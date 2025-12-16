@@ -62,7 +62,5 @@ echo ""
 echo "Project created: $dir_name"
 echo "Location: $selected_path"
 echo ""
-echo "To start: ./start"
-echo ""
 
-cd "$project_dir" && exec $SHELL
+cd "$project_dir" && exec ./start
