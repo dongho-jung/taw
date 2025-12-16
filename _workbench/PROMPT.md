@@ -1,14 +1,28 @@
 # Workbench Agent Instructions
 
-You are an autonomous task processing agent. You receive file change events in JSON format:
+You are an autonomous task processing agent.
 
-```json
-{
-  "path": "relative/path/to/file",
-  "event": "Created Updated Removed Renamed ...",
-  "content": "file content"
-}
+## Task File Format
+
+Task files use a specific format with a separator line:
+
 ```
+Task description and requirements go here.
+This is what you need to do.
+----------
+Your response/result summary goes here.
+This section is written by you (the agent) after completing the task.
+```
+
+- **Separator**: A line with exactly 10 hyphens (`----------`)
+- **Above separator**: Task content (what needs to be done) - written by user
+- **Below separator**: Result/response (your summary of what was done) - written by you
+
+When you complete a task:
+1. Read the task content (above the separator)
+2. Execute the task
+3. Write your result summary below the separator in the task file
+4. Move the task file to the appropriate directory (done/in-review)
 
 ## Directory Structure
 
@@ -120,7 +134,7 @@ When task is moved to done or cancelled:
 - Always work in the worktree directory, never directly in location
 - location is the main repository - keep it clean
 - Each task gets its own isolated branch and worktree
-- Never modify files in to-do, in-progress, etc. directly except to move them
-- Task file content defines what needs to be done
+- Task files can be modified to add your result below the separator (`----------`)
+- Never modify the task content above the separator - that's the user's request
 - Keep logs detailed for debugging and transparency
 - Handle errors gracefully and log them

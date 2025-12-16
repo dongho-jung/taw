@@ -119,6 +119,28 @@ handle_task_event() {
 }
 TASKJSON
 
+    # Log
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Task: $task_name, Status: $status" >> "$agent_dir/log"
+
+    # Try to find existing tab for this task (any status)
+    local found_tab=""
+    for old_status in "to-do" "in-progress" "in-review" "done" "cancelled"; do
+        local old_tab_name="$task_name/$old_status"
+        if zj go-to-tab-name "$old_tab_name" 2>/dev/null; then
+            found_tab="$old_tab_name"
+            break
+        fi
+    done
+
+    if [ -n "$found_tab" ]; then
+        # Tab exists - just rename it
+        zj rename-tab "$tab_name"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Renamed tab: $found_tab -> $tab_name" >> "$WATCHER_DIR/watcher.log"
+        return
+    fi
+
+    # No existing tab - create new one with claude
+
     # Build system prompt from global and project PROMPT files
     local system_prompt=""
     if [ -f "$GLOBAL_PROMPT" ]; then
@@ -131,10 +153,11 @@ TASKJSON
         system_prompt="$system_prompt$(cat "$PROJECT_PROMPT")"
     fi
 
-    # Read task content
+    # Read task content (only the part above the separator '----------')
     local task_content=""
     if [ -f "$task_file" ]; then
-        task_content=$(cat "$task_file")
+        # Extract content above the separator (10 hyphens)
+        task_content=$(sed -n '/^----------$/q;p' "$task_file")
     fi
 
     # Build the user prompt with task context
@@ -144,22 +167,22 @@ TASKJSON
 - **Name**: $task_name
 - **Status**: $status
 - **Path**: $relative_path
-- **Event**: $event_flags
+- **Task File**: $task_file
 
 ## Task Content
 $task_content
 
 ## Instructions
-Execute this task following the system instructions. Log your progress to agents/$task_name/log"
+1. Execute this task following the system instructions
+2. Log your progress to agents/$task_name/log
+3. When done, write your result summary to the task file below the separator line (\`----------\`)
+4. Move the task file to done/ (or in-review/ if human review needed)"
 
     # Save system prompt to file for claude to use
     echo "$system_prompt" > "$agent_dir/system-prompt.txt"
 
     # Save user prompt to file
     echo "$user_prompt" > "$agent_dir/user-prompt.txt"
-
-    # Log
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Task: $task_name, Status: $status" >> "$agent_dir/log"
 
     # Create new tab with task name/status (cwd = PROJECT_DIR)
     zj new-tab --name "$tab_name" --cwd "$PROJECT_DIR"
@@ -171,9 +194,15 @@ Execute this task following the system instructions. Log your progress to agents
     # Go back to left pane (focus left)
     zj move-focus left
 
+    # Helper to send text + Enter
+    send_line() {
+        zj write-chars "$1"
+        sleep 0.1
+        zj write-chars $'\n'
+    }
+
     # Start claude interactively with system prompt
-    zj write-chars "claude --dangerously-skip-permissions --system-prompt \"\$(cat agents/$task_name/system-prompt.txt)\""
-    zj write 10
+    send_line "claude --dangerously-skip-permissions --system-prompt \"\$(cat agents/$task_name/system-prompt.txt)\""
 
     # Wait for claude to start
     sleep 2
@@ -182,14 +211,12 @@ Execute this task following the system instructions. Log your progress to agents
     local screen_content
     screen_content=$(zellij --session "$SESSION_NAME" action dump-screen 2>/dev/null || echo "")
     if echo "$screen_content" | grep -qiE "trust|Trust this project|y/n|\[y\]|Are you sure"; then
-        zj write-chars "y"
-        zj write 10
+        send_line "y"
         sleep 1
     fi
 
-    # Send the task instruction
-    zj write-chars "Read and execute the task from agents/$task_name/user-prompt.txt"
-    zj write 10
+    # Send the task instruction (use absolute path)
+    send_line "Read and execute the task from $agent_dir/user-prompt.txt"
 
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Created tab: $tab_name, sent task to claude" >> "$WATCHER_DIR/watcher.log"
 }
@@ -231,10 +258,12 @@ start_watcher() {
     done
 }
 
-# Auto: attach if running, start if not
+# Kill existing session and start fresh
 if is_session_running; then
-    echo "Attaching to '$SESSION_NAME'... (Ctrl+O, d to detach)"
-    zellij attach "$SESSION_NAME"
-else
-    start_session
+    echo "Killing existing session '$SESSION_NAME'..."
+    zellij kill-session "$SESSION_NAME" 2>/dev/null
+    pkill -f "fswatch.*$PROJECT_DIR" 2>/dev/null
+    rm -f "$WATCHER_DIR/watcher.pid"
+    sleep 1
 fi
+start_session
