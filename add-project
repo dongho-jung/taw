@@ -1,0 +1,68 @@
+#!/bin/bash
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECTS_DIR="$SCRIPT_DIR/projects"
+WORKBENCH_DIR="$SCRIPT_DIR/_workbench"
+
+mkdir -p "$WORKBENCH_DIR"
+
+# Open project with yazi
+temp_file=$(mktemp)
+yazi --chooser-file="$temp_file" ~
+
+if [ ! -s "$temp_file" ]; then
+    rm -f "$temp_file"
+    echo "No directory selected."
+    exit 1
+fi
+
+selected_path=$(cat "$temp_file")
+rm -f "$temp_file"
+
+if [ ! -d "$selected_path" ]; then
+    echo "Selected path is not a directory."
+    exit 1
+fi
+
+dir_name=$(basename "$selected_path")
+project_dir="$PROJECTS_DIR/$dir_name"
+
+mkdir -p "$project_dir"
+mkdir -p "$project_dir/to-do"
+mkdir -p "$project_dir/in-progress"
+mkdir -p "$project_dir/in-review"
+mkdir -p "$project_dir/done"
+mkdir -p "$project_dir/cancelled"
+mkdir -p "$project_dir/agents"
+mkdir -p "$project_dir/.watcher"
+touch "$project_dir/.watcher/watcher.log"
+
+# Create symlink
+rm -f "$project_dir/location" 2>/dev/null
+ln -s "$selected_path" "$project_dir/location"
+
+# Create metadata
+echo "location: $selected_path" > "$project_dir/metadata"
+
+# Create project PROMPT.md if not exists
+if [ ! -f "$project_dir/PROMPT.md" ]; then
+    echo "# Project Prompt" > "$project_dir/PROMPT.md"
+    echo "" >> "$project_dir/PROMPT.md"
+    echo "Add project-specific instructions here." >> "$project_dir/PROMPT.md"
+fi
+
+# Copy start script from template
+cp "$WORKBENCH_DIR/start" "$project_dir/start"
+chmod +x "$project_dir/start"
+
+# Make project root read-only
+chmod a-w "$project_dir"
+
+echo ""
+echo "Project created: $dir_name"
+echo "Location: $selected_path"
+echo ""
+echo "To start: ./start"
+echo ""
+
+cd "$project_dir" && exec $SHELL

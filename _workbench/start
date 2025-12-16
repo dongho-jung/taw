@@ -1,0 +1,240 @@
+#!/bin/bash
+
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_NAME="$(basename "$PROJECT_DIR")"
+WORKBENCH_DIR="$(cd "$PROJECT_DIR/../.." && pwd)/_workbench"
+WATCHER_DIR="$PROJECT_DIR/.watcher"
+SESSION_NAME="$PROJECT_NAME"
+
+GLOBAL_PROMPT="$WORKBENCH_DIR/PROMPT.md"
+PROJECT_PROMPT="$PROJECT_DIR/PROMPT.md"
+
+json_escape() {
+    local str="$1"
+    str="${str//\\/\\\\}"
+    str="${str//\"/\\\"}"
+    str="${str//$'\n'/\\n}"
+    str="${str//$'\r'/\\r}"
+    str="${str//$'\t'/\\t}"
+    echo "$str"
+}
+
+check_dependencies() {
+    if ! command -v zellij &> /dev/null; then
+        echo "zellij is not installed. Install: brew install zellij"
+        exit 1
+    fi
+    if ! command -v fswatch &> /dev/null; then
+        echo "fswatch is not installed. Install: brew install fswatch"
+        exit 1
+    fi
+}
+
+is_session_running() {
+    zellij list-sessions 2>/dev/null | grep -q "$SESSION_NAME"
+}
+
+zj() {
+    zellij --session "$SESSION_NAME" action "$@"
+}
+
+cleanup() {
+    echo "Cleaning up..."
+    pkill -f "fswatch.*$PROJECT_DIR" 2>/dev/null
+    rm -f "$WATCHER_DIR/watcher.pid"
+}
+
+start_session() {
+    check_dependencies
+    if is_session_running; then
+        echo "Session '$SESSION_NAME' is already running. Attaching..."
+        zellij attach "$SESSION_NAME"
+        exit 0
+    fi
+
+    # Create watcher directory first
+    mkdir -p "$WATCHER_DIR"
+    touch "$WATCHER_DIR/watcher.log"
+
+    echo "Starting session '$SESSION_NAME'..."
+
+    # Start watcher in background first
+    start_watcher &
+    local watcher_pid=$!
+    echo "$watcher_pid" > "$WATCHER_DIR/watcher.pid"
+
+    # Cleanup on exit
+    trap cleanup EXIT
+
+    # Start zellij session with layout (tab name "_", cwd = PROJECT_DIR)
+    cd "$PROJECT_DIR"
+    zellij -s "$SESSION_NAME" -n "$WORKBENCH_DIR/layout.kdl"
+
+    # This runs after zellij exits
+    cleanup
+}
+
+get_status_from_path() {
+    local path="$1"
+    if [[ "$path" == to-do/* ]]; then echo "to-do"
+    elif [[ "$path" == in-progress/* ]]; then echo "in-progress"
+    elif [[ "$path" == in-review/* ]]; then echo "in-review"
+    elif [[ "$path" == done/* ]]; then echo "done"
+    elif [[ "$path" == cancelled/* ]]; then echo "cancelled"
+    else echo ""
+    fi
+}
+
+get_task_name_from_path() {
+    local path="$1"
+    local filename=$(basename "$path")
+    echo "${filename%.*}"  # Remove extension
+}
+
+handle_task_event() {
+    local relative_path="$1"
+    local event_flags="$2"
+    local file_content="$3"
+
+    local status=$(get_status_from_path "$relative_path")
+    if [ -z "$status" ]; then
+        return
+    fi
+
+    local task_name=$(get_task_name_from_path "$relative_path")
+    local agent_dir="$PROJECT_DIR/agents/$task_name"
+    local tab_name="$task_name/$status"
+    local task_file="$PROJECT_DIR/$relative_path"
+
+    # Create agent directory
+    mkdir -p "$agent_dir"
+
+    # Save task info to JSON file
+    cat > "$agent_dir/task.json" << TASKJSON
+{
+  "path": "$relative_path",
+  "event": "$event_flags",
+  "status": "$status",
+  "task_file": "$task_file"
+}
+TASKJSON
+
+    # Build system prompt from global and project PROMPT files
+    local system_prompt=""
+    if [ -f "$GLOBAL_PROMPT" ]; then
+        system_prompt=$(cat "$GLOBAL_PROMPT")
+    fi
+    if [ -f "$PROJECT_PROMPT" ]; then
+        if [ -n "$system_prompt" ]; then
+            system_prompt="$system_prompt"$'\n\n---\n\n'
+        fi
+        system_prompt="$system_prompt$(cat "$PROJECT_PROMPT")"
+    fi
+
+    # Read task content
+    local task_content=""
+    if [ -f "$task_file" ]; then
+        task_content=$(cat "$task_file")
+    fi
+
+    # Build the user prompt with task context
+    local user_prompt="# Task Execution Request
+
+## Task Info
+- **Name**: $task_name
+- **Status**: $status
+- **Path**: $relative_path
+- **Event**: $event_flags
+
+## Task Content
+$task_content
+
+## Instructions
+Execute this task following the system instructions. Log your progress to agents/$task_name/log"
+
+    # Save system prompt to file for claude to use
+    echo "$system_prompt" > "$agent_dir/system-prompt.txt"
+
+    # Save user prompt to file
+    echo "$user_prompt" > "$agent_dir/user-prompt.txt"
+
+    # Log
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Task: $task_name, Status: $status" >> "$agent_dir/log"
+
+    # Create new tab with task name/status (cwd = PROJECT_DIR)
+    zj new-tab --name "$tab_name" --cwd "$PROJECT_DIR"
+    sleep 0.5
+
+    # Split vertically (creates right pane, left has claude)
+    zj new-pane --direction right
+
+    # Go back to left pane (focus left)
+    zj move-focus left
+
+    # Start claude interactively with system prompt
+    zj write-chars "claude --dangerously-skip-permissions --system-prompt \"\$(cat agents/$task_name/system-prompt.txt)\""
+    zj write 10
+
+    # Wait for claude to start
+    sleep 2
+
+    # Check if confirmation is needed by examining screen content
+    local screen_content
+    screen_content=$(zellij --session "$SESSION_NAME" action dump-screen 2>/dev/null || echo "")
+    if echo "$screen_content" | grep -qiE "trust|Trust this project|y/n|\[y\]|Are you sure"; then
+        zj write-chars "y"
+        zj write 10
+        sleep 1
+    fi
+
+    # Send the task instruction
+    zj write-chars "Read and execute the task from agents/$task_name/user-prompt.txt"
+    zj write 10
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Created tab: $tab_name, sent task to claude" >> "$WATCHER_DIR/watcher.log"
+}
+
+start_watcher() {
+    # Wait for session to start
+    for i in {1..30}; do
+        if is_session_running; then
+            break
+        fi
+        sleep 0.5
+    done
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watcher started" >> "$WATCHER_DIR/watcher.log"
+
+    fswatch -x --exclude "location" --exclude ".watcher" --exclude "agents" --exclude "start" --exclude "metadata" --exclude "PROMPT.md" -r "$PROJECT_DIR" 2>/dev/null | while read -r line; do
+        changed_file=$(echo "$line" | awk '{print $1}')
+        event_flags=$(echo "$line" | cut -d' ' -f2-)
+
+        # Skip unwanted paths
+        if [[ "$changed_file" == "$PROJECT_DIR/location"* ]]; then continue; fi
+        if [[ "$changed_file" == "$PROJECT_DIR/agents"* ]]; then continue; fi
+        if [[ "$changed_file" == "$PROJECT_DIR/.watcher"* ]]; then continue; fi
+
+        if ! is_session_running; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Session not running, stopping" >> "$WATCHER_DIR/watcher.log"
+            break
+        fi
+
+        relative_path="${changed_file#$PROJECT_DIR/}"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] File: $relative_path ($event_flags)" >> "$WATCHER_DIR/watcher.log"
+
+        file_content=""
+        if [ -f "$changed_file" ]; then
+            file_content=$(cat "$changed_file")
+        fi
+
+        handle_task_event "$relative_path" "$event_flags" "$file_content"
+    done
+}
+
+# Auto: attach if running, start if not
+if is_session_running; then
+    echo "Attaching to '$SESSION_NAME'... (Ctrl+O, d to detach)"
+    zellij attach "$SESSION_NAME"
+else
+    start_session
+fi
