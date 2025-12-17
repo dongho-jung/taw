@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# Get project directory (uses current working directory)
+PROJECT_DIR="$(pwd)"
+AGENTS_DIR="$PROJECT_DIR/agents"
+LOG_DIR="$PROJECT_DIR/.metadata/log"
+LOG_FILE="$LOG_DIR/new-task"
+
+# Ensure directories exist
+mkdir -p "$AGENTS_DIR"
+mkdir -p "$LOG_DIR"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+}
+
+# Create temp file for editing
+temp_file=$(mktemp)
+trap "rm -f '$temp_file'" EXIT
+
+# Open editor
+${EDITOR:-vim} "$temp_file"
+
+# Check if file has content
+if [ ! -s "$temp_file" ]; then
+    echo "No content written. Task cancelled."
+    log "Task cancelled: no content"
+    exit 1
+fi
+
+# Read task content into memory
+task_content=$(cat "$temp_file")
+
+log "Task content received, calling Claude CLI (haiku)..."
+
+# Call Claude CLI to generate task name
+prompt="Generate a task name (8-32 chars, lowercase, hyphens ok).
+Format: verb-target (e.g., fix-auth-bug, add-dark-mode)
+Output ONLY the name.
+
+Task:
+$task_content"
+
+task_name=$(claude --print --model haiku "$prompt" 2>/dev/null | tr -d '[:space:]')
+
+log "Generated task name: $task_name"
+
+# Validate task name: 8-32 chars, lowercase letters, numbers, hyphens, no leading/trailing hyphens
+if [[ ! "$task_name" =~ ^[a-z0-9][a-z0-9-]{6,30}[a-z0-9]$ ]]; then
+    timestamp=$(date '+%y%m%d%H%M%S')
+    echo "Warning: Generated task name '$task_name' is invalid. Using timestamp."
+    log "Invalid task name, using fallback: task-$timestamp"
+    task_name="task-$timestamp"
+fi
+
+# Ensure no duplicate
+final_name="$task_name"
+counter=1
+while [ -d "$AGENTS_DIR/$final_name" ]; do
+    final_name="${task_name}-${counter}"
+    counter=$((counter + 1))
+done
+
+# Create agent directory and save task content
+agent_dir="$AGENTS_DIR/$final_name"
+mkdir -p "$agent_dir"
+echo "$task_content" > "$agent_dir/task"
+
+echo "Task created: $agent_dir"
+log "Task created: $final_name"

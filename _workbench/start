@@ -3,21 +3,12 @@
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_NAME="$(basename "$PROJECT_DIR")"
 WORKBENCH_DIR="$(cd "$PROJECT_DIR/../.." && pwd)/_workbench"
-WATCHER_DIR="$PROJECT_DIR/.watcher"
+WATCHER_DIR="$PROJECT_DIR/.metadata/watcher"
+AGENTS_DIR="$PROJECT_DIR/agents"
 SESSION_NAME="$PROJECT_NAME"
 
 GLOBAL_PROMPT="$WORKBENCH_DIR/PROMPT.md"
 PROJECT_PROMPT="$PROJECT_DIR/PROMPT.md"
-
-json_escape() {
-    local str="$1"
-    str="${str//\\/\\\\}"
-    str="${str//\"/\\\"}"
-    str="${str//$'\n'/\\n}"
-    str="${str//$'\r'/\\r}"
-    str="${str//$'\t'/\\t}"
-    echo "$str"
-}
 
 check_dependencies() {
     if ! command -v zellij &> /dev/null; then
@@ -31,7 +22,15 @@ check_dependencies() {
 }
 
 is_session_running() {
-    zellij list-sessions 2>/dev/null | grep -q "$SESSION_NAME"
+    # Check if session exists and is not EXITED
+    zellij list-sessions 2>/dev/null | grep "$SESSION_NAME" | grep -qv "EXITED"
+}
+
+cleanup_dead_session() {
+    # Delete EXITED session if exists
+    if zellij list-sessions 2>/dev/null | grep "$SESSION_NAME" | grep -q "EXITED"; then
+        zellij delete-session "$SESSION_NAME" --force 2>/dev/null
+    fi
 }
 
 zj() {
@@ -40,118 +39,45 @@ zj() {
 
 cleanup() {
     echo "Cleaning up..."
-    pkill -f "fswatch.*$PROJECT_DIR" 2>/dev/null
+    pkill -f "fswatch.*$PROJECT_DIR/agents" 2>/dev/null
     rm -f "$WATCHER_DIR/watcher.pid"
 }
 
-start_session() {
-    check_dependencies
+# Truncate tab name to 32 chars with ... in middle if needed
+truncate_tab_name() {
+    local name="$1"
+    local max_len=32
+    local len=${#name}
 
-    # Create watcher directory first
-    mkdir -p "$WATCHER_DIR"
-    touch "$WATCHER_DIR/watcher.log"
-
-    # Clean up tab markers from previous session
-    find "$PROJECT_DIR/agents" -name ".tab-created" -delete 2>/dev/null
-
-    echo "Starting session '$SESSION_NAME'..."
-
-    # Start watcher in background first
-    start_watcher &
-    local watcher_pid=$!
-    echo "$watcher_pid" > "$WATCHER_DIR/watcher.pid"
-
-    # Cleanup on exit
-    trap cleanup EXIT
-
-    # Start zellij session with layout (tab name "_", cwd = PROJECT_DIR)
-    cd "$PROJECT_DIR"
-    zellij -s "$SESSION_NAME" -n "$WORKBENCH_DIR/layout.kdl"
-
-    # This runs after zellij exits
-    cleanup
-}
-
-get_status_from_path() {
-    local path="$1"
-    if [[ "$path" == to-do/* ]]; then echo "to-do"
-    elif [[ "$path" == in-progress/* ]]; then echo "in-progress"
-    elif [[ "$path" == in-review/* ]]; then echo "in-review"
-    elif [[ "$path" == done/* ]]; then echo "done"
-    elif [[ "$path" == cancelled/* ]]; then echo "cancelled"
-    else echo ""
+    if [ $len -le $max_len ]; then
+        echo "$name"
+    else
+        local keep=$(( (max_len - 3) / 2 ))
+        local left="${name:0:$keep}"
+        local right="${name: -$keep}"
+        echo "${left}...${right}"
     fi
 }
 
-get_task_name_from_path() {
-    local path="$1"
-    local filename=$(basename "$path")
-    echo "${filename%.*}"  # Remove extension
-}
+handle_task() {
+    local task_file="$1"
+    local agent_dir=$(dirname "$task_file")
+    local task_name=$(basename "$agent_dir")
 
-handle_task_event() {
-    local relative_path="$1"
-    local event_flags="$2"
-    local file_content="$3"
-
-    local status=$(get_status_from_path "$relative_path")
-    if [ -z "$status" ]; then
+    # Only process files named "task"
+    if [[ "$(basename "$task_file")" != "task" ]]; then
         return
     fi
 
-    local task_name=$(get_task_name_from_path "$relative_path")
-    local task_file="$PROJECT_DIR/$relative_path"
-
-    # If status is to-do, move to in-progress and wait for new event
-    if [ "$status" = "to-do" ]; then
-        local new_file="$PROJECT_DIR/in-progress/$(basename "$relative_path")"
-        mv "$task_file" "$new_file"
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Moved task to in-progress: $task_name" >> "$WATCHER_DIR/watcher.log"
-        return  # fswatch will trigger new event for in-progress
-    fi
-
-    local agent_dir="$PROJECT_DIR/agents/$task_name"
-    local tab_name="$task_name/$status"
-
-    # Create agent directory
-    mkdir -p "$agent_dir"
-
-    # Save task info to JSON file
-    cat > "$agent_dir/task.json" << TASKJSON
-{
-  "path": "$relative_path",
-  "event": "$event_flags",
-  "status": "$status",
-  "task_file": "$task_file"
-}
-TASKJSON
-
-    # Log
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Task: $task_name, Status: $status" >> "$agent_dir/log"
-
-    # Check if tab was already created for this task (using marker file)
     local tab_marker="$agent_dir/.tab-created"
 
+    # Skip if already processed
     if [ -f "$tab_marker" ]; then
-        # Tab exists - find it and rename
-        for old_status in "to-do" "in-progress" "in-review" "done" "cancelled"; do
-            local old_tab_name="$task_name/$old_status"
-            if [ "$old_tab_name" != "$tab_name" ]; then
-                zj go-to-tab-name "$old_tab_name" 2>/dev/null
-                zj rename-tab "$tab_name" 2>/dev/null
-            fi
-        done
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Tab already exists for: $task_name (status: $status)" >> "$WATCHER_DIR/watcher.log"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Task already processed: $task_name" >> "$WATCHER_DIR/watcher.log"
         return
     fi
 
-    # Only start agent for in-progress tasks
-    if [ "$status" != "in-progress" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Ignoring non-in-progress task without tab: $task_name ($status)" >> "$WATCHER_DIR/watcher.log"
-        return
-    fi
-
-    # No existing tab - create new one with claude
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] New task detected: $task_name" >> "$WATCHER_DIR/watcher.log"
 
     # Build system prompt from global and project PROMPT files
     local system_prompt=""
@@ -165,53 +91,26 @@ TASKJSON
         system_prompt="$system_prompt$(cat "$PROJECT_PROMPT")"
     fi
 
-    # Read task content (only the part above the separator '----------')
+    # Read task content
     local task_content=""
     if [ -f "$task_file" ]; then
-        # Extract content above the separator (10 hyphens)
-        task_content=$(sed -n '/^----------$/q;p' "$task_file")
-    fi
-
-    # Get location target
-    local location_target=""
-    if [ -L "$PROJECT_DIR/location" ]; then
-        location_target=$(readlink "$PROJECT_DIR/location")
+        task_content=$(cat "$task_file")
     fi
 
     # Build the user prompt with task context
-    local user_prompt="# Task Execution Request
+    local user_prompt="# Task: $task_name
 
-## Environment
-- **Project Root**: $PROJECT_DIR (your current working directory)
-- **Source Code**: $PROJECT_DIR/location → $location_target
-- **Agent Workspace**: $PROJECT_DIR/agents/$task_name/
+**Workspace**: $agent_dir
 
-## Task Info
-- **Name**: $task_name
-- **Status**: $status
-- **Task File**: $task_file
+$task_content"
 
-## Task Content
-$task_content
-
-## Instructions
-1. The source code you need to work on is at \`location/\` (symlink to the actual repository)
-2. Create a git worktree for your changes:
-   \`\`\`bash
-   git -C $PROJECT_DIR/location worktree add $agent_dir/worktree -b task/$task_name
-   \`\`\`
-3. Do your work in \`$agent_dir/worktree/\`
-4. Log your progress to \`$agent_dir/log\`
-5. When done, write your result summary to the task file below the separator line (\`----------\`)
-6. Move the task file to \`done/\` (or \`in-review/\` if human review needed)"
-
-    # Save system prompt to file for claude to use
+    # Save prompts to files
     echo "$system_prompt" > "$agent_dir/system-prompt.txt"
-
-    # Save user prompt to file
     echo "$user_prompt" > "$agent_dir/user-prompt.txt"
 
-    # Create new tab with task name/status (cwd = PROJECT_DIR)
+    # Create new tab with truncated name and working emoji
+    local display_name=$(truncate_tab_name "$task_name")
+    local tab_name="🤖${display_name}"
     zj new-tab --name "$tab_name" --cwd "$PROJECT_DIR"
     touch "$tab_marker"
     sleep 0.5
@@ -224,22 +123,21 @@ $task_content
 
     # Helper to send text + Enter to agent pane
     send_to_agent() {
-        # Ensure we're on the right tab and pane
         zj go-to-tab-name "$tab_name" 2>/dev/null
         zj move-focus left
         sleep 0.1
         zj write-chars "$1"
         sleep 0.1
-        zj write 13  # Enter key (CR)
+        zj write 13  # Enter key
     }
 
     # Start claude interactively with system prompt
-    send_to_agent "claude --dangerously-skip-permissions --system-prompt \"\$(cat agents/$task_name/system-prompt.txt)\""
+    send_to_agent "claude --dangerously-skip-permissions --system-prompt \"\$(cat $agent_dir/system-prompt.txt)\""
 
     # Wait for claude to start
     sleep 2
 
-    # Check if confirmation is needed by examining screen content
+    # Check if confirmation is needed
     local screen_content
     screen_content=$(zellij --session "$SESSION_NAME" action dump-screen 2>/dev/null || echo "")
     if echo "$screen_content" | grep -qiE "trust|Trust this project|y/n|\[y\]|Are you sure"; then
@@ -247,7 +145,7 @@ $task_content
         sleep 1
     fi
 
-    # Send the task instruction (use absolute path)
+    # Send the task instruction
     send_to_agent "Read and execute the task from $agent_dir/user-prompt.txt"
 
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Created tab: $tab_name, sent task to claude" >> "$WATCHER_DIR/watcher.log"
@@ -264,52 +162,76 @@ start_watcher() {
 
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watcher started" >> "$WATCHER_DIR/watcher.log"
 
-    fswatch -x --event Created --event Updated --event Removed --event Renamed --exclude "location" --exclude ".watcher" --exclude "agents" --exclude "start" --exclude "metadata" --exclude "PROMPT.md" -r "$PROJECT_DIR" 2>/dev/null | while read -r line; do
+    # Watch agents directory for new task files
+    fswatch -x --event Created --event Renamed -r "$PROJECT_DIR/agents" 2>/dev/null | while read -r line; do
         changed_file=$(echo "$line" | awk '{print $1}')
-        event_flags=$(echo "$line" | cut -d' ' -f2-)
 
-        # Skip unwanted paths
-        if [[ "$changed_file" == "$PROJECT_DIR/location"* ]]; then continue; fi
-        if [[ "$changed_file" == "$PROJECT_DIR/agents"* ]]; then continue; fi
-        if [[ "$changed_file" == "$PROJECT_DIR/.watcher"* ]]; then continue; fi
+        # Skip directories
+        if [ -d "$changed_file" ]; then
+            continue
+        fi
+
+        # Only process files named "task"
+        if [[ "$(basename "$changed_file")" != "task" ]]; then
+            continue
+        fi
 
         if ! is_session_running; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Session not running, stopping" >> "$WATCHER_DIR/watcher.log"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Session not running, stopping watcher" >> "$WATCHER_DIR/watcher.log"
             break
         fi
 
-        relative_path="${changed_file#$PROJECT_DIR/}"
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] File: $relative_path ($event_flags)" >> "$WATCHER_DIR/watcher.log"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Task file detected: $changed_file" >> "$WATCHER_DIR/watcher.log"
 
-        file_content=""
-        if [ -f "$changed_file" ]; then
-            file_content=$(cat "$changed_file")
-        fi
-
-        handle_task_event "$relative_path" "$event_flags" "$file_content"
+        handle_task "$changed_file"
     done
 }
 
-# Kill existing session and start fresh
-if is_session_running; then
-    echo "Killing existing session '$SESSION_NAME'..."
-    zellij kill-session "$SESSION_NAME" 2>&1 >/dev/null
-    pkill -f "fswatch.*$PROJECT_DIR" 2>/dev/null
-    rm -f "$WATCHER_DIR/watcher.pid"
+start_session() {
+    check_dependencies
 
-    # Wait until session is fully terminated
-    for i in {1..20}; do
-        if ! is_session_running; then
-            break
-        fi
-        sleep 0.2
-    done
+    # Create directories
+    mkdir -p "$WATCHER_DIR"
+    mkdir -p "$AGENTS_DIR"
+    touch "$WATCHER_DIR/watcher.log"
 
-    # Force kill if still running
-    if is_session_running; then
-        echo "Force killing session..."
-        zellij delete-session "$SESSION_NAME" --force 2>&1 >/dev/null
-        sleep 0.5
-    fi
+    # Clean up tab markers from previous session
+    find "$AGENTS_DIR" -name ".tab-created" -delete 2>/dev/null
+
+    echo "Starting session '$SESSION_NAME'..."
+
+    # Start watcher in background
+    start_watcher &
+    local watcher_pid=$!
+    echo "$watcher_pid" > "$WATCHER_DIR/watcher.pid"
+
+    # Cleanup on exit
+    trap cleanup EXIT
+
+    # Start zellij session with layout
+    cd "$PROJECT_DIR"
+    zellij -s "$SESSION_NAME" -n "$WORKBENCH_DIR/layout.kdl"
+
+    # This runs after zellij exits
+    cleanup
+}
+
+# Check if already inside zellij session
+if [ -n "$ZELLIJ" ]; then
+    echo "Already inside zellij session. Ignoring."
+    exit 0
 fi
-start_session
+
+# Add _workbench/bin to PATH
+export PATH="$WORKBENCH_DIR/bin:$PATH"
+
+# Clean up dead session if exists
+cleanup_dead_session
+
+# If session exists, attach to it; otherwise start new
+if is_session_running; then
+    echo "Attaching to existing session '$SESSION_NAME'..."
+    zellij attach "$SESSION_NAME"
+else
+    start_session
+fi
