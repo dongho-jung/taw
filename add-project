@@ -81,6 +81,10 @@ fi
 rm -f "$project_dir/start" 2>/dev/null
 ln -s "$WORKBENCH_DIR/start" "$project_dir/start"
 
+# Create symlink to .claude directory (for shared slash commands)
+rm -rf "$project_dir/.claude" 2>/dev/null
+ln -s "$WORKBENCH_DIR/claude" "$project_dir/.claude"
+
 # Make project root read-only
 chmod a-w "$project_dir"
 

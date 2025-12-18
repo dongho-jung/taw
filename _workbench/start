@@ -131,8 +131,8 @@ $task_content"
         zj write 13  # Enter key
     }
 
-    # Start claude interactively with system prompt
-    send_to_agent "claude --dangerously-skip-permissions --system-prompt \"\$(cat $agent_dir/system-prompt.txt)\""
+    # Start claude interactively with system prompt (export TASK_NAME and SESSION_NAME for /done command)
+    send_to_agent "export TASK_NAME='$task_name' ZELLIJ_SESSION_NAME='$SESSION_NAME' && claude --dangerously-skip-permissions --system-prompt \"\$(cat $agent_dir/system-prompt.txt)\""
 
     # Wait for claude to start
     sleep 2
