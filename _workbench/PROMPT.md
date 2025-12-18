@@ -18,7 +18,11 @@ You are an autonomous task processing agent.
 
 1. **Create worktree** (never work directly in `location/`):
    ```bash
-   git -C {project-root}/location worktree add {agent-workspace}/worktree -b task/{task-name}
+   # First, clean up any stale worktree references
+   git -C {project-root}/location worktree prune
+
+   # Then create worktree (branch name = task name)
+   git -C {project-root}/location worktree add {agent-workspace}/worktree -b {task-name}
    ```
 
 2. **Work** in `{agent-workspace}/worktree/`
