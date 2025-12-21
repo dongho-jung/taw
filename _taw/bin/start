@@ -1,0 +1,327 @@
+#!/bin/bash
+
+# TAW Session Starter
+# Called from bin/taw after .taw directory is initialized
+
+PROJECT_DIR="$(pwd)"
+TAW_DIR="$PROJECT_DIR/.taw"
+PROJECT_NAME="$(basename "$PROJECT_DIR")"
+TAW_HOME="${TAW_HOME:-$(cd "$(dirname "$0")/../.." && pwd)}"
+
+WATCHER_DIR="$TAW_DIR/.metadata/watcher"
+LOG_DIR="$TAW_DIR/.metadata/log"
+LOG_FILE="$LOG_DIR/start.log"
+AGENTS_DIR="$TAW_DIR/agents"
+SESSION_NAME="$PROJECT_NAME"
+
+GLOBAL_PROMPT="$TAW_HOME/_taw/PROMPT.md"
+PROJECT_PROMPT="$TAW_DIR/PROMPT.md"
+
+# Logging function
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
+
+check_dependencies() {
+    if ! command -v tmux &> /dev/null; then
+        echo "tmux is not installed. Install: brew install tmux"
+        exit 1
+    fi
+    if ! command -v fswatch &> /dev/null; then
+        echo "fswatch is not installed. Install: brew install fswatch"
+        exit 1
+    fi
+}
+
+is_session_running() {
+    tmux has-session -t "$SESSION_NAME" 2>/dev/null
+}
+
+cleanup_dead_session() {
+    # tmux automatically cleans up dead sessions
+    :
+}
+
+tm() {
+    tmux "$@"
+}
+
+cleanup() {
+    log "Cleanup started"
+    echo "Cleaning up..."
+    pkill -f "fswatch.*$TAW_DIR/agents" 2>/dev/null
+    rm -f "$WATCHER_DIR/watcher.pid"
+    log "Cleanup completed"
+}
+
+# Truncate tab name to 32 chars with ... in middle if needed
+truncate_tab_name() {
+    local name="$1"
+    local max_len=32
+    local len=${#name}
+
+    if [ $len -le $max_len ]; then
+        echo "$name"
+    else
+        local keep=$(( (max_len - 3) / 2 ))
+        local left="${name:0:$keep}"
+        local right="${name: -$keep}"
+        echo "${left}...${right}"
+    fi
+}
+
+handle_task() {
+    local task_file="$1"
+    local agent_dir=$(dirname "$task_file")
+    local task_name=$(basename "$agent_dir")
+
+    # Only process files named ".task"
+    if [[ "$(basename "$task_file")" != ".task" ]]; then
+        return
+    fi
+
+    local tab_marker="$agent_dir/.tab-created"
+
+    # Skip if already processed
+    if [ -f "$tab_marker" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Task already processed: $task_name" >> "$WATCHER_DIR/watcher.log"
+        return
+    fi
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] New task detected: $task_name" >> "$WATCHER_DIR/watcher.log"
+
+    # Build system prompt from global and project PROMPT files
+    local system_prompt=""
+    if [ -f "$GLOBAL_PROMPT" ]; then
+        system_prompt=$(cat "$GLOBAL_PROMPT")
+    fi
+    if [ -f "$PROJECT_PROMPT" ]; then
+        if [ -n "$system_prompt" ]; then
+            system_prompt="$system_prompt"$'\n\n---\n\n'
+        fi
+        system_prompt="$system_prompt$(cat "$PROJECT_PROMPT")"
+    fi
+
+    # Read task content
+    local task_content=""
+    if [ -f "$task_file" ]; then
+        task_content=$(cat "$task_file")
+    fi
+
+    # Build the user prompt with task context
+    local user_prompt="# Task: $task_name
+
+**Workspace**: $agent_dir
+**Project**: $PROJECT_DIR
+
+$task_content"
+
+    # Save prompts to files (hidden)
+    echo "$system_prompt" > "$agent_dir/.system-prompt"
+    echo "$user_prompt" > "$agent_dir/.user-prompt"
+
+    # Create new window with truncated name and working emoji
+    local display_name=$(truncate_tab_name "$task_name")
+    local window_name="🤖${display_name}"
+
+    # Get window ID for reliable targeting (emoji in name can cause issues)
+    local window_id
+    window_id=$(tm new-window -t "$SESSION_NAME" -n "$window_name" -c "$PROJECT_DIR" -P -F "#{window_id}")
+    touch "$tab_marker"
+
+    # Set remain-on-exit for this window
+    tm setw -t "$window_id" remain-on-exit on
+    sleep 0.5
+
+    # Split horizontally (creates right pane for user)
+    tm split-window -t "$window_id" -h -c "$PROJECT_DIR"
+
+    # Select left pane (agent pane)
+    tm select-pane -t "${window_id}.0"
+
+    # Send shell command (normal Enter)
+    send_shell_cmd() {
+        tm send-keys -t "${window_id}.0" -l "$1"
+        tm send-keys -t "${window_id}.0" Enter
+    }
+
+    # Send input to claude code (Escape to exit multiline, then raw ASCII 13 to submit)
+    send_to_claude() {
+        tm send-keys -t "${window_id}.0" -l "$1"
+        sleep 0.1
+        tm send-keys -t "${window_id}.0" Escape
+        sleep 0.1
+        tm send-keys -t "${window_id}.0" -H 0d  # ASCII 13 (Carriage Return)
+    }
+
+    # Helper to get pane content
+    get_pane_content() {
+        tm capture-pane -t "${window_id}.0" -p 2>/dev/null || echo ""
+    }
+
+    # Wait for claude to be ready (poll until we see expected output)
+    wait_for_claude_ready() {
+        local max_attempts=60  # 30 seconds max
+        local attempt=0
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Waiting for claude to be ready..." >> "$WATCHER_DIR/watcher.log"
+        while [ $attempt -lt $max_attempts ]; do
+            local content=$(get_pane_content)
+            # Claude is ready when we see trust prompt or the input prompt (╭─)
+            if echo "$content" | grep -qE "Trust|trust|╭─"; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] Claude ready after $attempt attempts" >> "$WATCHER_DIR/watcher.log"
+                return 0
+            fi
+            sleep 0.5
+            attempt=$((attempt + 1))
+        done
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Timeout waiting for claude" >> "$WATCHER_DIR/watcher.log"
+        return 1
+    }
+
+    # Start claude interactively with system prompt (export env vars for slash commands)
+    send_shell_cmd "export TASK_NAME='$task_name' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' && claude --dangerously-skip-permissions --system-prompt \"\$(cat $agent_dir/.system-prompt)\""
+
+    # Wait for claude to be ready
+    if ! wait_for_claude_ready; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Failed to start claude for $task_name" >> "$WATCHER_DIR/watcher.log"
+        return 1
+    fi
+
+    # Check if confirmation is needed
+    local screen_content
+    screen_content=$(get_pane_content)
+    if echo "$screen_content" | grep -qiE "trust|Trust this project|y/n|\[y\]|Are you sure"; then
+        send_shell_cmd "y"
+        # Wait for claude to be ready again after trust confirmation
+        wait_for_claude_ready
+    fi
+
+    # Send the task instruction to claude
+    send_to_claude "Read and execute the task from $agent_dir/.user-prompt"
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Created window: $window_name, sent task to claude" >> "$WATCHER_DIR/watcher.log"
+}
+
+start_watcher() {
+    # Wait for session to start
+    for i in {1..30}; do
+        if is_session_running; then
+            break
+        fi
+        sleep 0.5
+    done
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watcher started" >> "$WATCHER_DIR/watcher.log"
+
+    # Watch agents directory for new task files
+    fswatch -x --event Created --event Renamed -r "$TAW_DIR/agents" 2>/dev/null | while read -r line; do
+        changed_file=$(echo "$line" | awk '{print $1}')
+
+        # Skip directories
+        if [ -d "$changed_file" ]; then
+            continue
+        fi
+
+        # Only process files named ".task"
+        if [[ "$(basename "$changed_file")" != ".task" ]]; then
+            continue
+        fi
+
+        if ! is_session_running; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Session not running, stopping watcher" >> "$WATCHER_DIR/watcher.log"
+            break
+        fi
+
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Task file detected: $changed_file" >> "$WATCHER_DIR/watcher.log"
+
+        handle_task "$changed_file"
+    done
+}
+
+start_session() {
+    check_dependencies
+
+    # Create directories
+    mkdir -p "$WATCHER_DIR"
+    mkdir -p "$LOG_DIR"
+    mkdir -p "$AGENTS_DIR"
+    touch "$WATCHER_DIR/watcher.log"
+
+    log "=== Session start ==="
+    log "Project: $PROJECT_NAME"
+    log "Directory: $PROJECT_DIR"
+    log "TAW Directory: $TAW_DIR"
+
+    # Clean up tab markers from previous session
+    find "$AGENTS_DIR" -name ".tab-created" -delete 2>/dev/null
+
+    echo "Starting session '$SESSION_NAME'..."
+
+    # Start watcher in background
+    start_watcher &
+    local watcher_pid=$!
+    echo "$watcher_pid" > "$WATCHER_DIR/watcher.pid"
+    log "Watcher started (PID: $watcher_pid)"
+
+    # Cleanup on exit
+    trap cleanup EXIT
+
+    # Start tmux session with initial window (detached first to configure)
+    cd "$PROJECT_DIR"
+    tm new-session -d -s "$SESSION_NAME" -n "_"
+    log "Tmux session created: $SESSION_NAME"
+
+    # Configure tmux session
+    tm set -t "$SESSION_NAME" mouse on
+
+    # Pane persistence hook (session-level) - respawn the dead pane automatically
+    tm set-hook -t "$SESSION_NAME" pane-died 'respawn-pane -k -t "#{hook_pane}"'
+
+    # Set remain-on-exit for initial window
+    tm setw -t "$SESSION_NAME:_" remain-on-exit on
+
+    # Unbind all default keys and set minimal bindings
+    tm unbind-key -a
+    tm bind -n C-q detach
+    tm bind -n M-Left select-pane -L
+    tm bind -n M-Right select-pane -R
+    tm bind -n M-C-Left previous-window
+    tm bind -n M-C-Right next-window
+    log "Tmux configured"
+
+    # Status line: 2 lines - windows on top, hints on bottom
+    tm set -t "$SESSION_NAME" status 2
+    tm set -t "$SESSION_NAME" status-format[0] "#[align=left]#{W:#[fg=white bg=default] #W #[default],#[fg=white bg=blue bold] #W #[default]}"
+    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ⌥←→:pane  ^⌥←→:window  ^q:detach"
+
+    # Show help in initial window
+    tm send-keys -t "$SESSION_NAME:_" "cat $TAW_HOME/_taw/HELP.md" Enter
+
+    # Attach to session
+    log "Attaching to session"
+    tm attach -t "$SESSION_NAME"
+
+    # This runs after tmux exits
+    cleanup
+}
+
+# Check if already inside tmux session
+if [ -n "$TMUX" ]; then
+    echo "Already inside tmux session. Ignoring."
+    exit 0
+fi
+
+# Ensure log directory exists for reattach logging
+mkdir -p "$LOG_DIR"
+
+# Clean up dead session if exists
+cleanup_dead_session
+
+# If session exists, attach to it; otherwise start new
+if is_session_running; then
+    log "Reattaching to existing session: $SESSION_NAME"
+    echo "Attaching to existing session '$SESSION_NAME'..."
+    tm attach -t "$SESSION_NAME"
+else
+    start_session
+fi

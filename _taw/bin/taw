@@ -1,0 +1,95 @@
+#!/bin/bash
+
+# TAW - Tmux + Agent + Worktree
+# Initializes .taw directory in current git project and starts session
+
+set -e
+
+# Get the installation directory (where taw was installed from)
+TAW_HOME="${TAW_HOME:-$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")/../.." && pwd)}"
+
+PROJECT_DIR="$(pwd)"
+TAW_DIR="$PROJECT_DIR/.taw"
+
+# Check if current directory is a git repository root
+check_git_root() {
+    local git_root
+    git_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+        echo "Error: Not a git repository."
+        echo "Run 'taw' from a git project root directory."
+        exit 1
+    }
+
+    local current_real
+    local git_root_real
+    current_real=$(cd "$PROJECT_DIR" && pwd -P)
+    git_root_real=$(cd "$git_root" && pwd -P)
+
+    if [ "$current_real" != "$git_root_real" ]; then
+        echo "Error: Not at git repository root."
+        echo "Git root is: $git_root"
+        echo "Please cd to the git root and run 'taw' again."
+        exit 1
+    fi
+}
+
+# Initialize .taw directory structure
+init_taw_dir() {
+    if [ -d "$TAW_DIR" ]; then
+        echo "Found existing .taw directory."
+        return
+    fi
+
+    echo "Initializing .taw directory..."
+
+    mkdir -p "$TAW_DIR"
+    mkdir -p "$TAW_DIR/agents"
+    mkdir -p "$TAW_DIR/.metadata/watcher"
+    mkdir -p "$TAW_DIR/.metadata/log"
+    touch "$TAW_DIR/.metadata/watcher/watcher.log"
+
+    # Create symlink to claude commands
+    rm -rf "$TAW_DIR/.claude" 2>/dev/null
+    ln -s "$TAW_HOME/_taw/claude" "$TAW_DIR/.claude"
+
+    # Create symlink to new-task
+    rm -f "$TAW_DIR/new-task" 2>/dev/null
+    ln -s "$TAW_HOME/_taw/bin/new-task" "$TAW_DIR/new-task"
+
+    # Create project PROMPT.md if not exists
+    if [ ! -f "$TAW_DIR/PROMPT.md" ]; then
+        cat > "$TAW_DIR/PROMPT.md" << 'EOF'
+# Project Prompt
+
+Add project-specific instructions here.
+EOF
+    fi
+
+    echo "Initialized .taw directory."
+}
+
+# Add .taw to .gitignore if not already there
+update_gitignore() {
+    local gitignore="$PROJECT_DIR/.gitignore"
+
+    if [ -f "$gitignore" ]; then
+        if ! grep -qxF ".taw" "$gitignore" && ! grep -qxF ".taw/" "$gitignore"; then
+            echo ".taw" >> "$gitignore"
+            echo "Added .taw to .gitignore"
+        fi
+    else
+        echo ".taw" > "$gitignore"
+        echo "Created .gitignore with .taw"
+    fi
+}
+
+# Main
+check_git_root
+init_taw_dir
+update_gitignore
+
+# Export TAW_HOME for child scripts
+export TAW_HOME
+
+# Start session
+exec "$TAW_HOME/_taw/bin/start"

@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# TAW Installer
+# Installs taw command to ~/.local/bin
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BIN_DIR="$HOME/.local/bin"
+TAW_SCRIPT="$BIN_DIR/taw"
+
+# Create bin directory if not exists
+mkdir -p "$BIN_DIR"
+
+# Create wrapper script that sets TAW_HOME
+cat > "$TAW_SCRIPT" << EOF
+#!/bin/bash
+export TAW_HOME="$SCRIPT_DIR"
+exec "\$TAW_HOME/_taw/bin/taw" "\$@"
+EOF
+
+chmod +x "$TAW_SCRIPT"
+
+echo "taw installed to $TAW_SCRIPT"
+echo ""
+
+# Check if ~/.local/bin is in PATH
+if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
+    echo "Note: $BIN_DIR is not in your PATH."
+    echo "Add this line to your shell config (~/.bashrc, ~/.zshrc, etc.):"
+    echo ""
+    echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo ""
+fi
+
+echo "Usage: cd to any git project and run 'taw'"

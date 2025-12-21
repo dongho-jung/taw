@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# TAW Uninstaller
+# Removes taw command from ~/.local/bin
+
+set -e
+
+BIN_DIR="$HOME/.local/bin"
+TAW_SCRIPT="$BIN_DIR/taw"
+
+if [ -f "$TAW_SCRIPT" ]; then
+    rm -f "$TAW_SCRIPT"
+    echo "taw removed from $TAW_SCRIPT"
+else
+    echo "taw not found at $TAW_SCRIPT"
+fi
+
+echo ""
+echo "Note: This does not remove .taw directories from your projects."
+echo "To fully clean up a project, delete its .taw directory manually."
