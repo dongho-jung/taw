@@ -9,14 +9,15 @@ Claude Code 기반 자율 에이전트 작업 환경
   ^e          현재 태스크 종료 (/done 실행)
 
 ### Pane 조작
-  ⌥ ←/→       좌/우 pane으로 이동
-  ^⌥ h        왼쪽에 새 pane 생성
-  ^⌥ j        아래에 새 pane 생성
-  ^⌥ k        위에 새 pane 생성
-  ^⌥ l        오른쪽에 새 pane 생성
+  ⌥ ←/→/↑/↓   pane 이동
+  ⌥ h         왼쪽에 새 pane 생성
+  ⌥ j         아래에 새 pane 생성
+  ⌥ k         위에 새 pane 생성
+  ⌥ l         오른쪽에 새 pane 생성
+  ⌥ x         현재 pane 닫기
 
 ### Window 조작
-  ^⌥ ←/→      이전/다음 window로 이동
+  ⇧⌥ ←/→      이전/다음 window로 이동
 
 ### 세션
   ^q          세션에서 나가기 (detach)

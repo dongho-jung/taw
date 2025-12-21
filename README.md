@@ -99,7 +99,9 @@ brew install tmux fswatch gh
 |------|--------|
 | 새 태스크 | `^n` |
 | 태스크 종료 | `^e` (agent에 /done 전송) |
-| Pane 이동 | `⌥ + ←/→` |
-| Pane 분할 | `^⌥ + h/j/k/l` (좌/하/상/우) |
-| Window 이동 | `^⌥ + ←/→` |
+| Pane 이동 | `⌥ + ←/→/↑/↓` |
+| Pane 분할 | `⌥ + h/j/k/l` (좌/하/상/우) |
+| Pane 닫기 | `⌥ + x` |
+| Window 이동 | `⇧⌥ + ←/→` |
+| 도움말 | `⌥ + /` |
 | Session 나가기 | `^q` (detach) |

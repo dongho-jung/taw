@@ -235,8 +235,6 @@ $task_content"
     window_id=$(tm new-window -t "$SESSION_NAME" -n "$window_name" -c "$worktree_dir" -P -F "#{window_id}")
     touch "$tab_marker"
 
-    # Set remain-on-exit for this window
-    tm setw -t "$window_id" remain-on-exit on
     sleep 0.5
 
     # Split horizontally (creates right pane for user) - also in worktree
@@ -383,25 +381,23 @@ start_session() {
     # Configure tmux session
     tm set -t "$SESSION_NAME" mouse on
 
-    # Pane persistence hook (session-level) - respawn the dead pane automatically
-    tm set-hook -t "$SESSION_NAME" pane-died 'respawn-pane -k -t "#{hook_pane}"'
-
-    # Set remain-on-exit for initial window
-    tm setw -t "$SESSION_NAME:_" remain-on-exit on
-
     # Unbind all default keys and set minimal bindings
     tm unbind-key -a
     tm bind -n C-q detach
     tm bind -n C-n run-shell "tmux new-window -t '$SESSION_NAME' -n '_' -c '$PROJECT_DIR' '$TAW_HOME/_taw/bin/new-task'"
+    # Pane: Alt + arrows to move, Alt + hjkl to split, Alt + x to close
     tm bind -n M-Left select-pane -L
     tm bind -n M-Right select-pane -R
-    tm bind -n M-C-Left previous-window
-    tm bind -n M-C-Right next-window
-    # Split pane: Ctrl+Option + h/j/k/l
-    tm bind -n M-C-h split-window -hb -c "#{pane_current_path}"
-    tm bind -n M-C-j split-window -v -c "#{pane_current_path}"
-    tm bind -n M-C-k split-window -vb -c "#{pane_current_path}"
-    tm bind -n M-C-l split-window -h -c "#{pane_current_path}"
+    tm bind -n M-Up select-pane -U
+    tm bind -n M-Down select-pane -D
+    tm bind -n M-h split-window -hb -c "#{pane_current_path}"
+    tm bind -n M-j split-window -v -c "#{pane_current_path}"
+    tm bind -n M-k split-window -vb -c "#{pane_current_path}"
+    tm bind -n M-l split-window -h -c "#{pane_current_path}"
+    tm bind -n M-x kill-pane
+    # Window: Ctrl+Alt + arrows (using Shift+Alt as fallback for compatibility)
+    tm bind -n S-M-Left previous-window
+    tm bind -n S-M-Right next-window
     # End task: Ctrl+E - send /done to agent pane (pane 0)
     tm bind -n C-e run-shell "tmux send-keys -t .0 Escape; sleep 0.2; tmux send-keys -t .0 C-c; sleep 0.5; tmux send-keys -t .0 '/done' Escape; sleep 0.1; tmux send-keys -t .0 -H 0d"
     # Help: Alt+/ - show help in temporary window
@@ -411,7 +407,7 @@ start_session() {
     # Status line: 2 lines - windows on top, hints on bottom
     tm set -t "$SESSION_NAME" status 2
     tm set -t "$SESSION_NAME" status-format[0] "#[align=left]#{W:#[fg=white bg=default] #W #[default],#[fg=white bg=blue bold] #W #[default]}"
-    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ^n:new-task  ^e:end-task  ⌥←→:move-pane  ^⌥hjkl:split-pane  ^⌥←→:move-window  ^q:quit  ⌥/:help"
+    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ^n:new-task  ^e:end-task  ⌥←→↑↓:move-pane  ⌥hjkl:split-pane  ⌥x:close-pane  ⇧⌥←→:move-window  ^q:quit  ⌥/:help"
 
     # Run new-task in the initial window (will be killed after first task is created)
     tm send-keys -t "$SESSION_NAME:_" "$TAW_HOME/_taw/bin/new-task" Enter
