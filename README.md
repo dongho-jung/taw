@@ -4,8 +4,10 @@ Claude Code 기반의 프로젝트 관리 시스템입니다.
 
 ## 개요
 
-- 각 git 프로젝트에서 `taw` 명령어로 tmux 세션 기반의 작업 환경을 시작합니다.
+- 아무 디렉토리에서 `taw` 명령어로 tmux 세션 기반의 작업 환경을 시작합니다.
 - 태스크를 생성하면 자동으로 Claude Code agent가 시작됩니다.
+- **Git 모드**: git 레포에서 실행 시 태스크마다 worktree 자동 생성
+- **Non-Git 모드**: git 없이도 사용 가능 (worktree 없이 프로젝트 디렉토리에서 작업)
 
 ## 설치
 
@@ -29,9 +31,11 @@ taw/                           # 이 레포
         ├── pr.md              # /pr - PR 생성
         └── done.md            # /done - 태스크 정리
 
-{any-git-project}/             # 사용자 프로젝트
+{any-project}/                 # 사용자 프로젝트 (git 또는 일반 디렉토리)
 └── .taw/                      # taw가 생성하는 디렉토리
     ├── PROMPT.md              # 프로젝트별 프롬프트
+    ├── .global-prompt         # -> 전역 프롬프트 (symlink, git 모드에 따라 다름)
+    ├── .is-git-repo           # git 모드 마커 (git 레포일 때만 존재)
     ├── .claude                # -> _taw/claude (symlink)
     ├── .metadata/             # 로그 및 상태
     └── agents/{task-name}/    # 태스크별 작업 공간
@@ -39,7 +43,7 @@ taw/                           # 이 레포
         ├── log                # 진행 로그
         ├── attach             # 태스크 재연결 스크립트
         ├── origin             # -> 프로젝트 루트 (symlink)
-        ├── worktree/          # git worktree (자동 생성)
+        ├── worktree/          # git worktree (git 모드에서만 자동 생성)
         ├── .tab-created       # 탭 생성 마커
         └── .pr                # PR 번호 (생성 시)
 ```
@@ -49,9 +53,12 @@ taw/                           # 이 레포
 ### 프로젝트에서 taw 시작
 
 ```bash
-cd /path/to/your/git/project
+cd /path/to/your/project  # git 레포 또는 일반 디렉토리
 taw  # .taw 디렉토리 생성 및 tmux 세션 시작 → 자동으로 new-task 실행
 ```
+
+- git 레포에서 실행: Git 모드 (worktree 자동 생성)
+- 일반 디렉토리에서 실행: Non-Git 모드 (프로젝트 디렉토리에서 직접 작업)
 
 첫 시작 시 자동으로 태스크 작성 에디터가 열립니다.
 
@@ -90,7 +97,7 @@ Agent가 사용할 수 있는 slash commands:
 ## 의존성
 
 ```bash
-brew install tmux fswatch gh
+brew install tmux gh
 ```
 
 ## tmux 단축키
