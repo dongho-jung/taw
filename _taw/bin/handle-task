@@ -117,6 +117,27 @@ if [ "$IS_GIT_REPO" = true ]; then
         log "Creating worktree: $WORK_DIR"
         debug "Creating worktree: $WORK_DIR"
         git -C "$PROJECT_DIR" worktree prune 2>/dev/null || true
+
+        # Check for uncommitted changes (staged + unstaged)
+        # Use git stash create to get a hash without touching the stack
+        STASH_HASH=""
+        HAS_UNTRACKED=false
+
+        if ! git -C "$PROJECT_DIR" diff --quiet 2>/dev/null || ! git -C "$PROJECT_DIR" diff --cached --quiet 2>/dev/null; then
+            debug "Detected uncommitted changes, creating stash commit..."
+            # git stash create returns a commit hash without modifying refs/stash
+            STASH_HASH=$(git -C "$PROJECT_DIR" stash create 2>/dev/null)
+            debug "Stash hash: $STASH_HASH"
+        fi
+
+        # Check for untracked files (stash create doesn't include them)
+        UNTRACKED_LIST="$TASK_DIR/.untracked-files"
+        git -C "$PROJECT_DIR" ls-files --others --exclude-standard > "$UNTRACKED_LIST" 2>/dev/null
+        if [ -s "$UNTRACKED_LIST" ]; then
+            HAS_UNTRACKED=true
+            debug "Detected untracked files, will copy separately"
+        fi
+
         debug "Running: git worktree add $WORK_DIR -b $TASK_NAME"
         if ! git -C "$PROJECT_DIR" worktree add "$WORK_DIR" -b "$TASK_NAME" 2>> "$LOG_DIR/handle-task.log"; then
             # Branch might already exist, try without -b
@@ -127,6 +148,25 @@ if [ "$IS_GIT_REPO" = true ]; then
                 exit 1
             fi
         fi
+
+        # Apply stashed changes to worktree using hash (original dir unchanged)
+        if [ -n "$STASH_HASH" ]; then
+            debug "Applying stash $STASH_HASH to worktree..."
+            git -C "$WORK_DIR" stash apply "$STASH_HASH" 2>> "$LOG_DIR/handle-task.log" || true
+        fi
+
+        # Copy untracked files to worktree
+        if [ "$HAS_UNTRACKED" = true ]; then
+            debug "Copying untracked files to worktree..."
+            while IFS= read -r file; do
+                if [ -n "$file" ] && [ -f "$PROJECT_DIR/$file" ]; then
+                    mkdir -p "$WORK_DIR/$(dirname "$file")"
+                    cp "$PROJECT_DIR/$file" "$WORK_DIR/$file" 2>/dev/null || true
+                fi
+            done < "$UNTRACKED_LIST"
+        fi
+        rm -f "$UNTRACKED_LIST"
+
         log "Worktree created: $WORK_DIR"
         debug "Worktree created successfully"
     else
