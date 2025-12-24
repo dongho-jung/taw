@@ -1,0 +1,168 @@
+#!/bin/bash
+
+# TAW End Task
+# Ends the current task: kills claude, cleans up worktree/branch, closes window
+# Called from ^x keybinding
+#
+# Modes:
+#   end-task <session> <window_id>         - Check merge status, confirm if not merged
+#   end-task <session> <window_id> --force - Skip merge check, cleanup immediately
+
+# Get current window info from tmux
+# Window name format: 🤖task-name or ✅task-name etc
+get_task_info() {
+    local session_name="$1"
+    local window_id="$2"
+
+    # Get window name
+    local window_name=$(tmux -L "taw-$session_name" display-message -t "$window_id" -p '#{window_name}' 2>/dev/null)
+
+    # Extract task name (remove emoji prefix)
+    # Emojis: 🤖 💬 ✅
+    local task_name=$(echo "$window_name" | sed 's/^[🤖💬✅]*//')
+
+    echo "$task_name"
+}
+
+# Resolve symlinks (macOS compatible)
+resolve_path() {
+    local path="$1"
+    while [ -L "$path" ]; do
+        local dir="$(cd "$(dirname "$path")" && pwd)"
+        path="$(readlink "$path")"
+        [[ "$path" != /* ]] && path="$dir/$path"
+    done
+    echo "$(cd "$(dirname "$path")" && pwd)/$(basename "$path")"
+}
+
+# Get TAW_HOME from script location
+SCRIPT_PATH="$(resolve_path "$0")"
+TAW_HOME="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd)"
+
+# Arguments: session_name window_id [--force]
+SESSION_NAME="$1"
+WINDOW_ID="$2"
+FORCE_MODE="$3"
+
+if [ -z "$SESSION_NAME" ] || [ -z "$WINDOW_ID" ]; then
+    echo "Usage: end-task <session_name> <window_id> [--force]"
+    exit 1
+fi
+
+tm() {
+    tmux -L "taw-$SESSION_NAME" "$@"
+}
+
+# Get task name from window
+TASK_NAME=$(get_task_info "$SESSION_NAME" "$WINDOW_ID")
+
+if [ -z "$TASK_NAME" ]; then
+    echo "Could not determine task name from window"
+    exit 1
+fi
+
+# Determine project directory from session name
+# Try current pane's path first
+PANE_PATH=$(tm display-message -t "$WINDOW_ID" -p '#{pane_current_path}' 2>/dev/null)
+
+# Find .taw directory by walking up
+find_taw_dir() {
+    local dir="$1"
+    while [ "$dir" != "/" ]; do
+        if [ -d "$dir/.taw" ]; then
+            echo "$dir"
+            return 0
+        fi
+        dir=$(dirname "$dir")
+    done
+    return 1
+}
+
+PROJECT_DIR=$(find_taw_dir "$PANE_PATH")
+
+if [ -z "$PROJECT_DIR" ]; then
+    echo "Could not find .taw directory"
+    exit 1
+fi
+
+TAW_DIR="$PROJECT_DIR/.taw"
+AGENT_DIR="$TAW_DIR/agents/$TASK_NAME"
+WORKTREE_DIR="$AGENT_DIR/worktree"
+
+# Check if agent directory exists
+if [ ! -d "$AGENT_DIR" ]; then
+    echo "Agent directory not found: $AGENT_DIR"
+    # Just close the window
+    tm kill-window -t "$WINDOW_ID" 2>/dev/null || true
+    exit 0
+fi
+
+# Check if this is git mode
+IS_GIT_MODE=false
+if [ -f "$TAW_DIR/.is-git-repo" ]; then
+    IS_GIT_MODE=true
+fi
+
+# === Merge Status Check (git mode only, skip if --force) ===
+if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ]; then
+    MERGED=false
+
+    # Check if PR exists and is merged
+    PR_FILE="$AGENT_DIR/.pr"
+    if [ -f "$PR_FILE" ]; then
+        PR_NUMBER=$(cat "$PR_FILE")
+        PR_STATE=$(gh pr view "$PR_NUMBER" --json state,merged -q '.merged' 2>/dev/null || echo "false")
+        if [ "$PR_STATE" = "true" ]; then
+            MERGED=true
+        fi
+    fi
+
+    # If no PR or PR not merged, check if branch is merged to main
+    if [ "$MERGED" = false ]; then
+        git -C "$PROJECT_DIR" fetch origin main 2>/dev/null || true
+        if git -C "$PROJECT_DIR" branch --merged main 2>/dev/null | grep -q "$TASK_NAME"; then
+            MERGED=true
+        fi
+    fi
+
+    # If not merged, ask for confirmation via tmux confirm-before
+    if [ "$MERGED" = false ]; then
+        # Use confirm-before to ask user
+        tm confirm-before -p "Task '$TASK_NAME' is NOT merged. Delete anyway? (y/n)" \
+            "run-shell '$TAW_HOME/_taw/bin/end-task \"$SESSION_NAME\" \"$WINDOW_ID\" --force'"
+        exit 0
+    fi
+fi
+
+# === Cleanup ===
+echo "=== Ending task: $TASK_NAME ==="
+
+# 1. Kill claude process in pane 0 (send Ctrl+C multiple times)
+echo "Stopping claude..."
+tm send-keys -t "${WINDOW_ID}.0" C-c 2>/dev/null || true
+sleep 0.3
+tm send-keys -t "${WINDOW_ID}.0" C-c 2>/dev/null || true
+sleep 0.3
+
+# 2. Remove worktree (git mode only)
+if [ -d "$WORKTREE_DIR" ]; then
+    echo "Removing worktree..."
+    git -C "$PROJECT_DIR" worktree remove "$WORKTREE_DIR" --force 2>/dev/null || true
+    git -C "$PROJECT_DIR" worktree prune 2>/dev/null || true
+fi
+
+# 3. Delete branch (git mode only)
+if git -C "$PROJECT_DIR" rev-parse --verify "$TASK_NAME" &>/dev/null; then
+    echo "Deleting branch: $TASK_NAME"
+    git -C "$PROJECT_DIR" branch -D "$TASK_NAME" 2>/dev/null || true
+fi
+
+# 4. Remove agent directory
+echo "Removing agent directory..."
+rm -rf "$AGENT_DIR" 2>/dev/null || true
+
+# 5. Close window
+echo "Closing window..."
+tm kill-window -t "$WINDOW_ID" 2>/dev/null || true
+
+echo "Done."

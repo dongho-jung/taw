@@ -324,9 +324,8 @@ start_session() {
     # Window: Ctrl+Alt + arrows (using Shift+Alt as fallback for compatibility)
     tm bind -n S-M-Left previous-window
     tm bind -n S-M-Right next-window
-    # End task: Ctrl+E - send /done to agent pane (pane 0)
-    # Sequence: Escape (exit multiline) -> Ctrl+C (cancel current) -> /done text -> Escape -> Enter
-    tm bind -n C-e run-shell "tmux send-keys -t .0 Escape; sleep 0.3; tmux send-keys -t .0 C-c; sleep 0.5; tmux send-keys -t .0 -l '/done'; sleep 0.2; tmux send-keys -t .0 Escape; sleep 0.2; tmux send-keys -t .0 -H 0d"
+    # End task: Ctrl+X - directly run cleanup script (no agent needed)
+    tm bind -n C-x run-shell "$TAW_HOME/_taw/bin/end-task '$SESSION_NAME' '#{window_id}'"
     # Help: Alt+/ - show help in temporary window
     tm bind -n M-/ new-window -n "HELP" "less '$TAW_HOME/_taw/HELP.md'"
     log "Tmux configured"
@@ -334,7 +333,7 @@ start_session() {
     # Status line: 2 lines - windows on top, hints on bottom
     tm set -t "$SESSION_NAME" status 2
     tm set -t "$SESSION_NAME" status-format[0] "#[align=left]#{W:#[fg=white bg=default] #W #[default],#[fg=white bg=blue bold] #W #[default]}"
-    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ^n:new-task  ^e:end-task  ⌥←→↑↓:move-pane  ⌥hjkl:split-pane  ⌥x:close-pane  ⇧⌥←→:move-window  ^q:quit  ⌥/:help"
+    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ^n:new-task  ^x:end-task  ⌥←→↑↓:move-pane  ⌥hjkl:split-pane  ⌥x:close-pane  ⇧⌥←→:move-window  ^q:quit  ⌥/:help"
 
     # Run new-task in the initial window, then exit to close _ window
     debug "Running new-task in initial window..."
