@@ -86,28 +86,45 @@ log "Task content received, calling Claude CLI (haiku)..."
 debug "Task content: $task_content"
 
 # Call Claude CLI to generate task name
-prompt="Generate a task name (8-32 chars, lowercase, hyphens ok).
-Format: verb-target (e.g., fix-auth-bug, add-dark-mode)
-Output ONLY the name.
+prompt="Task: $task_content
 
-Task:
-$task_content"
+---
+Reply with EXACTLY one task name. No explanation. No prefix. No quotes.
+Rules: 8-32 chars, lowercase, hyphens only, format: verb-noun (e.g. fix-auth-bug)"
 
-debug "Calling claude CLI to generate task name..."
-if [ "${TAW_DEBUG:-0}" = "1" ]; then
-    task_name=$(echo "$prompt" | claude --print --model haiku 2>&1 | tee /dev/stderr | tr -d '[:space:]')
-else
-    task_name=$(echo "$prompt" | claude --print --model haiku 2>/dev/null | tr -d '[:space:]')
-fi
-debug "Claude CLI returned: '$task_name'"
+# Generate task name with timeout and retry (3s, 5s, 10s)
+timeouts=(3 5 10)
+task_name=""
 
-log "Generated task name: $task_name"
+for i in "${!timeouts[@]}"; do
+    timeout_sec="${timeouts[$i]}"
+    attempt=$((i + 1))
+    debug "Attempt $attempt: calling claude CLI (timeout: ${timeout_sec}s)..."
 
-# Validate task name: 8-32 chars, lowercase letters, numbers, hyphens, no leading/trailing hyphens
-if [[ ! "$task_name" =~ ^[a-z0-9][a-z0-9-]{6,30}[a-z0-9]$ ]]; then
+    if [ "${TAW_DEBUG:-0}" = "1" ]; then
+        result=$(echo "$prompt" | timeout "$timeout_sec" claude --print --model haiku 2>&1 | tee /dev/stderr | tr -d '[:space:]') || true
+    else
+        result=$(echo "$prompt" | timeout "$timeout_sec" claude --print --model haiku 2>/dev/null | tr -d '[:space:]') || true
+    fi
+
+    debug "Claude CLI returned: '$result'"
+
+    # Validate: 8-32 chars, lowercase letters, numbers, hyphens, no leading/trailing hyphens
+    if [[ "$result" =~ ^[a-z0-9][a-z0-9-]{6,30}[a-z0-9]$ ]]; then
+        task_name="$result"
+        log "Generated task name: $task_name (attempt $attempt)"
+        break
+    else
+        log "Attempt $attempt failed: invalid name '$result'"
+        debug "Invalid task name, retrying..."
+    fi
+done
+
+# Fallback to timestamp if all attempts failed
+if [ -z "$task_name" ]; then
     timestamp=$(date '+%y%m%d%H%M%S')
-    echo "Warning: Generated task name '$task_name' is invalid. Using timestamp."
-    log "Invalid task name, using fallback: task-$timestamp"
+    echo "Warning: Failed to generate valid task name after 3 attempts. Using timestamp."
+    log "All attempts failed, using fallback: task-$timestamp"
     task_name="task-$timestamp"
 fi
 
