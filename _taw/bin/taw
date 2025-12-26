@@ -441,6 +441,12 @@ start_session() {
     # Configure tmux session
     tm set -t "$SESSION_NAME" mouse on
 
+    # Highlight focused pane with distinct border color
+    # Active pane: cyan border (stands out in most terminals)
+    # Inactive pane: dim gray border
+    tm set -t "$SESSION_NAME" pane-border-style "fg=colour238"
+    tm set -t "$SESSION_NAME" pane-active-border-style "fg=cyan,bold"
+
     # Unbind all default keys and set minimal bindings
     # All bindings use Alt key to avoid conflicts with shell keybindings
     tm unbind-key -a
