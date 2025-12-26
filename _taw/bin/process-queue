@@ -62,12 +62,26 @@ fi
 
 log "Processing queued task: $TASK_CONTENT" "$LOG_FILE"
 
-# Generate task name from content (use claude if available, otherwise simple hash)
-# For simplicity, create a short slug from content
+# Generate task name from content
+# Creates a valid task name: 8-32 chars, lowercase letters, numbers, hyphens
 generate_task_name() {
     local content="$1"
+    local name
     # Take first 30 chars, lowercase, replace spaces/special chars with hyphen
-    echo "$content" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-30
+    name=$(echo "$content" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-30)
+
+    # Ensure minimum length (8 chars) by padding with timestamp if needed
+    if [ ${#name} -lt 8 ]; then
+        local timestamp=$(date '+%H%M%S')
+        name="task-${name}-${timestamp}"
+    fi
+
+    # Ensure name starts with a letter (not a number)
+    if [[ "$name" =~ ^[0-9] ]]; then
+        name="task-$name"
+    fi
+
+    echo "$name" | cut -c1-32
 }
 
 TASK_NAME=$(generate_task_name "$TASK_CONTENT")

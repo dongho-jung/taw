@@ -116,7 +116,7 @@ generate_config() {
     cat > "$CONFIG_FILE" << EOF
 # TAW Configuration
 # Edit this file directly to change settings
-# Documentation: https://github.com/user/taw#configuration
+# Documentation: See README.md for configuration options
 
 # ============================================================================
 # Work Mode (git repositories only)

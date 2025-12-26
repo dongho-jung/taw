@@ -416,28 +416,9 @@ reopen_corrupted_tasks() {
     done
 }
 
-start_session() {
-    check_dependencies
-
-    # Create directories
-    mkdir -p "$LOG_DIR"
-    mkdir -p "$AGENTS_DIR"
-
-    log "=== Session start ==="
-    log "Project: $PROJECT_NAME"
-    log "Directory: $PROJECT_DIR"
-    log "TAW Directory: $TAW_DIR"
-
-    # Clean up tab markers from previous session
-    find "$AGENTS_DIR" -name ".tab-created" -delete 2>/dev/null
-
-    echo "Starting session '$SESSION_NAME'..."
-
-    # Start tmux session with temporary window
-    cd "$PROJECT_DIR"
-    tm new-session -d -s "$SESSION_NAME" -n "_" -c "$PROJECT_DIR"
-    log "Tmux session created: $SESSION_NAME"
-
+# Configure tmux settings and keybindings
+# Can be called on new session or reattach to ensure bindings are up to date
+setup_tmux_config() {
     # Configure tmux session
     tm set -t "$SESSION_NAME" mouse on
 
@@ -465,12 +446,39 @@ start_session() {
     tm bind -n M-q detach
     tm bind -n M-/ run-shell "$TAW_HOME/_taw/bin/toggle-help '$SESSION_NAME'"
 
-    log "Tmux configured"
-
     # Status line: 2 lines - windows on top, hints on bottom
     tm set -t "$SESSION_NAME" status 2
     tm set -t "$SESSION_NAME" status-format[0] "#[align=left]#{W:#[fg=white bg=default] #W #[default],#[fg=white bg=blue bold] #W #[default]}"
     tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ⌥tab:pane  ⌥←→:window  ⌥n:new  ⌥e:end  ⌥m:merge  ⌥p:popup  ⌥u:queue  ⌥q:quit  ⌥/:help"
+
+    debug "Tmux config and keybindings applied"
+}
+
+start_session() {
+    check_dependencies
+
+    # Create directories
+    mkdir -p "$LOG_DIR"
+    mkdir -p "$AGENTS_DIR"
+
+    log "=== Session start ==="
+    log "Project: $PROJECT_NAME"
+    log "Directory: $PROJECT_DIR"
+    log "TAW Directory: $TAW_DIR"
+
+    # Clean up tab markers from previous session
+    find "$AGENTS_DIR" -name ".tab-created" -delete 2>/dev/null
+
+    echo "Starting session '$SESSION_NAME'..."
+
+    # Start tmux session with temporary window
+    cd "$PROJECT_DIR"
+    tm new-session -d -s "$SESSION_NAME" -n "_" -c "$PROJECT_DIR"
+    log "Tmux session created: $SESSION_NAME"
+
+    # Apply tmux configuration and keybindings
+    setup_tmux_config
+    log "Tmux configured"
 
     # Run new-task in the initial window, then exit to close _ window
     debug "Running new-task in initial window..."
@@ -558,6 +566,9 @@ if is_session_running; then
         log "Session terminated after cleanup, starting fresh..."
         start_session
     else
+        # Update tmux config and keybindings (ensures latest bindings on reattach)
+        setup_tmux_config
+
         # Reopen any incomplete tasks
         debug "Checking for incomplete tasks..."
         reopen_incomplete_tasks

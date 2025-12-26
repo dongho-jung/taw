@@ -16,14 +16,14 @@ If any variable is empty, stop and inform the user.
 
 ## Step 2: Check Current State
 
-Using the actual values from Step 1, check:
+Using the environment variables from Step 1, check:
 
 ```bash
 git branch --show-current
 ```
 
 ```bash
-git -C {PROJECT_DIR} branch --show-current
+git -C "$PROJECT_DIR" branch --show-current
 ```
 
 ```bash
@@ -43,17 +43,17 @@ If there are uncommitted changes in worktree, ask user whether to:
 
 The merge will be:
 ```
-{worktree branch} -> {project branch}
+$TASK_NAME (worktree branch) -> project's current branch
 ```
 
 Ask user to confirm before proceeding.
 
 ## Step 4: Perform Merge
 
-Using actual values from Step 1:
+Using environment variables from Step 1:
 
 ```bash
-git -C {PROJECT_DIR} merge {TASK_NAME} --no-ff -m "Merge branch '{TASK_NAME}'"
+git -C "$PROJECT_DIR" merge "$TASK_NAME" --no-ff -m "Merge branch '$TASK_NAME'"
 ```
 
 Use `--no-ff` to preserve branch history.
@@ -63,7 +63,7 @@ Use `--no-ff` to preserve branch history.
 If merge conflicts occur:
 
 ```bash
-git -C {PROJECT_DIR} diff --name-only --diff-filter=U
+git -C "$PROJECT_DIR" diff --name-only --diff-filter=U
 ```
 
 - List conflicted files
@@ -73,11 +73,11 @@ git -C {PROJECT_DIR} diff --name-only --diff-filter=U
 ## Step 6: Show Result
 
 ```bash
-git -C {PROJECT_DIR} log --oneline -5
+git -C "$PROJECT_DIR" log --oneline -5
 ```
 
 ## After Merge
 
-Inform user they can now run `/done` to clean up the task (worktree, branch, window).
+Inform user they can now press `⌥ e` (end-task) to clean up the task (worktree, branch, window).
 
 Proceed with merge.

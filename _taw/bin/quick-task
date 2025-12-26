@@ -62,12 +62,15 @@ esac
 # Get next task number
 get_next_num() {
     local max=0
-    for f in "$QUEUE_DIR"/*.task 2>/dev/null; do
+    # Use nullglob to handle case when no .task files exist
+    shopt -s nullglob
+    for f in "$QUEUE_DIR"/*.task; do
         [ -f "$f" ] || continue
         local num=$(basename "$f" .task | sed 's/^0*//')
         [ -z "$num" ] && num=0
         [ "$num" -gt "$max" ] && max=$num
     done
+    shopt -u nullglob
     printf "%03d" $((max + 1))
 }
 
