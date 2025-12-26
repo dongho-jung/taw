@@ -328,10 +328,10 @@ kill_agent_pane() {
 debug "Starting claude with system prompt..."
 if [ "$USE_WORKTREE" = true ]; then
     debug "Worktree mode: setting WORKTREE_DIR"
-    send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$TASK_DIR/.system-prompt')\""
+    send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' ON_COMPLETE='$ON_COMPLETE' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$TASK_DIR/.system-prompt')\""
 else
     debug "Main/non-git mode: no WORKTREE_DIR"
-    send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$TASK_DIR/.system-prompt')\""
+    send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' ON_COMPLETE='$ON_COMPLETE' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$TASK_DIR/.system-prompt')\""
 fi
 
 # Wait for claude to be ready
