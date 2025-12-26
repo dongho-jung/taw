@@ -343,6 +343,87 @@ get_worktree_status_description() {
 }
 
 # ============================================================================
+# Merged Task Detection
+# ============================================================================
+
+# Check if a task's branch is merged (either to main or via PR)
+# Usage: is_merged=$(check_task_merged "$PROJECT_DIR" "$TASK_NAME" "$AGENT_DIR")
+# Returns: "merged" or "not_merged"
+check_task_merged() {
+    local project_dir="$1"
+    local task_name="$2"
+    local agent_dir="$3"
+
+    # Check if branch exists first
+    if ! git -C "$project_dir" rev-parse --verify "$task_name" &>/dev/null; then
+        # Branch doesn't exist - could have been deleted after merge
+        echo "merged"
+        return 0
+    fi
+
+    # Check if PR exists and is merged
+    local pr_file="$agent_dir/.pr"
+    if [ -f "$pr_file" ]; then
+        local pr_number=$(cat "$pr_file")
+        local pr_state=$(gh pr view "$pr_number" --json merged -q '.merged' 2>/dev/null || echo "false")
+        if [ "$pr_state" = "true" ]; then
+            echo "merged"
+            return 0
+        fi
+    fi
+
+    # Check if branch is merged to main
+    git -C "$project_dir" fetch origin main 2>/dev/null || true
+    if git -C "$project_dir" branch --merged main 2>/dev/null | grep -q "\\b$task_name\\b"; then
+        echo "merged"
+        return 0
+    fi
+
+    echo "not_merged"
+}
+
+# Find merged tasks: tasks where branch has been merged but not cleaned up
+# Usage: merged_tasks=$(find_merged_tasks "$AGENTS_DIR" "$PROJECT_DIR" "$SESSION_NAME")
+# Returns: newline-separated list of agent directories
+find_merged_tasks() {
+    local agents_dir="$1"
+    local project_dir="$2"
+    local session_name="${3:-}"
+    local result=""
+
+    [ -d "$agents_dir" ] || return 0
+
+    for agent_dir in "$agents_dir"/*/; do
+        [ -d "$agent_dir" ] || continue
+
+        local task_name=$(basename "$agent_dir")
+        local tab_lock="$agent_dir/.tab-lock"
+
+        # Skip tasks that have an active window (if session_name provided)
+        if [ -n "$session_name" ] && [ -d "$tab_lock" ] && [ -f "$tab_lock/window_id" ]; then
+            local window_id=$(cat "$tab_lock/window_id")
+            # Check if window actually exists
+            if tmux -L "taw-$session_name" list-windows -F "#{window_id}" 2>/dev/null | grep -q "^${window_id}$"; then
+                # Window still exists, skip this task
+                continue
+            fi
+        fi
+
+        # Check if task is merged
+        local status=$(check_task_merged "$project_dir" "$task_name" "$agent_dir")
+        if [ "$status" = "merged" ]; then
+            if [ -n "$result" ]; then
+                result="$result"$'\n'"$agent_dir"
+            else
+                result="$agent_dir"
+            fi
+        fi
+    done
+
+    echo "$result"
+}
+
+# ============================================================================
 # Task Cleanup (shared between end-task and /done)
 # ============================================================================
 

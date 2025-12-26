@@ -293,6 +293,43 @@ clean_all() {
     echo "Done."
 }
 
+# Auto-cleanup merged tasks (tasks where branch has been merged externally)
+auto_cleanup_merged_tasks() {
+    # Only in git mode
+    [ "$IS_GIT_REPO" = true ] || return 0
+
+    local merged_tasks
+    merged_tasks=$(find_merged_tasks "$AGENTS_DIR" "$PROJECT_DIR" "$SESSION_NAME")
+
+    [ -z "$merged_tasks" ] && return 0
+
+    echo "$merged_tasks" | while IFS= read -r agent_dir; do
+        [ -z "$agent_dir" ] && continue
+        local task_name=$(basename "$agent_dir")
+        local tab_lock="$agent_dir/.tab-lock"
+        local window_id_file="$tab_lock/window_id"
+
+        log "Auto-cleaning merged task: $task_name"
+        debug "Cleaning merged task: $agent_dir"
+
+        # If window exists, close it first
+        if [ -f "$window_id_file" ]; then
+            local window_id=$(cat "$window_id_file")
+            if tm list-windows -F "#{window_id}" 2>/dev/null | grep -q "^${window_id}$"; then
+                debug "Closing window: $window_id"
+                tm send-keys -t "${window_id}.0" C-c 2>/dev/null || true
+                sleep 0.2
+                tm kill-window -t "$window_id" 2>/dev/null || true
+            fi
+        fi
+
+        # Clean up task (worktree, branch, agent dir)
+        cleanup_task "$task_name" "$PROJECT_DIR" "$agent_dir" true
+
+        echo "✅ Cleaned up merged task: $task_name"
+    done
+}
+
 # Reopen incomplete tasks (tasks where window was closed but not done)
 reopen_incomplete_tasks() {
     local incomplete_tasks
@@ -391,6 +428,10 @@ start_session() {
     debug "Running new-task in initial window..."
     tm send-keys -t "$SESSION_NAME:_" "$TAW_HOME/_taw/bin/new-task; exit" Enter
 
+    # Auto-cleanup merged tasks (before reopening, so merged tasks are cleaned up first)
+    debug "Checking for merged tasks to cleanup..."
+    auto_cleanup_merged_tasks
+
     # Reopen any incomplete tasks from previous sessions
     debug "Checking for incomplete tasks..."
     reopen_incomplete_tasks
@@ -451,6 +492,10 @@ export TAW_HOME TAW_DEBUG
 if is_session_running; then
     log "Reattaching to existing session: $SESSION_NAME"
     echo "Attaching to existing session '$SESSION_NAME'..."
+
+    # Auto-cleanup merged tasks (before reopening, so merged tasks are cleaned up first)
+    debug "Checking for merged tasks to cleanup..."
+    auto_cleanup_merged_tasks
 
     # Reopen any incomplete tasks
     debug "Checking for incomplete tasks..."
