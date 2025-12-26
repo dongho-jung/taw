@@ -71,13 +71,9 @@ trap cleanup_on_error EXIT
 log "New task detected: $TASK_NAME" "$LOG_FILE"
 debug "New task: $TASK_NAME (IS_GIT_REPO=$IS_GIT_REPO)"
 
-# Create origin and attach symlinks if they don't exist
-if [ ! -L "$TASK_DIR/origin" ]; then
-    ln -s ../../.. "$TASK_DIR/origin" 2>/dev/null || true
-fi
-if [ ! -L "$TASK_DIR/attach" ]; then
-    ln -s "$TAW_HOME/_taw/bin/attach" "$TASK_DIR/attach" 2>/dev/null || true
-fi
+# Create origin and attach symlinks (use -sf to avoid TOCTOU race)
+ln -sf ../../.. "$TASK_DIR/origin" 2>/dev/null || warn "Failed to create origin symlink"
+ln -sf "$TAW_HOME/_taw/bin/attach" "$TASK_DIR/attach" 2>/dev/null || warn "Failed to create attach symlink"
 
 # Set working directory based on git mode
 debug "Setting up working directory..."
@@ -110,11 +106,12 @@ if [ "$IS_GIT_REPO" = true ]; then
         fi
 
         debug "Running: git worktree add $WORK_DIR -b $TASK_NAME"
-        if ! git -C "$PROJECT_DIR" worktree add "$WORK_DIR" -b "$TASK_NAME" 2>> "$LOG_DIR/handle-task.log"; then
+        # Use timeout to prevent hanging on slow/frozen git operations
+        if ! timeout 30 git -C "$PROJECT_DIR" worktree add "$WORK_DIR" -b "$TASK_NAME" 2>> "$LOG_DIR/handle-task.log"; then
             # Branch might already exist, try without -b
             debug "First attempt failed, trying without -b flag..."
-            if ! git -C "$PROJECT_DIR" worktree add "$WORK_DIR" "$TASK_NAME" 2>> "$LOG_DIR/handle-task.log"; then
-                log "Failed to create worktree for $TASK_NAME" "$LOG_FILE"
+            if ! timeout 30 git -C "$PROJECT_DIR" worktree add "$WORK_DIR" "$TASK_NAME" 2>> "$LOG_DIR/handle-task.log"; then
+                log "Failed to create worktree for $TASK_NAME (timeout or error)" "$LOG_FILE"
                 debug "Failed to create worktree!"
                 exit 1
             fi
@@ -155,8 +152,13 @@ fi
 
 # Ensure .claude symlink exists in WORK_DIR for slash commands
 if [ ! -L "$WORK_DIR/.claude" ] && [ ! -d "$WORK_DIR/.claude" ]; then
-    debug "Creating .claude symlink in WORK_DIR"
-    ln -s "$TAW_DIR/.claude" "$WORK_DIR/.claude" 2>/dev/null || true
+    # Verify target exists before creating symlink
+    if [ -d "$TAW_DIR/.claude" ] || [ -L "$TAW_DIR/.claude" ]; then
+        debug "Creating .claude symlink in WORK_DIR"
+        ln -sf "$TAW_DIR/.claude" "$WORK_DIR/.claude" 2>/dev/null || warn "Failed to create .claude symlink"
+    else
+        warn ".claude directory not found at $TAW_DIR/.claude - slash commands may not work"
+    fi
 fi
 
 # Build system prompt from global and project PROMPT files
@@ -269,22 +271,31 @@ wait_for_claude_ready() {
     return 1
 }
 
+# Helper to kill orphaned pane on failure
+kill_agent_pane() {
+    debug "Killing orphaned agent pane..."
+    tm "$SESSION_NAME" send-keys -t "${window_id}.0" C-c 2>/dev/null || true
+    sleep 0.2
+    tm "$SESSION_NAME" kill-window -t "$window_id" 2>/dev/null || true
+}
+
 # Start claude interactively with system prompt
 # Set environment variables (WORKTREE_DIR only in git mode)
 debug "Starting claude with system prompt..."
 if [ "$IS_GIT_REPO" = true ]; then
     debug "Git mode: setting WORKTREE_DIR"
-    send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat $TASK_DIR/.system-prompt)\""
+    send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$TASK_DIR/.system-prompt')\""
 else
     debug "Non-git mode: no WORKTREE_DIR"
-    send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat $TASK_DIR/.system-prompt)\""
+    send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$TASK_DIR/.system-prompt')\""
 fi
 
 # Wait for claude to be ready
 debug "Waiting for claude to start..."
 if ! wait_for_claude_ready; then
-    log "Failed to start claude for $TASK_NAME" "$LOG_FILE"
+    log "Failed to start claude for $TASK_NAME - killing orphaned pane" "$LOG_FILE"
     debug "FAILED: claude did not start properly"
+    kill_agent_pane
     exit 1
 fi
 
@@ -295,7 +306,11 @@ if echo "$screen_content" | grep -qiE "trust|Trust this project|y/n|\[y\]|Are yo
     debug "Trust confirmation needed, sending 'y'"
     send_shell_cmd "y"
     debug "Waiting for claude to be ready again..."
-    wait_for_claude_ready
+    if ! wait_for_claude_ready; then
+        log "Failed after trust confirmation for $TASK_NAME" "$LOG_FILE"
+        kill_agent_pane
+        exit 1
+    fi
 fi
 
 # Wait a bit more to ensure claude is fully ready for input
@@ -303,7 +318,7 @@ sleep 0.5
 
 # Send the task instruction to claude
 debug "Sending task instruction to claude..."
-send_to_claude "ultrathink Read and execute the task from $TASK_DIR/.user-prompt"
+send_to_claude "ultrathink Read and execute the task from '$TASK_DIR/.user-prompt'"
 
 # Mark task as completed (prevents cleanup_on_error from removing .tab-lock)
 TASK_COMPLETED=true

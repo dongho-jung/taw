@@ -104,10 +104,11 @@ tmux split-window -t "$window_id" -h -c "$WORK_DIR"
 tmux select-pane -t "${window_id}.0"
 
 # Start claude with system prompt (include WINDOW_ID, WORKTREE_DIR only in git mode)
+# Note: paths are single-quoted to handle spaces correctly
 if [ "$IS_GIT_MODE" = true ]; then
-    tmux send-keys -t "${window_id}.0" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat $AGENT_DIR/.system-prompt)\"" Enter
+    tmux send-keys -t "${window_id}.0" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\"" Enter
 else
-    tmux send-keys -t "${window_id}.0" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat $AGENT_DIR/.system-prompt)\"" Enter
+    tmux send-keys -t "${window_id}.0" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\"" Enter
 fi
 
 echo "Attached to task: $TASK_NAME"

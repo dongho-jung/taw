@@ -28,7 +28,10 @@ mkdir -p "$AGENTS_DIR"
 mkdir -p "$LOG_DIR"
 
 # Create temp file for editing with hint
-temp_file=$(mktemp)
+temp_file=$(mktemp) || {
+    echo "Error: Failed to create temp file"
+    exit 1
+}
 trap "rm -f '$temp_file'" EXIT
 debug "Created temp file: $temp_file"
 
@@ -42,6 +45,12 @@ EOF
 editor="${EDITOR:-vim}"
 debug "Using editor: $editor"
 
+# Check if editor exists
+if ! command -v "$editor" &>/dev/null; then
+    echo "Error: Editor '$editor' not found. Set \$EDITOR to a valid editor."
+    exit 1
+fi
+
 # If editor is vi/vim/nvim, start on line 3 in insert mode
 editor_args=()
 if [[ "$editor" =~ (^|/)n?vim?$ ]]; then
@@ -50,7 +59,10 @@ fi
 
 # Open editor
 debug "Opening editor..."
-"$editor" "${editor_args[@]}" "$temp_file"
+if ! "$editor" "${editor_args[@]}" "$temp_file"; then
+    echo "Error: Editor exited with error"
+    exit 1
+fi
 debug "Editor closed"
 
 # Read task content, filtering out comment lines (starting with #)
