@@ -438,7 +438,7 @@ setup_tmux_config() {
     tm bind -n M-Right next-window          # Next window
 
     # Task management: Alt + key
-    tm bind -n M-n run-shell "tmux new-window -t '$SESSION_NAME' -n '_' -c '$PROJECT_DIR' '$TAW_HOME/_taw/bin/new-task'"
+    tm bind -n M-n run-shell "tmux -L 'taw-$SESSION_NAME' display-popup -E -w 80% -h 60% -d '$PROJECT_DIR' -T ' New Task ' '$TAW_HOME/_taw/bin/new-task'"
     tm bind -n M-e send-keys -t ':.1' "$TAW_HOME/_taw/bin/end-task-ui '$SESSION_NAME' '#{window_id}'" Enter
     tm bind -n M-p run-shell "$TAW_HOME/_taw/bin/popup-shell '$SESSION_NAME'"
     tm bind -n M-u run-shell "$TAW_HOME/_taw/bin/quick-task '$SESSION_NAME'"
@@ -471,18 +471,19 @@ start_session() {
 
     echo "Starting session '$SESSION_NAME'..."
 
-    # Start tmux session with temporary window
+    # Start tmux session with empty placeholder window
     cd "$PROJECT_DIR"
-    tm new-session -d -s "$SESSION_NAME" -n "_" -c "$PROJECT_DIR"
+    tm new-session -d -s "$SESSION_NAME" -c "$PROJECT_DIR"
     log "Tmux session created: $SESSION_NAME"
 
     # Apply tmux configuration and keybindings
     setup_tmux_config
     log "Tmux configured"
 
-    # Run new-task in the initial window, then exit to close _ window
-    debug "Running new-task in initial window..."
-    tm send-keys -t "$SESSION_NAME:_" "$TAW_HOME/_taw/bin/new-task; exit" Enter
+    # Show new-task popup immediately after attach (scheduled via hook)
+    # The popup will open once the session is attached
+    debug "Scheduling new-task popup on attach..."
+    tm set-hook -t "$SESSION_NAME" client-attached "run-shell 'tmux -L \"taw-$SESSION_NAME\" display-popup -E -w 80% -h 60% -d \"$PROJECT_DIR\" -T \" New Task \" \"$TAW_HOME/_taw/bin/new-task\"; tmux -L \"taw-$SESSION_NAME\" set-hook -u -t \"$SESSION_NAME\" client-attached'"
 
     # Auto-cleanup merged tasks (before reopening, so merged tasks are cleaned up first)
     debug "Checking for merged tasks to cleanup..."
