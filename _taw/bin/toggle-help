@@ -28,8 +28,10 @@ HELP_OPEN=$(tm show-options -gqv @taw_help_open 2>/dev/null || echo "")
 
 if [ "$HELP_OPEN" = "1" ]; then
     # Help is currently shown - close it
+    # Note: display-popup -C only works from inside the popup
+    # Opening a new popup that immediately exits will close the existing one
     tm set-option -g @taw_help_open ""
-    tm display-popup -C 2>/dev/null || true
+    tm display-popup -E "true" 2>/dev/null || true
 else
     # Help is not shown - open it
     tm set-option -g @taw_help_open "1"
