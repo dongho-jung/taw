@@ -3,6 +3,8 @@
 # TAW New Task Creator
 # Creates a new task in .taw/agents directory
 
+set -e
+
 # Source common utilities
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/_common.sh"
@@ -66,7 +68,8 @@ fi
 debug "Editor closed"
 
 # Read task content, filtering out comment lines (starting with #)
-task_content=$(grep -v '^[[:space:]]*#' "$temp_file")
+# Use || true to prevent set -e from exiting when all lines are comments
+task_content=$(grep -v '^[[:space:]]*#' "$temp_file" || true)
 
 # Check if content exists after filtering (ignore empty lines for this check)
 if [ -z "$(echo "$task_content" | tr -d '[:space:]')" ]; then
@@ -79,25 +82,30 @@ log "Task content received, calling Claude CLI (haiku)..."
 debug "Task content: $task_content"
 
 # Call Claude CLI to generate task name
-prompt="Task: $task_content
-
----
-Reply with EXACTLY one task name. No explanation. No prefix. No quotes.
-Rules: 8-32 chars, lowercase, hyphens only, format: verb-noun (e.g. fix-auth-bug)"
+# Use single-line prompt for reliability
+base_prompt="Create a task name for: '$task_content'. Reply with ONLY the task name, nothing else. Rules: 8-32 chars, lowercase letters and hyphens only, format verb-noun like fix-auth-bug"
 
 # Generate task name with timeout and retry (3s, 5s, 10s)
 timeouts=(3 5 10)
 task_name=""
+last_error=""
 
 for i in "${!timeouts[@]}"; do
     timeout_sec="${timeouts[$i]}"
     attempt=$((i + 1))
     debug "Attempt $attempt: calling claude CLI (timeout: ${timeout_sec}s)..."
 
-    if [ "${TAW_DEBUG:-0}" = "1" ]; then
-        result=$(echo "$prompt" | timeout "$timeout_sec" claude --print --model haiku 2>&1 | tee /dev/stderr | tr -d '[:space:]') || true
+    # Add error feedback on retry
+    if [ -n "$last_error" ]; then
+        prompt="$base_prompt. IMPORTANT: Your previous response '$last_error' was invalid. Reply with ONLY a valid task name."
     else
-        result=$(echo "$prompt" | timeout "$timeout_sec" claude --print --model haiku 2>/dev/null | tr -d '[:space:]') || true
+        prompt="$base_prompt"
+    fi
+
+    if [ "${TAW_DEBUG:-0}" = "1" ]; then
+        result=$(echo "$prompt" | timeout "$timeout_sec" claude -p --model haiku 2>&1 | tee /dev/stderr | tr -d '[:space:]') || true
+    else
+        result=$(echo "$prompt" | timeout "$timeout_sec" claude -p --model haiku 2>/dev/null | tr -d '[:space:]') || true
     fi
 
     debug "Claude CLI returned: '$result'"
@@ -110,6 +118,7 @@ for i in "${!timeouts[@]}"; do
     else
         log "Attempt $attempt failed: invalid name '$result'"
         debug "Invalid task name, retrying..."
+        last_error="$result"
     fi
 done
 
@@ -165,6 +174,25 @@ log "Task created: $final_name"
 # Use nohup to ensure process survives parent exit
 debug "Calling handle-task: $agent_dir (background)"
 nohup "$TAW_HOME/_taw/bin/handle-task" "$agent_dir" >> "$LOG_DIR/handle-task.log" 2>&1 &
-# Brief sleep to ensure background process starts before script exits
-sleep 0.2
-debug "handle-task started in background"
+
+# Wait for handle-task to create window (check for .tab-lock/window_id)
+# This prevents the _ window from closing before new window is created
+window_id_file="$agent_dir/.tab-lock/window_id"
+max_wait=30  # 30 seconds max
+waited=0
+debug "Waiting for window to be created..."
+while [ ! -f "$window_id_file" ] && [ $waited -lt $max_wait ]; do
+    sleep 0.5
+    waited=$((waited + 1))
+    if [ $((waited % 10)) -eq 0 ]; then
+        debug "Still waiting for window... ($waited attempts)"
+    fi
+done
+
+if [ -f "$window_id_file" ]; then
+    debug "Window created: $(cat "$window_id_file")"
+    log "Window created successfully"
+else
+    log "Warning: Timed out waiting for window creation"
+    debug "Timeout waiting for window, continuing anyway..."
+fi

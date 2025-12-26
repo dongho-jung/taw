@@ -13,10 +13,17 @@ readonly EMOJI_WAITING="💬"
 readonly EMOJI_DONE="✅"
 readonly EMOJI_WARNING="⚠️"
 
-# Limits
+# Display limits
 readonly MAX_DISPLAY_NAME_LEN=32
-readonly CLAUDE_READY_MAX_ATTEMPTS=60
+
+# Claude interaction
+readonly CLAUDE_READY_MAX_ATTEMPTS=60      # 60 * 0.5s = 30s max wait
 readonly CLAUDE_READY_POLL_INTERVAL=0.5
+
+# Timeouts (seconds)
+readonly WORKTREE_TIMEOUT=30               # git worktree operations
+readonly WINDOW_CREATION_TIMEOUT=30        # wait for tmux window creation
+readonly TASK_NAME_TIMEOUTS=(3 5 10)       # retry timeouts for task name generation
 
 # ============================================================================
 # Path Utilities
@@ -100,6 +107,49 @@ tm() {
     local session="$1"
     shift
     tmux -L "taw-$session" "$@"
+}
+
+# ============================================================================
+# Incomplete Task Detection
+# ============================================================================
+
+# Find incomplete tasks: tasks where window was closed but task not done
+# Usage: incomplete_tasks=$(find_incomplete_tasks "$AGENTS_DIR" "$SESSION_NAME")
+# Returns newline-separated list of task directory paths
+find_incomplete_tasks() {
+    local agents_dir="$1"
+    local session_name="$2"
+    local result=""
+
+    [ -d "$agents_dir" ] || return 0
+
+    for agent_dir in "$agents_dir"/*/; do
+        [ -d "$agent_dir" ] || continue
+
+        local task_name=$(basename "$agent_dir")
+        local tab_lock="$agent_dir/.tab-lock"
+        local window_id_file="$tab_lock/window_id"
+
+        # Skip if no .tab-lock (task never started or already cleaned)
+        [ -d "$tab_lock" ] || continue
+
+        # Skip if no window_id file
+        [ -f "$window_id_file" ] || continue
+
+        local window_id=$(cat "$window_id_file")
+
+        # Check if window still exists in tmux
+        if ! tmux -L "taw-$session_name" list-windows -F "#{window_id}" 2>/dev/null | grep -q "^${window_id}$"; then
+            # Window doesn't exist but task directory does = incomplete task
+            if [ -n "$result" ]; then
+                result="$result"$'\n'"$agent_dir"
+            else
+                result="$agent_dir"
+            fi
+        fi
+    done
+
+    echo "$result"
 }
 
 # ============================================================================

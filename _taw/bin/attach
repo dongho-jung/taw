@@ -92,9 +92,6 @@ window_name="${EMOJI_WORKING}${display_name}"
 
 # Create new window
 window_id=$(tmux new-window -n "$window_name" -c "$WORK_DIR" -P -F "#{window_id}")
-
-# Set remain-on-exit
-tmux setw -t "$window_id" remain-on-exit on
 sleep 0.3
 
 # Split horizontally for user pane
@@ -103,12 +100,55 @@ tmux split-window -t "$window_id" -h -c "$WORK_DIR"
 # Select agent pane (left)
 tmux select-pane -t "${window_id}.0"
 
+# Helper functions for claude interaction
+get_pane_content() {
+    tmux capture-pane -t "${window_id}.0" -p 2>/dev/null || echo ""
+}
+
+wait_for_claude_ready() {
+    local max_attempts=$CLAUDE_READY_MAX_ATTEMPTS
+    local attempt=0
+    debug "Waiting for claude to be ready (max $max_attempts attempts)..."
+    while [ $attempt -lt $max_attempts ]; do
+        local content=$(get_pane_content)
+        # Claude is ready when we see trust prompt, input prompt, or bypass permissions
+        if echo "$content" | grep -qE "Trust|trust|╭─|^> $|bypass permissions"; then
+            debug "Claude ready after $attempt attempts"
+            return 0
+        fi
+        sleep $CLAUDE_READY_POLL_INTERVAL
+        attempt=$((attempt + 1))
+    done
+    debug "TIMEOUT waiting for claude after $max_attempts attempts"
+    return 1
+}
+
+send_shell_cmd() {
+    tmux send-keys -t "${window_id}.0" -l "$1"
+    tmux send-keys -t "${window_id}.0" Enter
+}
+
 # Start claude with system prompt (include WINDOW_ID, WORKTREE_DIR only in git mode)
 # Note: paths are single-quoted to handle spaces correctly
+debug "Starting claude with system prompt..."
 if [ "$IS_GIT_MODE" = true ]; then
-    tmux send-keys -t "${window_id}.0" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\"" Enter
+    send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\""
 else
-    tmux send-keys -t "${window_id}.0" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\"" Enter
+    send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\""
+fi
+
+# Wait for claude to be ready
+debug "Waiting for claude to start..."
+if ! wait_for_claude_ready; then
+    warn "Timeout waiting for claude to start"
+fi
+
+# Check if trust confirmation is needed
+screen_content=$(get_pane_content)
+if echo "$screen_content" | grep -qiE "trust|Trust this project|y/n|\[y\]|Are you sure"; then
+    debug "Trust confirmation needed, sending 'y'"
+    send_shell_cmd "y"
+    wait_for_claude_ready || true
 fi
 
 echo "Attached to task: $TASK_NAME"

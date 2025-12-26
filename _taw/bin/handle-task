@@ -9,11 +9,30 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/_common.sh"
 
-# Arguments
-TASK_DIR="$1"
+# Parse arguments
+NO_INPUT=false
+REOPEN=false
+TASK_DIR=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-input)
+            NO_INPUT=true
+            shift
+            ;;
+        --reopen)
+            REOPEN=true
+            shift
+            ;;
+        *)
+            TASK_DIR="$1"
+            shift
+            ;;
+    esac
+done
 
 if [ -z "$TASK_DIR" ] || [ ! -d "$TASK_DIR" ]; then
-    echo "Usage: handle-task <task-directory>"
+    echo "Usage: handle-task [--no-input] [--reopen] <task-directory>"
     exit 1
 fi
 
@@ -52,6 +71,13 @@ LOG_FILE="$LOG_DIR/handle-task.log"
 # mkdir fails if directory already exists, making it safe for concurrent access
 TAB_MARKER="$TASK_DIR/.tab-lock"
 debug "Checking tab marker: $TAB_MARKER"
+
+# For reopen mode: remove old .tab-lock first
+if [ "$REOPEN" = true ] && [ -d "$TAB_MARKER" ]; then
+    debug "Reopen mode: removing old .tab-lock"
+    rm -rf "$TAB_MARKER"
+fi
+
 if ! mkdir "$TAB_MARKER" 2>/dev/null; then
     log "Task already being processed: $TASK_NAME" "$LOG_FILE"
     debug "Task already processed, exiting"
@@ -250,8 +276,9 @@ wait_for_claude_ready() {
     debug "Waiting for claude to be ready (max $max_attempts attempts)..."
     while [ $attempt -lt $max_attempts ]; do
         local content=$(get_pane_content)
-        # Claude is ready when we see trust prompt or the input prompt (╭─)
-        if echo "$content" | grep -qE "Trust|trust|╭─"; then
+        # Claude is ready when we see trust prompt, input prompt (> ), or bypass permissions
+        # Patterns: Trust prompt, old UI (╭─), new UI (> with ────), bypass permissions
+        if echo "$content" | grep -qE "Trust|trust|╭─|^> $|bypass permissions"; then
             log "Claude ready after $attempt attempts" "$LOG_FILE"
             debug "Claude ready after $attempt attempts"
             return 0
@@ -316,12 +343,16 @@ fi
 # Wait a bit more to ensure claude is fully ready for input
 sleep 0.5
 
-# Send the task instruction to claude
-debug "Sending task instruction to claude..."
-send_to_claude "ultrathink Read and execute the task from '$TASK_DIR/.user-prompt'"
+# Send the task instruction to claude (unless --no-input flag)
+if [ "$NO_INPUT" = true ]; then
+    debug "Skipping task input (--no-input flag)"
+    log "Created window: $window_name (no input sent - reopen mode)" "$LOG_FILE"
+else
+    debug "Sending task instruction to claude..."
+    send_to_claude "ultrathink Read and execute the task from '$TASK_DIR/.user-prompt'"
+    log "Created window: $window_name, sent task to claude" "$LOG_FILE"
+    debug "Task sent successfully. Window: $window_name"
+fi
 
 # Mark task as completed (prevents cleanup_on_error from removing .tab-lock)
 TASK_COMPLETED=true
-
-log "Created window: $window_name, sent task to claude" "$LOG_FILE"
-debug "Task sent successfully. Window: $window_name"

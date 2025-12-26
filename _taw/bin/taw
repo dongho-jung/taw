@@ -266,6 +266,24 @@ clean_all() {
     echo "Done."
 }
 
+# Reopen incomplete tasks (tasks where window was closed but not done)
+reopen_incomplete_tasks() {
+    local incomplete_tasks
+    incomplete_tasks=$(find_incomplete_tasks "$AGENTS_DIR" "$SESSION_NAME")
+
+    [ -z "$incomplete_tasks" ] && return 0
+
+    echo "$incomplete_tasks" | while IFS= read -r agent_dir; do
+        [ -z "$agent_dir" ] && continue
+        local task_name=$(basename "$agent_dir")
+        log "Reopening incomplete task: $task_name"
+        debug "Reopening: $agent_dir"
+
+        # Use handle-task with --reopen --no-input flags
+        nohup "$TAW_HOME/_taw/bin/handle-task" --reopen --no-input "$agent_dir" >> "$LOG_DIR/handle-task.log" 2>&1 &
+    done
+}
+
 start_session() {
     check_dependencies
 
@@ -325,6 +343,10 @@ start_session() {
     debug "Running new-task in initial window..."
     tm send-keys -t "$SESSION_NAME:_" "$TAW_HOME/_taw/bin/new-task; exit" Enter
 
+    # Reopen any incomplete tasks from previous sessions
+    debug "Checking for incomplete tasks..."
+    reopen_incomplete_tasks
+
     # Attach to session
     log "Attaching to session"
     printf '\e]1;%s\a' "taw: $SESSION_NAME"
@@ -366,6 +388,11 @@ export TAW_HOME TAW_DEBUG
 if is_session_running; then
     log "Reattaching to existing session: $SESSION_NAME"
     echo "Attaching to existing session '$SESSION_NAME'..."
+
+    # Reopen any incomplete tasks
+    debug "Checking for incomplete tasks..."
+    reopen_incomplete_tasks
+
     printf '\e]1;%s\a' "taw: $SESSION_NAME"
     tm attach -t "$SESSION_NAME"
 else
