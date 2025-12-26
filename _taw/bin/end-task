@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # TAW End Task
-# Ends the current task: kills claude, cleans up worktree/branch, closes window
-# Called from ^x keybinding
+# Completes the current task: commit, PR/merge (based on ON_COMPLETE), cleanup
+# Called from ⌥ e keybinding
 #
 # Usage:
-#   end-task <session> <window_id>         - Check merge status, confirm if not merged
+#   end-task <session> <window_id>         - Full completion workflow
 #   end-task <session> <window_id> --force - Skip merge check, cleanup immediately
 
 set -e
@@ -64,6 +64,7 @@ fi
 
 TAW_DIR="$PROJECT_DIR/.taw"
 AGENT_DIR="$TAW_DIR/agents/$TASK_NAME"
+WORKTREE_DIR="$AGENT_DIR/worktree"
 LOG_FILE="$TAW_DIR/.metadata/log/end-task.log"
 
 # Ensure log directory exists
@@ -86,10 +87,116 @@ if [ -f "$TAW_DIR/.is-git-repo" ]; then
     IS_GIT_MODE=true
 fi
 
-# === Merge Status Check (git mode only, skip if --force) ===
-if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ]; then
-    MERGED=false
+# Get ON_COMPLETE setting
+ON_COMPLETE=$(read_config "$TAW_DIR" "on_complete" "$DEFAULT_ON_COMPLETE")
+log "ON_COMPLETE=$ON_COMPLETE" "$LOG_FILE"
 
+# Get work directory (worktree or project dir)
+WORK_DIR="$PROJECT_DIR"
+if [ "$IS_GIT_MODE" = true ] && [ -d "$WORKTREE_DIR" ]; then
+    WORK_DIR="$WORKTREE_DIR"
+fi
+
+# === Step 1: Commit uncommitted changes (git mode only, skip if --force) ===
+if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ] && [ -d "$WORK_DIR" ]; then
+    cd "$WORK_DIR"
+
+    # Check for uncommitted changes
+    if [ -n "$(git status -s 2>/dev/null)" ]; then
+        log "Found uncommitted changes, committing..." "$LOG_FILE"
+
+        # Stage all changes
+        git add -A
+
+        # Get diff summary for commit message
+        DIFF_STAT=$(git diff --cached --stat 2>/dev/null | tail -1 || echo "changes")
+
+        # Create simple commit message
+        git commit -m "chore: auto-commit on task end
+
+$DIFF_STAT" 2>/dev/null || true
+
+        log "Changes committed" "$LOG_FILE"
+    fi
+fi
+
+# === Step 2: PR/Merge based on ON_COMPLETE (git mode only, skip if --force) ===
+MERGED=false
+
+if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ] && [ -d "$WORK_DIR" ]; then
+    cd "$WORK_DIR"
+
+    case "$ON_COMPLETE" in
+        auto-merge)
+            log "auto-merge: pushing and merging..." "$LOG_FILE"
+
+            # Push branch
+            git push -u origin "$TASK_NAME" 2>/dev/null || true
+
+            # Get main branch name
+            MAIN_BRANCH=$(git -C "$PROJECT_DIR" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+
+            # Fetch and merge
+            git -C "$PROJECT_DIR" fetch origin "$MAIN_BRANCH" 2>/dev/null || true
+
+            if git -C "$PROJECT_DIR" merge "$TASK_NAME" --no-ff -m "Merge branch '$TASK_NAME'" 2>/dev/null; then
+                git -C "$PROJECT_DIR" push origin "$MAIN_BRANCH" 2>/dev/null || true
+                MERGED=true
+                log "Merged to $MAIN_BRANCH" "$LOG_FILE"
+            else
+                # Merge conflict - abort and ask
+                git -C "$PROJECT_DIR" merge --abort 2>/dev/null || true
+                log "Merge conflict, manual resolution needed" "$LOG_FILE"
+                tm "$SESSION_NAME" display-message "Merge conflict! Resolve manually or use --force to skip"
+            fi
+            ;;
+
+        auto-pr)
+            log "auto-pr: pushing and creating PR..." "$LOG_FILE"
+
+            # Push branch
+            git push -u origin "$TASK_NAME" 2>/dev/null || true
+
+            # Check if PR already exists
+            if ! gh pr view 2>/dev/null; then
+                # Create PR
+                PR_TITLE="$TASK_NAME"
+                PR_BODY="## Summary
+- Task: $TASK_NAME
+
+## Changes
+$(git log --oneline origin/main..$TASK_NAME 2>/dev/null || echo "- See commits")"
+
+                if gh pr create --title "$PR_TITLE" --body "$PR_BODY" 2>/dev/null; then
+                    # Save PR number
+                    gh pr view --json number -q '.number' > "$AGENT_DIR/.pr" 2>/dev/null || true
+                    log "PR created" "$LOG_FILE"
+                fi
+            else
+                log "PR already exists" "$LOG_FILE"
+            fi
+
+            # Check if PR is merged
+            PR_FILE="$AGENT_DIR/.pr"
+            if [ -f "$PR_FILE" ]; then
+                PR_NUMBER=$(cat "$PR_FILE")
+                PR_STATE=$(gh pr view "$PR_NUMBER" --json merged -q '.merged' 2>/dev/null || echo "false")
+                if [ "$PR_STATE" = "true" ]; then
+                    MERGED=true
+                fi
+            fi
+            ;;
+
+        auto-commit|confirm|*)
+            log "Pushing branch..." "$LOG_FILE"
+            # Just push the branch
+            git push -u origin "$TASK_NAME" 2>/dev/null || true
+            ;;
+    esac
+fi
+
+# === Step 3: Merge Status Check (git mode only, skip if --force) ===
+if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ] && [ "$MERGED" = false ]; then
     # Check if PR exists and is merged
     PR_FILE="$AGENT_DIR/.pr"
     if [ -f "$PR_FILE" ]; then
@@ -110,8 +217,8 @@ if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ]; then
         fi
     fi
 
-    # If not merged, ask for confirmation
-    if [ "$MERGED" = false ]; then
+    # If not merged and not auto-merge mode, ask for confirmation
+    if [ "$MERGED" = false ] && [ "$ON_COMPLETE" != "auto-merge" ]; then
         log "Task not merged, requesting confirmation" "$LOG_FILE"
         tm "$SESSION_NAME" confirm-before -p "Task '$TASK_NAME' is NOT merged. Delete anyway? (y/n)" \
             "run-shell '$TAW_HOME/_taw/bin/end-task \"$SESSION_NAME\" \"$WINDOW_ID\" --force'"
@@ -119,7 +226,7 @@ if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ]; then
     fi
 fi
 
-# === Cleanup ===
+# === Step 4: Cleanup ===
 log "Starting cleanup" "$LOG_FILE"
 
 # 1. Kill claude process (send Ctrl+C)

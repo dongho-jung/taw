@@ -10,7 +10,7 @@ Claude Code 기반 자율 에이전트 작업 환경
 
 ### 태스크 관리
   ⌥ n         새 태스크 생성 (에디터 열림)
-  ⌥ e         현재 태스크 종료 (worktree/branch 정리)
+  ⌥ e         태스크 완료 (commit → PR/merge → cleanup, ON_COMPLETE 설정 따름)
   ⌥ m         완료된 태스크 일괄 머지 (✅ 상태 태스크 모두 merge + end)
   ⌥ p         팝업 쉘 열기/닫기 (현재 worktree 경로)
   ⌥ u         빠른 태스크 큐 추가 (완료 후 자동 처리)
@@ -25,8 +25,6 @@ Claude Code 기반 자율 에이전트 작업 환경
   /test       프로젝트 테스트 자동 감지 및 실행
   /pr         PR 자동 생성 및 브라우저 열기
   /merge      worktree 브랜치를 프로젝트 브랜치에 머지
-  /finish     태스크 완료 (commit → PR → 상태 업데이트)
-  /done       태스크 정리 (worktree, branch, window 삭제)
 
 ## 디렉토리 구조
 

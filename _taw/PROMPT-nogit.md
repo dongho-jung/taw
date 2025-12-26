@@ -124,7 +124,7 @@ tmux rename-window -t $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done
 |---------|-------------|
 | `/test` | 수동 테스트 실행 |
 
-Note: Git 관련 명령어 (/commit, /pr, /merge, /finish, /done)는 non-git 모드에서 사용 불가.
+Note: Git 관련 명령어 (/commit, /pr, /merge)는 non-git 모드에서 사용 불가. 태스크 종료는 `⌥ e`를 사용합니다.
 
 ---
 

@@ -143,8 +143,8 @@ tmux rename-window -t $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done
 | `/test` | 수동 테스트 실행 |
 | `/pr` | 수동 PR 생성 |
 | `/merge` | main에 머지 (PROJECT_DIR에서) |
-| `/finish` | 수동 완료 처리 |
-| `/done` | 정리 (worktree, branch, window 삭제) |
+
+**태스크 종료**: 사용자가 `⌥ e`를 누르면 자동으로 커밋 → PR/머지 → 정리가 수행됩니다.
 
 ---
 

@@ -31,9 +31,9 @@ taw/                           # 이 레포
     │   ├── setup              # 초기 설정 마법사
     │   ├── new-task           # 태스크 생성
     │   ├── handle-task        # 태스크 처리 (worktree 생성, agent 시작)
-    │   ├── end-task           # 태스크 종료 (⌥ e)
+    │   ├── end-task           # 태스크 완료 및 종료 (⌥ e) - commit/PR/merge/cleanup
     │   ├── attach             # 태스크 재연결
-    │   ├── cleanup            # 정리 스크립트 (/done에서 사용)
+    │   ├── cleanup            # 정리 스크립트 (end-task에서 사용)
     │   ├── quick-task         # 빠른 태스크 큐 추가 (⌥ u)
     │   ├── popup-shell        # 팝업 쉘 (⌥p로 열고, ⌥q로 닫기)
     │   ├── process-queue      # 큐 처리 (태스크 완료 후 자동 실행)
@@ -43,9 +43,7 @@ taw/                           # 이 레포
         ├── commit.md          # /commit - 스마트 커밋
         ├── test.md            # /test - 테스트 실행
         ├── pr.md              # /pr - PR 생성
-        ├── merge.md           # /merge - 브랜치 머지
-        ├── finish.md          # /finish - 태스크 완료
-        └── done.md            # /done - 태스크 정리
+        └── merge.md           # /merge - 브랜치 머지
 
 {any-project}/                 # 사용자 프로젝트 (git 또는 일반 디렉토리)
 └── .taw/                      # taw가 생성하는 디렉토리
@@ -101,12 +99,12 @@ Agent가 사용할 수 있는 slash commands:
 | `/test` | 프로젝트 테스트 자동 감지 및 실행 |
 | `/pr` | PR 자동 생성 및 브라우저 열기 |
 | `/merge` | worktree 브랜치를 프로젝트의 현재 브랜치에 머지 |
-| `/finish` | 태스크 완료 (commit → push → PR → 상태 업데이트) |
-| `/done` | 태스크 정리 (worktree, branch, 디렉토리, window) |
+
+**태스크 종료**: `⌥ e`를 누르면 자동으로 커밋 → PR/머지(ON_COMPLETE 설정에 따라) → 정리가 수행됩니다.
 
 ### 불완전한 태스크 자동 재오픈
 
-태스크가 완료되지 않은 상태(done 처리되지 않음)에서 window가 닫히거나 tmux 세션이 종료된 경우, 다음에 `taw`를 실행하면 자동으로 해당 태스크들의 window를 다시 열어줍니다.
+태스크가 완료되지 않은 상태(`⌥ e`로 종료되지 않음)에서 window가 닫히거나 tmux 세션이 종료된 경우, 다음에 `taw`를 실행하면 자동으로 해당 태스크들의 window를 다시 열어줍니다.
 
 - 새 세션 시작 시와 기존 세션 재연결 시 모두 자동으로 감지
 - Claude에 새로운 입력을 보내지 않고 이전 상태 그대로 복원
@@ -223,7 +221,7 @@ brew install tmux gh
 | Pane 순환 | `⌥ Tab` |
 | Window 이동 | `⌥ ←/→` |
 | 새 태스크 | `⌥ n` |
-| 태스크 종료 | `⌥ e` (worktree/branch 정리 및 창 닫기) |
+| 태스크 완료 | `⌥ e` (commit → PR/merge → cleanup, ON_COMPLETE에 따라) |
 | 완료 태스크 일괄 머지 | `⌥ m` (✅ 상태 태스크 모두 merge + end) |
 | 팝업 쉘 | `⌥ p` (현재 worktree에서 쉘 열기/닫기) |
 | 빠른 태스크 큐 추가 | `⌥ u` (현재 태스크 완료 후 자동 처리) |
@@ -236,7 +234,7 @@ brew install tmux gh
 
 1. `⌥ u`를 누르면 팝업이 열립니다
 2. 태스크 내용을 입력하고 Enter
-3. 현재 태스크가 완료(`/finish` 또는 `/done`)되면 큐에 있는 태스크가 자동으로 시작됩니다
+3. 현재 태스크가 완료(`⌥ e`)되면 큐에 있는 태스크가 자동으로 시작됩니다
 
 큐 관리:
 ```bash
