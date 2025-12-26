@@ -332,12 +332,14 @@ start_session() {
     tm bind -n M-/ new-window -n "HELP" "less '$TAW_HOME/_taw/HELP.md'"
     # Quick task: Ctrl+Alt+A - add task to queue via popup
     tm bind -n C-M-a run-shell "$TAW_HOME/_taw/bin/quick-task '$SESSION_NAME'"
+    # Popup shell: Ctrl+A - toggle popup shell in worktree directory
+    tm bind -n C-a run-shell "$TAW_HOME/_taw/bin/popup-shell '$SESSION_NAME'"
     log "Tmux configured"
 
     # Status line: 2 lines - windows on top, hints on bottom
     tm set -t "$SESSION_NAME" status 2
     tm set -t "$SESSION_NAME" status-format[0] "#[align=left]#{W:#[fg=white bg=default] #W #[default],#[fg=white bg=blue bold] #W #[default]}"
-    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ^n:new  ^x:end  ^⌥a:queue  ⌥←→↑↓:pane  ⌥hjkl:split  ⇧⌥←→:window  ^q:quit  ⌥/:help"
+    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ^a:popup  ^n:new  ^x:end  ^⌥a:queue  ⌥←→↑↓:pane  ⌥hjkl:split  ⇧⌥←→:window  ^q:quit  ⌥/:help"
 
     # Run new-task in the initial window, then exit to close _ window
     debug "Running new-task in initial window..."

@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# TAW Popup Shell
+# Opens a toggleable popup shell in the current worktree directory
+# Ctrl+A closes the popup from inside
+#
+# Usage:
+#   popup-shell <session_name>
+
+set -e
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/_common.sh"
+
+# Arguments
+SESSION_NAME="$1"
+
+if [ -z "$SESSION_NAME" ]; then
+    echo "Usage: popup-shell <session_name>"
+    exit 1
+fi
+
+# Get current pane's working directory (this is the worktree path)
+PANE_PATH=$(tmux -L "taw-$SESSION_NAME" display-message -p '#{pane_current_path}')
+
+if [ -z "$PANE_PATH" ]; then
+    PANE_PATH="$HOME"
+fi
+
+# Create temporary rcfile for popup shell
+# This binds Ctrl+A to exit the shell
+TMP_RCFILE=$(mktemp)
+cat > "$TMP_RCFILE" << 'RCFILE'
+# Load user's bashrc if exists
+[ -f ~/.bashrc ] && source ~/.bashrc
+
+# Custom prompt for popup
+PS1='\[\033[1;36m\]popup\[\033[0m\]:\[\033[1;34m\]\W\[\033[0m\]\$ '
+
+# Bind Ctrl+A to exit (close popup)
+bind '"\C-a": "\C-u exit\n"'
+
+# Show hint on start
+echo -e "\033[90m(Ctrl+A to close)\033[0m"
+RCFILE
+
+# Show popup with interactive shell
+# - 80% width, 60% height
+# - Title shows current directory
+# - -E flag makes popup close when shell exits
+tmux -L "taw-$SESSION_NAME" display-popup \
+    -E \
+    -w 80% -h 60% \
+    -d "$PANE_PATH" \
+    -T " Popup Shell (Ctrl+A to close) " \
+    "bash --rcfile '$TMP_RCFILE'; rm -f '$TMP_RCFILE'"

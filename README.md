@@ -34,6 +34,7 @@ taw/                           # 이 레포
     │   ├── attach             # 태스크 재연결
     │   ├── cleanup            # 정리 스크립트 (/done에서 사용)
     │   ├── quick-task         # 빠른 태스크 큐 추가 (^⌥a)
+    │   ├── popup-shell        # 팝업 쉘 (^a로 토글)
     │   ├── process-queue      # 큐 처리 (태스크 완료 후 자동 실행)
     │   └── _common.sh         # 공통 유틸리티 (상수, 함수)
     └── claude/commands/       # slash commands
@@ -131,6 +132,7 @@ brew install tmux gh
 
 | 동작 | 단축키 |
 |------|--------|
+| 팝업 쉘 | `^a` (현재 worktree에서 쉘 열기/닫기) |
 | 새 태스크 | `^n` |
 | 태스크 종료 | `^x` (worktree/branch 정리 및 창 닫기) |
 | 빠른 태스크 큐 추가 | `^⌥a` (현재 태스크 완료 후 자동 처리) |
