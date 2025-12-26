@@ -216,7 +216,6 @@ brew install tmux gh
 | 태스크 종료 | `⌥ e` (worktree/branch 정리 및 창 닫기) |
 | 팝업 쉘 | `⌥ p` (현재 worktree에서 쉘 열기/닫기) |
 | 빠른 태스크 큐 추가 | `⌥ u` (현재 태스크 완료 후 자동 처리) |
-| Pane 이동 (상/하) | `⌥ ↑/↓` |
 | Session 나가기 | `⌥ q` (detach) |
 | 도움말 | `⌥ /` |
 

@@ -379,9 +379,6 @@ start_session() {
     tm bind -n M-q detach
     tm bind -n M-/ new-window -n "HELP" "less '$TAW_HOME/_taw/HELP.md'"
 
-    # Pane: Alt + up/down to move
-    tm bind -n M-Up select-pane -U
-    tm bind -n M-Down select-pane -D
     log "Tmux configured"
 
     # Status line: 2 lines - windows on top, hints on bottom
