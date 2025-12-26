@@ -4,11 +4,15 @@ Claude Code 기반 자율 에이전트 작업 환경
 
 ## 키보드 단축키
 
+### 네비게이션
+  Tab         다음 pane으로 이동 (순환)
+  ⌥ Tab       다음 window로 이동 (순환)
+
 ### 태스크 관리
-  ^a          팝업 쉘 열기/닫기 (현재 worktree 경로)
-  ^n          새 태스크 생성 (에디터 열림)
-  ^x          현재 태스크 종료 (worktree/branch 정리)
-  ^⌥a         빠른 태스크 큐 추가 (완료 후 자동 처리)
+  ⌥ n         새 태스크 생성 (에디터 열림)
+  ⌥ e         현재 태스크 종료 (worktree/branch 정리)
+  ⌥ p         팝업 쉘 열기/닫기 (현재 worktree 경로)
+  ⌥ u         빠른 태스크 큐 추가 (완료 후 자동 처리)
 
 ### Pane 조작
   ⌥ ←/→/↑/↓   pane 이동
@@ -18,11 +22,8 @@ Claude Code 기반 자율 에이전트 작업 환경
   ⌥ l         오른쪽에 새 pane 생성
   ⌥ x         현재 pane 닫기
 
-### Window 조작
-  ⇧⌥ ←/→      이전/다음 window로 이동
-
 ### 세션
-  ^q          세션에서 나가기 (detach)
+  ⌥ q         세션에서 나가기 (detach)
   ⌥ /         이 도움말 보기
 
 ## Slash Commands (에이전트용)
@@ -39,7 +40,7 @@ Claude Code 기반 자율 에이전트 작업 환경
   .taw/
   ├── PROMPT.md              프로젝트별 에이전트 지시사항
   ├── new-task               태스크 생성 스크립트
-  ├── .queue/                빠른 태스크 큐 (^⌥a로 추가)
+  ├── .queue/                빠른 태스크 큐 (⌥u로 추가)
   └── agents/{task-name}/
       ├── task               태스크 내용
       ├── log                진행 로그

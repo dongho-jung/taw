@@ -363,9 +363,21 @@ start_session() {
     tm set -t "$SESSION_NAME" mouse on
 
     # Unbind all default keys and set minimal bindings
+    # All bindings use Alt key to avoid conflicts with shell keybindings
     tm unbind-key -a
-    tm bind -n C-q detach
-    tm bind -n C-n run-shell "tmux new-window -t '$SESSION_NAME' -n '_' -c '$PROJECT_DIR' '$TAW_HOME/_taw/bin/new-task'"
+
+    # Core navigation (no modifier conflicts)
+    tm bind -n Tab select-pane -t :.+       # Cycle panes
+    tm bind -n M-Tab next-window            # Cycle windows
+
+    # Task management: Alt + key
+    tm bind -n M-n run-shell "tmux new-window -t '$SESSION_NAME' -n '_' -c '$PROJECT_DIR' '$TAW_HOME/_taw/bin/new-task'"
+    tm bind -n M-e run-shell "$TAW_HOME/_taw/bin/end-task '$SESSION_NAME' '#{window_id}'"
+    tm bind -n M-p run-shell "$TAW_HOME/_taw/bin/popup-shell '$SESSION_NAME'"
+    tm bind -n M-u run-shell "$TAW_HOME/_taw/bin/quick-task '$SESSION_NAME'"
+    tm bind -n M-q detach
+    tm bind -n M-/ new-window -n "HELP" "less '$TAW_HOME/_taw/HELP.md'"
+
     # Pane: Alt + arrows to move, Alt + hjkl to split, Alt + x to close
     tm bind -n M-Left select-pane -L
     tm bind -n M-Right select-pane -R
@@ -376,23 +388,12 @@ start_session() {
     tm bind -n M-k split-window -vb -c "#{pane_current_path}"
     tm bind -n M-l split-window -h -c "#{pane_current_path}"
     tm bind -n M-x kill-pane
-    # Window: Ctrl+Alt + arrows (using Shift+Alt as fallback for compatibility)
-    tm bind -n S-M-Left previous-window
-    tm bind -n S-M-Right next-window
-    # End task: Ctrl+X - directly run cleanup script (no agent needed)
-    tm bind -n C-x run-shell "$TAW_HOME/_taw/bin/end-task '$SESSION_NAME' '#{window_id}'"
-    # Help: Alt+/ - show help in temporary window
-    tm bind -n M-/ new-window -n "HELP" "less '$TAW_HOME/_taw/HELP.md'"
-    # Quick task: Ctrl+Alt+A - add task to queue via popup
-    tm bind -n C-M-a run-shell "$TAW_HOME/_taw/bin/quick-task '$SESSION_NAME'"
-    # Popup shell: Ctrl+A - toggle popup shell in worktree directory
-    tm bind -n C-a run-shell "$TAW_HOME/_taw/bin/popup-shell '$SESSION_NAME'"
     log "Tmux configured"
 
     # Status line: 2 lines - windows on top, hints on bottom
     tm set -t "$SESSION_NAME" status 2
     tm set -t "$SESSION_NAME" status-format[0] "#[align=left]#{W:#[fg=white bg=default] #W #[default],#[fg=white bg=blue bold] #W #[default]}"
-    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ^a:popup  ^n:new  ^x:end  ^⌥a:queue  ⌥←→↑↓:pane  ⌥hjkl:split  ⇧⌥←→:window  ^q:quit  ⌥/:help"
+    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] tab:pane  ⌥tab:window  ⌥n:new  ⌥e:end  ⌥p:popup  ⌥u:queue  ⌥q:quit  ⌥/:help"
 
     # Run new-task in the initial window, then exit to close _ window
     debug "Running new-task in initial window..."
