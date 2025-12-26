@@ -17,7 +17,7 @@ Claude Code 기반 자율 에이전트 작업 환경
 
 ### 세션
   ⌥ q         세션에서 나가기 (detach)
-  ⌥ /         이 도움말 보기
+  ⌥ /         이 도움말 열기/닫기 (toggle)
 
 ## Slash Commands (에이전트용)
 
@@ -55,4 +55,4 @@ Claude Code 기반 자율 에이전트 작업 환경
   WINDOW_ID     tmux window ID (상태 갱신용)
 
 ---
-q 키로 나가기
+⌥/ 또는 q 키로 나가기

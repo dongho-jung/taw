@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# Toggle help popup window
+# If help is open, close it. If closed, open it.
+
+set -e
+
+SESSION_NAME="${1:-}"
+if [ -z "$SESSION_NAME" ]; then
+    echo "Usage: toggle-help SESSION_NAME" >&2
+    exit 1
+fi
+
+# Resolve TAW_HOME if not set
+if [ -z "$TAW_HOME" ]; then
+    SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)"
+    TAW_HOME="$(cd "$SCRIPT_PATH/../.." && pwd)"
+fi
+
+# Lock file to track popup state (per session)
+LOCK_FILE="/tmp/taw-help-popup-${SESSION_NAME}.lock"
+
+# tmux helper
+tm() {
+    tmux -L "taw-$SESSION_NAME" "$@"
+}
+
+if [ -f "$LOCK_FILE" ]; then
+    # Help is currently shown - close it
+    rm -f "$LOCK_FILE"
+    tm display-popup -C 2>/dev/null || true
+else
+    # Help is not shown - open it
+    touch "$LOCK_FILE"
+    # Note: The lock file is removed when less exits (user presses q or popup is closed)
+    tm display-popup -E -w 80% -h 80% -T " Help (⌥/ to close) " \
+        "less '$TAW_HOME/_taw/HELP.md'; rm -f '$LOCK_FILE'"
+fi

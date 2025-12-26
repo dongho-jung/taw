@@ -463,7 +463,7 @@ start_session() {
     tm bind -n M-u run-shell "$TAW_HOME/_taw/bin/quick-task '$SESSION_NAME'"
     tm bind -n M-m run-shell "$TAW_HOME/_taw/bin/merge-completed '$SESSION_NAME'"
     tm bind -n M-q detach
-    tm bind -n M-/ display-popup -E -w 80% -h 80% -T " Help " "less '$TAW_HOME/_taw/HELP.md'"
+    tm bind -n M-/ run-shell "$TAW_HOME/_taw/bin/toggle-help '$SESSION_NAME'"
 
     log "Tmux configured"
 
