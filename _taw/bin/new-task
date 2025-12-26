@@ -40,6 +40,7 @@ debug "Created temp file: $temp_file"
 # Add hint comment
 cat > "$temp_file" << 'EOF'
 # 에이전트에게 시킬 일 적고 저장
+# ⌥/ 로 도움말 보기
 
 EOF
 
