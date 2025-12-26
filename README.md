@@ -187,7 +187,7 @@ work_mode: worktree
 # Options: confirm | auto-commit | auto-merge | auto-pr
 #   confirm     - Ask before each action (commit, merge, PR)
 #   auto-commit - Automatically commit changes (manual merge/PR)
-#   auto-merge  - Auto commit + merge to current branch
+#   auto-merge  - Auto commit + merge + auto cleanup (closes window)
 #   auto-pr     - Auto commit + create Pull Request (for teams)
 on_complete: confirm
 ```
@@ -200,7 +200,7 @@ on_complete: confirm
 |             | `main` | 현재 브랜치에서 직접 작업 (단순) |
 | `on_complete` | `confirm` | 각 작업 전 확인 (안전) |
 |               | `auto-commit` | 자동 커밋 (머지/PR은 수동) |
-|               | `auto-merge` | 자동 커밋 + 현재 브랜치에 머지 |
+|               | `auto-merge` | 자동 커밋 + 머지 + 자동 정리 (worktree, window 삭제) |
 |               | `auto-pr` | 자동 커밋 + PR 생성 (팀 협업용) |
 
 ### 기타 설정

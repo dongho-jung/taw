@@ -158,14 +158,39 @@ $TAW_HOME/_taw/bin/process-queue "$(basename {PROJECT_DIR})"
 
 This will automatically start the next task from the queue if any exists.
 
-## Step 8: Report to User
+## Step 8: Report to User (and Auto-Cleanup for auto-merge)
 
 Based on ON_COMPLETE mode:
 
-- **auto-merge**: "Changes merged to main branch. Run `/done` to cleanup."
-- **auto-pr**: Show PR URL. "Run `/done` to cleanup when PR is merged."
-- **auto-commit**: "Changes committed. Run `/merge` to merge or `/pr` to create PR."
-- **confirm**: Show what was done and available options.
+### If ON_COMPLETE = "auto-merge"
+
+**Auto-cleanup after successful merge:**
+
+1. Report to user: "Changes merged to main branch. Cleaning up..."
+
+2. Run cleanup script to remove worktree, branch, agent dir, and close window:
+   ```bash
+   {TAW_DIR}/cleanup "{TASK_NAME}" "{TAW_DIR}" "{PROJECT_DIR}" "{WORKTREE_DIR}"
+   ```
+
+   If WORKTREE_DIR is empty (main mode), use PROJECT_DIR:
+   ```bash
+   {TAW_DIR}/cleanup "{TASK_NAME}" "{TAW_DIR}" "{PROJECT_DIR}" "{PROJECT_DIR}"
+   ```
+
+   The cleanup script will automatically close the tmux window.
+
+### If ON_COMPLETE = "auto-pr"
+
+Show PR URL. "Run `/done` to cleanup when PR is merged."
+
+### If ON_COMPLETE = "auto-commit"
+
+"Changes committed. Run `/merge` to merge or `/pr` to create PR."
+
+### If ON_COMPLETE = "confirm"
+
+Show what was done and available options.
 
 If queue was processed, mention: "Started next queued task"
 
