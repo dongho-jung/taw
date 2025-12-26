@@ -2,7 +2,7 @@
 
 # TAW Popup Shell
 # Opens a toggleable popup shell in the current worktree directory
-# Alt+Q closes the popup from inside
+# Alt+P toggles the popup (open/close)
 #
 # Usage:
 #   popup-shell <session_name>
@@ -21,6 +21,16 @@ if [ -z "$SESSION_NAME" ]; then
     exit 1
 fi
 
+# Check if popup is currently open (using tmux user option)
+POPUP_OPEN=$(tmux -L "taw-$SESSION_NAME" show-options -gqv @taw_popup_open 2>/dev/null || echo "")
+
+if [ "$POPUP_OPEN" = "1" ]; then
+    # Popup is open, close it
+    tmux -L "taw-$SESSION_NAME" set-option -g @taw_popup_open ""
+    tmux -L "taw-$SESSION_NAME" display-popup -C
+    exit 0
+fi
+
 # Get current pane's working directory (this is the worktree path)
 PANE_PATH=$(tmux -L "taw-$SESSION_NAME" display-message -p '#{pane_current_path}')
 
@@ -28,30 +38,74 @@ if [ -z "$PANE_PATH" ]; then
     PANE_PATH="$HOME"
 fi
 
+# Detect user's shell
+USER_SHELL="${SHELL:-/bin/bash}"
+SHELL_NAME=$(basename "$USER_SHELL")
+
 # Create temporary rcfile for popup shell
-# This binds Alt+Q to exit the shell
 TMP_RCFILE=$(mktemp)
-cat > "$TMP_RCFILE" << 'RCFILE'
+
+case "$SHELL_NAME" in
+    zsh)
+        cat > "$TMP_RCFILE" << 'RCFILE'
+# Source user's zshrc for full environment
+[[ -f ~/.zshrc ]] && source ~/.zshrc
+
+# Override prompt for popup identification
+PROMPT='%F{cyan}popup%f:%F{blue}%1~%f%# '
+
+# Bind Alt+P to exit (toggle close from inside popup)
+# This disables the default paste behavior and enables toggle
+bindkey -s '\ep' '\C-u exit\n'
+
+# Show hint on start
+echo -e "\033[90m(Alt+P to close)\033[0m"
+RCFILE
+        ;;
+    *)
+        # Default to bash behavior
+        cat > "$TMP_RCFILE" << 'RCFILE'
 # Load user's bashrc if exists
 [ -f ~/.bashrc ] && source ~/.bashrc
 
 # Custom prompt for popup
 PS1='\[\033[1;36m\]popup\[\033[0m\]:\[\033[1;34m\]\W\[\033[0m\]\$ '
 
-# Bind Alt+Q to exit (close popup)
-bind '"\eq": "\C-u exit\n"'
+# Bind Alt+P to exit (toggle close from inside popup)
+# This disables the default paste behavior and enables toggle
+bind '"\ep": "\C-u exit\n"'
 
 # Show hint on start
-echo -e "\033[90m(Alt+Q to close)\033[0m"
+echo -e "\033[90m(Alt+P to close)\033[0m"
 RCFILE
+        ;;
+esac
+
+# Mark popup as open
+tmux -L "taw-$SESSION_NAME" set-option -g @taw_popup_open "1"
+
+# Build shell command based on shell type
+case "$SHELL_NAME" in
+    zsh)
+        # Zsh doesn't support --rcfile, so we create a temp ZDOTDIR
+        TMP_ZDOTDIR=$(mktemp -d)
+        mv "$TMP_RCFILE" "$TMP_ZDOTDIR/.zshrc"
+        SHELL_CMD="ZDOTDIR='$TMP_ZDOTDIR' zsh; rm -rf '$TMP_ZDOTDIR'"
+        ;;
+    *)
+        # Bash supports --rcfile directly
+        SHELL_CMD="bash --rcfile '$TMP_RCFILE'; rm -f '$TMP_RCFILE'"
+        ;;
+esac
 
 # Show popup with interactive shell
 # - 80% width, 60% height
 # - Title shows current directory
 # - -E flag makes popup close when shell exits
+# When popup exits (naturally or via Alt+P), clean up the state
 tmux -L "taw-$SESSION_NAME" display-popup \
     -E \
     -w 80% -h 60% \
     -d "$PANE_PATH" \
-    -T " Popup Shell (Alt+Q to close) " \
-    "bash --rcfile '$TMP_RCFILE'; rm -f '$TMP_RCFILE'"
+    -T " Popup Shell (Alt+P to close) " \
+    "$SHELL_CMD; tmux -L 'taw-$SESSION_NAME' set-option -g @taw_popup_open '' 2>/dev/null || true"
