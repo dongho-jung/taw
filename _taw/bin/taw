@@ -390,6 +390,28 @@ reopen_incomplete_tasks() {
     done
 }
 
+# Ensure ⭐️main window exists and is at leftmost position (index 0)
+ensure_main_window() {
+    local main_exists
+    main_exists=$(tm list-windows -t "$SESSION_NAME" -F "#{window_name}" 2>/dev/null | grep -c "^⭐️main$" || true)
+
+    if [ "$main_exists" -eq 0 ]; then
+        log "Creating ⭐️main window..."
+        # Create at index 0
+        tm new-window -t "$SESSION_NAME:0" -n "⭐️main" -c "$PROJECT_DIR"
+        # Run new-task in it
+        tm send-keys -t "$SESSION_NAME:⭐️main" "$TAW_HOME/_taw/bin/new-task" Enter
+    else
+        # Ensure it's at index 0 (leftmost)
+        local main_index
+        main_index=$(tm list-windows -t "$SESSION_NAME" -F "#{window_index} #{window_name}" 2>/dev/null | grep "⭐️main$" | awk '{print $1}')
+        if [ "$main_index" != "0" ]; then
+            debug "Moving ⭐️main from index $main_index to 0"
+            tm move-window -s "$SESSION_NAME:⭐️main" -t "$SESSION_NAME:0"
+        fi
+    fi
+}
+
 # Reopen corrupted tasks (tasks where worktree state is invalid)
 reopen_corrupted_tasks() {
     # Only check in git mode
@@ -438,7 +460,8 @@ setup_tmux_config() {
     tm bind -n M-Right next-window          # Next window
 
     # Task management: Alt + key
-    tm bind -n M-n run-shell "tmux -L 'taw-$SESSION_NAME' display-popup -E -w 80% -h 60% -d '$PROJECT_DIR' -T ' New Task ' '$TAW_HOME/_taw/bin/new-task'"
+    # M-n: focus main window (⭐️main) where new-task runs
+    tm bind -n M-n run-shell "tmux -L 'taw-$SESSION_NAME' select-window -t '$SESSION_NAME:⭐️main'"
     tm bind -n M-e run-shell "tmux -L 'taw-$SESSION_NAME' send-keys -t ':.1' \"$TAW_HOME/_taw/bin/end-task-ui '$SESSION_NAME' '#{window_id}'\" Enter"
     tm bind -n M-p run-shell "$TAW_HOME/_taw/bin/popup-shell '$SESSION_NAME'"
     tm bind -n M-u run-shell "$TAW_HOME/_taw/bin/quick-task '$SESSION_NAME'"
@@ -450,7 +473,7 @@ setup_tmux_config() {
     # Status line: 2 lines - windows on top, hints on bottom
     tm set -t "$SESSION_NAME" status 2
     tm set -t "$SESSION_NAME" status-format[0] "#[align=left]#{W:#[fg=white bg=default] #W #[default],#[fg=white bg=blue bold] #W #[default]}"
-    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ⌥tab:pane  ⌥←→:window  ⌥n:new  ⌥e:end  ⌥m:merge  ⌥p:popup  ⌥u:queue  ⌥q:quit  ⌥h:help"
+    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ⌥tab:pane  ⌥←→:window  ⌥n:main  ⌥e:end  ⌥m:merge  ⌥p:popup  ⌥u:queue  ⌥q:quit  ⌥h:help"
 
     debug "Tmux config and keybindings applied"
 }
@@ -472,19 +495,18 @@ start_session() {
 
     echo "Starting session '$SESSION_NAME'..."
 
-    # Start tmux session with empty placeholder window
+    # Start tmux session with ⭐️main window at index 0
     cd "$PROJECT_DIR"
-    tm new-session -d -s "$SESSION_NAME" -c "$PROJECT_DIR"
+    tm new-session -d -s "$SESSION_NAME" -n "⭐️main" -c "$PROJECT_DIR"
     log "Tmux session created: $SESSION_NAME"
 
     # Apply tmux configuration and keybindings
     setup_tmux_config
     log "Tmux configured"
 
-    # Show new-task popup immediately after attach (scheduled via hook)
-    # The popup will open once the session is attached
-    debug "Scheduling new-task popup on attach..."
-    tm set-hook -t "$SESSION_NAME" client-attached "run-shell 'tmux -L \"taw-$SESSION_NAME\" display-popup -E -w 80% -h 60% -d \"$PROJECT_DIR\" -T \" New Task \" \"$TAW_HOME/_taw/bin/new-task\"; tmux -L \"taw-$SESSION_NAME\" set-hook -u -t \"$SESSION_NAME\" client-attached'"
+    # Run new-task in the main window
+    debug "Running new-task in ⭐️main window..."
+    tm send-keys -t "$SESSION_NAME:⭐️main" "$TAW_HOME/_taw/bin/new-task" Enter
 
     # Auto-cleanup merged tasks (before reopening, so merged tasks are cleaned up first)
     debug "Checking for merged tasks to cleanup..."
@@ -570,6 +592,10 @@ if is_session_running; then
     else
         # Update tmux config and keybindings (ensures latest bindings on reattach)
         setup_tmux_config
+
+        # Ensure ⭐️main window exists (reopen if closed) and is at leftmost
+        debug "Ensuring main window..."
+        ensure_main_window
 
         # Reopen any incomplete tasks
         debug "Checking for incomplete tasks..."
