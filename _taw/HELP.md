@@ -7,6 +7,7 @@ Claude Code 기반 자율 에이전트 작업 환경
 ### 태스크 관리
   ^n          새 태스크 생성 (에디터 열림)
   ^x          현재 태스크 종료 (worktree/branch 정리)
+  ^⌥a         빠른 태스크 큐 추가 (완료 후 자동 처리)
 
 ### Pane 조작
   ⌥ ←/→/↑/↓   pane 이동
@@ -37,6 +38,7 @@ Claude Code 기반 자율 에이전트 작업 환경
   .taw/
   ├── PROMPT.md              프로젝트별 에이전트 지시사항
   ├── new-task               태스크 생성 스크립트
+  ├── .queue/                빠른 태스크 큐 (^⌥a로 추가)
   └── agents/{task-name}/
       ├── task               태스크 내용
       ├── log                진행 로그

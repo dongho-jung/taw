@@ -32,7 +32,10 @@ taw/                           # 이 레포
     │   ├── handle-task        # 태스크 처리 (worktree 생성, agent 시작)
     │   ├── end-task           # 태스크 종료 (^x)
     │   ├── attach             # 태스크 재연결
-    │   └── cleanup            # 정리 스크립트 (/done에서 사용)
+    │   ├── cleanup            # 정리 스크립트 (/done에서 사용)
+    │   ├── quick-task         # 빠른 태스크 큐 추가 (^⌥a)
+    │   ├── process-queue      # 큐 처리 (태스크 완료 후 자동 실행)
+    │   └── _common.sh         # 공통 유틸리티 (상수, 함수)
     └── claude/commands/       # slash commands
         ├── commit.md          # /commit - 스마트 커밋
         ├── test.md            # /test - 테스트 실행
@@ -48,6 +51,8 @@ taw/                           # 이 레포
     ├── .is-git-repo           # git 모드 마커 (git 레포일 때만 존재)
     ├── .claude                # -> _taw/claude (symlink)
     ├── .metadata/             # 로그 및 상태
+    ├── .queue/                # 빠른 태스크 큐 (^⌥a로 추가)
+    │   └── 001.task           # 대기 중인 태스크 (순서대로 처리)
     └── agents/{task-name}/    # 태스크별 작업 공간
         ├── task               # 태스크 내용
         ├── log                # 진행 로그
@@ -120,9 +125,24 @@ brew install tmux gh
 |------|--------|
 | 새 태스크 | `^n` |
 | 태스크 종료 | `^x` (worktree/branch 정리 및 창 닫기) |
+| 빠른 태스크 큐 추가 | `^⌥a` (현재 태스크 완료 후 자동 처리) |
 | Pane 이동 | `⌥ + ←/→/↑/↓` |
 | Pane 분할 | `⌥ + h/j/k/l` (좌/하/상/우) |
 | Pane 닫기 | `⌥ + x` |
 | Window 이동 | `⇧⌥ + ←/→` |
 | 도움말 | `⌥ + /` |
 | Session 나가기 | `^q` (detach) |
+
+## 빠른 태스크 큐
+
+작업 중에 떠오른 아이디어나 추가 작업을 빠르게 큐에 추가할 수 있습니다.
+
+1. `^⌥a`를 누르면 팝업이 열립니다
+2. 태스크 내용을 입력하고 Enter
+3. 현재 태스크가 완료(`/finish` 또는 `/done`)되면 큐에 있는 태스크가 자동으로 시작됩니다
+
+큐 관리:
+```bash
+.taw/.queue/      # 큐 디렉토리
+└── 001.task      # 대기 중인 태스크 파일
+```

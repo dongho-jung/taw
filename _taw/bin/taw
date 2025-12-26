@@ -6,7 +6,7 @@
 
 set -e
 
-# Parse arguments
+# Parse arguments first (before sourcing _common.sh)
 TAW_DEBUG=0
 COMMAND=""
 while [[ $# -gt 0 ]]; do
@@ -27,15 +27,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Debug output function
-debug() {
-    if [ "$TAW_DEBUG" = "1" ]; then
-        echo "[DEBUG] $*" >&2
-    fi
-}
-
-# Resolve symlinks (macOS compatible)
-resolve_path() {
+# Resolve symlinks (needed to find TAW_HOME before sourcing _common.sh)
+_resolve_path() {
     local path="$1"
     while [ -L "$path" ]; do
         local dir="$(cd "$(dirname "$path")" && pwd)"
@@ -46,8 +39,11 @@ resolve_path() {
 }
 
 # Get the installation directory (where taw was installed from)
-SCRIPT_PATH="$(resolve_path "$0")"
+SCRIPT_PATH="$(_resolve_path "$0")"
 TAW_HOME="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd)"
+
+# Source common utilities (provides debug, log, warn, tm, etc.)
+source "$TAW_HOME/_taw/bin/_common.sh"
 
 PROJECT_DIR="$(pwd)"
 TAW_DIR="$PROJECT_DIR/.taw"
@@ -58,9 +54,10 @@ LOG_FILE="$LOG_DIR/start.log"
 AGENTS_DIR="$TAW_DIR/agents"
 SESSION_NAME="$PROJECT_NAME"
 
-# Logging function
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+# Note: log(), debug(), warn() are now provided by _common.sh
+# Override tm() to use SESSION_NAME automatically (simpler than _common.sh version)
+tm() {
+    tmux -L "taw-$SESSION_NAME" "$@"
 }
 
 # Detect if current directory is a git repository root
@@ -165,10 +162,6 @@ check_dependencies() {
 
 is_session_running() {
     tmux -L "taw-$SESSION_NAME" has-session -t "$SESSION_NAME" 2>/dev/null
-}
-
-tm() {
-    tmux -L "taw-$SESSION_NAME" "$@"
 }
 
 # Full cleanup: remove everything taw-related for this project
@@ -319,12 +312,14 @@ start_session() {
     tm bind -n C-x run-shell "$TAW_HOME/_taw/bin/end-task '$SESSION_NAME' '#{window_id}'"
     # Help: Alt+/ - show help in temporary window
     tm bind -n M-/ new-window -n "HELP" "less '$TAW_HOME/_taw/HELP.md'"
+    # Quick task: Ctrl+Alt+A - add task to queue via popup
+    tm bind -n C-M-a run-shell "$TAW_HOME/_taw/bin/quick-task '$SESSION_NAME'"
     log "Tmux configured"
 
     # Status line: 2 lines - windows on top, hints on bottom
     tm set -t "$SESSION_NAME" status 2
     tm set -t "$SESSION_NAME" status-format[0] "#[align=left]#{W:#[fg=white bg=default] #W #[default],#[fg=white bg=blue bold] #W #[default]}"
-    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ^n:new-task  ^x:end-task  ⌥←→↑↓:move-pane  ⌥hjkl:split-pane  ⌥x:close-pane  ⇧⌥←→:move-window  ^q:quit  ⌥/:help"
+    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ^n:new  ^x:end  ^⌥a:queue  ⌥←→↑↓:pane  ⌥hjkl:split  ⇧⌥←→:window  ^q:quit  ⌥/:help"
 
     # Run new-task in the initial window, then exit to close _ window
     debug "Running new-task in initial window..."

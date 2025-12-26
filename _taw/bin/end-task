@@ -137,3 +137,7 @@ debug "Closing window..."
 tm "$SESSION_NAME" kill-window -t "$WINDOW_ID" 2>/dev/null || true
 
 log "Cleanup completed" "$LOG_FILE"
+
+# 4. Process queue (start next queued task if any)
+debug "Checking queue for next task..."
+"$TAW_HOME/_taw/bin/process-queue" "$SESSION_NAME" &

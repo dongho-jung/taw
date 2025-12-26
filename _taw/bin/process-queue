@@ -1,0 +1,119 @@
+#!/bin/bash
+
+# TAW Process Queue
+# Processes the next task from the queue
+# Called automatically after a task completes successfully
+#
+# Usage:
+#   process-queue <session_name>
+
+set -e
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/_common.sh"
+
+TAW_HOME=$(get_taw_home)
+
+# Arguments
+SESSION_NAME="$1"
+
+if [ -z "$SESSION_NAME" ]; then
+    echo "Usage: process-queue <session_name>"
+    exit 1
+fi
+
+# Find project directory from session name
+find_project_dir() {
+    local session="$1"
+    local pane_path
+    pane_path=$(tmux -L "taw-$session" list-panes -s -F '#{pane_current_path}' 2>/dev/null | head -1)
+
+    if [ -n "$pane_path" ]; then
+        local dir="$pane_path"
+        while [ "$dir" != "/" ]; do
+            if [ -d "$dir/.taw" ]; then
+                echo "$dir"
+                return 0
+            fi
+            dir=$(dirname "$dir")
+        done
+    fi
+    return 1
+}
+
+PROJECT_DIR=$(find_project_dir "$SESSION_NAME")
+if [ -z "$PROJECT_DIR" ]; then
+    debug "Could not find project directory for session: $SESSION_NAME"
+    exit 0
+fi
+
+TAW_DIR="$PROJECT_DIR/.taw"
+QUEUE_DIR="$TAW_DIR/.queue"
+AGENTS_DIR="$TAW_DIR/agents"
+LOG_DIR="$TAW_DIR/.metadata/log"
+LOG_FILE="$LOG_DIR/queue.log"
+
+mkdir -p "$LOG_DIR"
+
+# Check if queue has tasks
+if [ ! -d "$QUEUE_DIR" ] || [ -z "$(ls -A "$QUEUE_DIR" 2>/dev/null)" ]; then
+    debug "Queue is empty"
+    exit 0
+fi
+
+# Get the first task file (sorted by number)
+NEXT_TASK_FILE=$(ls "$QUEUE_DIR"/*.task 2>/dev/null | sort | head -1)
+
+if [ -z "$NEXT_TASK_FILE" ] || [ ! -f "$NEXT_TASK_FILE" ]; then
+    debug "No task files found"
+    exit 0
+fi
+
+# Read task content
+TASK_CONTENT=$(cat "$NEXT_TASK_FILE")
+if [ -z "$TASK_CONTENT" ]; then
+    log "Empty task file, removing: $NEXT_TASK_FILE" "$LOG_FILE"
+    rm -f "$NEXT_TASK_FILE"
+    exit 0
+fi
+
+log "Processing queued task: $TASK_CONTENT" "$LOG_FILE"
+
+# Generate task name from content (use claude if available, otherwise simple hash)
+# For simplicity, create a short slug from content
+generate_task_name() {
+    local content="$1"
+    # Take first 30 chars, lowercase, replace spaces/special chars with hyphen
+    echo "$content" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-30
+}
+
+TASK_NAME=$(generate_task_name "$TASK_CONTENT")
+
+# Ensure unique name by adding number if exists
+BASE_NAME="$TASK_NAME"
+COUNTER=1
+while [ -d "$AGENTS_DIR/$TASK_NAME" ]; do
+    TASK_NAME="${BASE_NAME}-${COUNTER}"
+    COUNTER=$((COUNTER + 1))
+done
+
+# Create task directory
+TASK_DIR="$AGENTS_DIR/$TASK_NAME"
+mkdir -p "$TASK_DIR"
+
+# Write task file
+echo "$TASK_CONTENT" > "$TASK_DIR/task"
+touch "$TASK_DIR/log"
+
+log "Created task directory: $TASK_DIR" "$LOG_FILE"
+
+# Remove processed task from queue
+rm -f "$NEXT_TASK_FILE"
+log "Removed from queue: $NEXT_TASK_FILE" "$LOG_FILE"
+
+# Run handle-task to start the agent
+log "Starting handle-task for: $TASK_NAME" "$LOG_FILE"
+"$TAW_HOME/_taw/bin/handle-task" "$TASK_DIR" &
+
+echo "Started queued task: $TASK_NAME"

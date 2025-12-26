@@ -60,4 +60,14 @@ The script will:
 4. Remove the agent directory
 5. Close the tmux window
 
-Report the cleanup result to user.
+## Step 5: Process Queue (Before window closes)
+
+Before cleanup completes, check if there are queued tasks:
+
+```bash
+{TAW_DIR}/../_taw/bin/process-queue "$(basename {PROJECT_DIR})"
+```
+
+This will automatically start the next task from the queue if any exists.
+
+Report the cleanup result to user (and mention if a new task was started from queue).

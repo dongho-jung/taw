@@ -98,10 +98,26 @@ tmux rename-window -t {WINDOW_ID} "✅$(echo {TASK_NAME} | cut -c1-12)"
 echo "작업 완료 - PR 생성됨" >> {TAW_DIR}/agents/{TASK_NAME}/log
 ```
 
-## Step 7: Report to User
+## Step 7: Process Queue
+
+Check if there are queued tasks and start the next one:
+
+```bash
+{TAW_DIR}/../_taw/bin/process-queue "$(basename {PROJECT_DIR})"
+```
+
+Or if TAW_HOME is available:
+```bash
+$TAW_HOME/_taw/bin/process-queue "$(basename {PROJECT_DIR})"
+```
+
+This will automatically start the next task from the queue if any exists.
+
+## Step 8: Report to User
 
 Show:
 - PR URL: `gh pr view --web` (open in browser)
 - Remind user: "Run `/done` to cleanup when PR is merged"
+- If queue was processed, mention: "Started next queued task"
 
 Proceed with task completion.
