@@ -103,6 +103,11 @@ func (a *App) GetLogPath() string {
 	return filepath.Join(a.TawDir, constants.LogFileName)
 }
 
+// GetHistoryDir returns the path to the history directory.
+func (a *App) GetHistoryDir() string {
+	return filepath.Join(a.TawDir, constants.HistoryDirName)
+}
+
 // GetPromptPath returns the path to the project-specific prompt file.
 func (a *App) GetPromptPath() string {
 	return filepath.Join(a.TawDir, constants.PromptFileName)

@@ -51,6 +51,7 @@ const (
 	TawDirName       = ".taw"
 	AgentsDirName    = "agents"
 	QueueDirName     = ".queue"
+	HistoryDirName   = "history"
 	ConfigFileName   = "config"
 	LogFileName      = "log"
 	PromptFileName   = "PROMPT.md"

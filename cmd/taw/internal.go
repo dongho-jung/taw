@@ -570,6 +570,27 @@ var endTaskCmd = &cobra.Command{
 			}
 		}
 
+		// Capture agent pane history before cleanup
+		historyDir := app.GetHistoryDir()
+		if err := os.MkdirAll(historyDir, 0755); err != nil {
+			logging.Warn("Failed to create history directory: %v", err)
+		} else {
+			// Capture pane content (use a large number to get full history)
+			paneContent, err := tm.CapturePane(windowID+".0", 10000)
+			if err != nil {
+				logging.Warn("Failed to capture pane content: %v", err)
+			} else {
+				// Generate filename: YYMMDD_HHMMSS_taskname
+				timestamp := time.Now().Format("060102_150405")
+				historyFile := filepath.Join(historyDir, fmt.Sprintf("%s_%s", timestamp, targetTask.Name))
+				if err := os.WriteFile(historyFile, []byte(paneContent), 0644); err != nil {
+					logging.Warn("Failed to write history file: %v", err)
+				} else {
+					logging.Log("Agent history saved: %s", historyFile)
+				}
+			}
+		}
+
 		// Cleanup task (only reached if merge succeeded or not in auto-merge mode)
 		cleanupTimer := logging.StartTimer("task cleanup")
 		if err := mgr.CleanupTask(targetTask); err != nil {
