@@ -867,7 +867,9 @@ var popupShellCmd = &cobra.Command{
 				cleanupCmd, cleanupCmd)
 		}
 
-		return tm.DisplayPopup(tmux.PopupOpts{
+		// Ignore exit code from popup - commands like 'less' exit with non-zero
+		// and we don't want run-shell to display "...returned 1"
+		tm.DisplayPopup(tmux.PopupOpts{
 			Width:     "80%",
 			Height:    "60%",
 			Title:     " Shell (⌥P to close) ",
@@ -875,6 +877,7 @@ var popupShellCmd = &cobra.Command{
 			Directory: panePath,
 			Style:     "fg=terminal,bg=terminal",
 		}, shellCmd)
+		return nil
 	},
 }
 
