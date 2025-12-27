@@ -219,32 +219,38 @@ var handleTaskCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Log("New task detected")
+		logging.Log("New task detected: name=%s, agentDir=%s", taskName, agentDir)
 
 		// Get task
 		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
 		t, err := mgr.GetTask(taskName)
 		if err != nil {
+			logging.Error("Failed to get task: %v", err)
 			return err
 		}
+		logging.Log("Task loaded: content_length=%d", len(t.Content))
 
 		// Create tab-lock atomically
 		created, err := t.CreateTabLock()
 		if err != nil {
+			logging.Error("Failed to create tab-lock: %v", err)
 			return err
 		}
 		if !created {
-			logging.Log("Task already being handled")
+			logging.Log("Task already being handled by another process")
 			return nil
 		}
+		logging.Log("Tab-lock created successfully")
 
 		// Setup worktree if git mode
 		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
-			logging.Log("Creating worktree")
+			timer := logging.StartTimer("worktree setup")
 			if err := mgr.SetupWorktree(t); err != nil {
+				timer.StopWithResult(false, err.Error())
 				t.RemoveTabLock()
 				return fmt.Errorf("failed to setup worktree: %w", err)
 			}
+			timer.StopWithResult(true, fmt.Sprintf("branch=%s, path=%s", taskName, t.WorktreeDir))
 		}
 
 		// Setup symlinks (error is non-fatal)
@@ -256,6 +262,7 @@ var handleTaskCmd = &cobra.Command{
 		// Create tmux window
 		tm := tmux.New(sessionName)
 		workDir := mgr.GetWorkingDirectory(t)
+		logging.Log("Creating tmux window: session=%s, workDir=%s", sessionName, workDir)
 
 		windowID, err := tm.NewWindow(tmux.WindowOpts{
 			Name:     t.GetWindowName(),
@@ -263,9 +270,11 @@ var handleTaskCmd = &cobra.Command{
 			Detached: true,
 		})
 		if err != nil {
+			logging.Error("Failed to create tmux window: %v", err)
 			t.RemoveTabLock()
 			return fmt.Errorf("failed to create window: %w", err)
 		}
+		logging.Log("Tmux window created: windowID=%s, name=%s", windowID, t.GetWindowName())
 
 		// Save window ID
 		if err := t.SaveWindowID(windowID); err != nil {
@@ -275,6 +284,8 @@ var handleTaskCmd = &cobra.Command{
 		// Split window for user pane (error is non-fatal)
 		if err := tm.SplitWindow(windowID, true, ""); err != nil {
 			logging.Warn("Failed to split window: %v", err)
+		} else {
+			logging.Log("Window split for user pane")
 		}
 
 		// Build system prompt
@@ -302,6 +313,18 @@ var handleTaskCmd = &cobra.Command{
 		// Get taw binary path for end-task
 		tawBin, _ := os.Executable()
 
+		// Create task-specific end-task script
+		// This allows Claude to call end-task without needing environment variables
+		endTaskScript := filepath.Join(t.AgentDir, "end-task")
+		endTaskContent := fmt.Sprintf(`#!/bin/bash
+# Auto-generated end-task script for this task
+# Claude can call this directly without environment variables
+exec "%s" internal end-task "%s" "%s"
+`, tawBin, sessionName, windowID)
+		if err := os.WriteFile(endTaskScript, []byte(endTaskContent), 0755); err != nil {
+			logging.Warn("Failed to create end-task script: %v", err)
+		}
+
 		// Build environment variables and Claude command
 		// These are used by PROMPT.md for auto-merge, auto-pr, etc.
 		var envVars strings.Builder
@@ -327,14 +350,20 @@ var handleTaskCmd = &cobra.Command{
 		}
 
 		// Wait for Claude to be ready
+		logging.Log("Waiting for Claude to be ready...")
 		claudeClient := claude.New()
+		claudeTimer := logging.StartTimer("Claude startup")
 		if err := claudeClient.WaitForReady(tm, windowID+".0"); err != nil {
-			logging.Warn("Timeout waiting for Claude: %v", err)
+			claudeTimer.StopWithResult(false, err.Error())
+		} else {
+			claudeTimer.StopWithResult(true, "")
 		}
 
 		// Send trust response if needed (error is non-fatal)
 		if err := claudeClient.SendTrustResponse(tm, windowID+".0"); err != nil {
 			logging.Debug("Failed to send trust response: %v", err)
+		} else {
+			logging.Log("Trust response sent")
 		}
 
 		// Wait a bit more for Claude to be fully ready
@@ -342,11 +371,12 @@ var handleTaskCmd = &cobra.Command{
 
 		// Send task instruction - tell Claude to read from file
 		taskInstruction := fmt.Sprintf("ultrathink Read and execute the task from '%s'", t.GetUserPromptPath())
+		logging.Log("Sending task instruction: length=%d", len(taskInstruction))
 		if err := claudeClient.SendInput(tm, windowID+".0", taskInstruction); err != nil {
 			logging.Warn("Failed to send task instruction: %v", err)
 		}
 
-		logging.Log("Task started")
+		logging.Log("Task started successfully: name=%s, windowID=%s", taskName, windowID)
 		return nil
 	},
 }
@@ -392,53 +422,70 @@ var endTaskCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Log("=== End task ===")
-		logging.Log("ON_COMPLETE=%s", app.Config.OnComplete)
+		logging.Log("=== End task: %s ===", targetTask.Name)
+		logging.Log("Configuration: ON_COMPLETE=%s, WorkMode=%s", app.Config.OnComplete, app.Config.WorkMode)
 
 		tm := tmux.New(sessionName)
 		gitClient := git.New()
 		workDir := mgr.GetWorkingDirectory(targetTask)
+		logging.Log("Working directory: %s", workDir)
 
 		// Commit changes if git mode
 		if app.IsGitRepo {
-			if gitClient.HasChanges(workDir) {
-				logging.Log("Committing changes")
+			hasChanges := gitClient.HasChanges(workDir)
+			logging.Log("Git status: hasChanges=%v", hasChanges)
+
+			if hasChanges {
+				commitTimer := logging.StartTimer("git commit")
 				if err := gitClient.AddAll(workDir); err != nil {
 					logging.Warn("Failed to add changes: %v", err)
 				}
 				diffStat, _ := gitClient.GetDiffStat(workDir)
+				logging.Log("Changes: %s", strings.ReplaceAll(diffStat, "\n", ", "))
 				message := fmt.Sprintf("chore: auto-commit on task end\n\n%s", diffStat)
 				if err := gitClient.Commit(workDir, message); err != nil {
-					logging.Warn("Failed to commit: %v", err)
+					commitTimer.StopWithResult(false, err.Error())
+				} else {
+					commitTimer.StopWithResult(true, "")
 				}
 			}
 
 			// Push changes
-			logging.Log("Pushing changes")
+			pushTimer := logging.StartTimer("git push")
 			if err := gitClient.Push(workDir, "origin", targetTask.Name, true); err != nil {
-				logging.Warn("Failed to push: %v", err)
+				pushTimer.StopWithResult(false, err.Error())
+			} else {
+				pushTimer.StopWithResult(true, fmt.Sprintf("branch=%s", targetTask.Name))
 			}
 
 			// Handle auto-merge mode
 			if app.Config != nil && app.Config.OnComplete == config.OnCompleteAutoMerge {
-				logging.Log("auto-merge: merging to main...")
+				logging.Log("auto-merge: starting merge process")
 
 				// Get main branch name
 				mainBranch := gitClient.GetMainBranch(app.ProjectDir)
+				logging.Log("Main branch: %s", mainBranch)
+
+				mergeTimer := logging.StartTimer("auto-merge")
 
 				// Fetch and checkout main in PROJECT_DIR
+				logging.Log("Fetching from origin...")
 				if err := gitClient.Fetch(app.ProjectDir, "origin"); err != nil {
 					logging.Warn("Failed to fetch: %v", err)
 				}
+				logging.Log("Checking out %s...", mainBranch)
 				if err := gitClient.Checkout(app.ProjectDir, mainBranch); err != nil {
 					logging.Warn("Failed to checkout %s: %v", mainBranch, err)
+					mergeTimer.StopWithResult(false, "checkout failed")
 				} else {
 					// Pull latest
+					logging.Log("Pulling latest changes...")
 					if err := gitClient.Pull(app.ProjectDir); err != nil {
 						logging.Warn("Failed to pull: %v", err)
 					}
 
 					// Merge task branch (--no-ff)
+					logging.Log("Merging branch %s into %s...", targetTask.Name, mainBranch)
 					mergeMsg := fmt.Sprintf("Merge branch '%s'", targetTask.Name)
 					if err := gitClient.Merge(app.ProjectDir, targetTask.Name, true, mergeMsg); err != nil {
 						logging.Warn("Merge failed: %v - may need manual resolution", err)
@@ -446,12 +493,15 @@ var endTaskCmd = &cobra.Command{
 						if abortErr := gitClient.MergeAbort(app.ProjectDir); abortErr != nil {
 							logging.Warn("Failed to abort merge: %v", abortErr)
 						}
+						mergeTimer.StopWithResult(false, "merge conflict")
 					} else {
 						// Push merged main
+						logging.Log("Pushing merged main to origin...")
 						if err := gitClient.Push(app.ProjectDir, "origin", mainBranch, false); err != nil {
 							logging.Warn("Failed to push merged main: %v", err)
+							mergeTimer.StopWithResult(false, "push failed")
 						} else {
-							logging.Log("Merged to %s", mainBranch)
+							mergeTimer.StopWithResult(true, fmt.Sprintf("merged %s into %s", targetTask.Name, mainBranch))
 						}
 					}
 				}
@@ -459,11 +509,11 @@ var endTaskCmd = &cobra.Command{
 		}
 
 		// Cleanup task
-		logging.Log("Cleanup started")
+		cleanupTimer := logging.StartTimer("task cleanup")
 		if err := mgr.CleanupTask(targetTask); err != nil {
-			logging.Warn("Cleanup failed: %v", err)
+			cleanupTimer.StopWithResult(false, err.Error())
 		} else {
-			logging.Log("Cleanup completed")
+			cleanupTimer.StopWithResult(true, "")
 		}
 
 		// Kill window

@@ -81,8 +81,9 @@ Commit → push → call end-task → (auto merge + cleanup + close window)
 3. Log: "Task complete - calling end-task"
 4. **Call end-task** (handles merge, cleanup, window close automatically):
    ```bash
-   "$TAW_HOME/_taw/bin/end-task" "$SESSION_NAME" "$WINDOW_ID"
+   "$TAW_DIR/agents/$TASK_NAME/end-task"
    ```
+   **NOTE**: Use the task-specific end-task script instead of environment variables. This script is auto-generated when the task is created.
 
 **CRITICAL**: In `auto-merge`, don't create PR! end-task automatically merges to main and cleans up.
 
