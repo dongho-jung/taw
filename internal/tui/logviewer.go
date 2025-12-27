@@ -86,7 +86,7 @@ func (m *LogViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey handles keyboard input.
 func (m *LogViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "alt+l":
+	case "q", "esc", "alt+l":
 		return m, tea.Quit
 
 	case "down":
@@ -192,7 +192,7 @@ func (m *LogViewer) getDisplayLines() []string {
 // View renders the log viewer.
 func (m *LogViewer) View() string {
 	if m.err != nil {
-		return fmt.Sprintf("Error: %v\n\nPress Alt+L to close.", m.err)
+		return fmt.Sprintf("Error: %v\n\nPress q or Esc to close.", m.err)
 	}
 
 	if m.width == 0 || m.height == 0 {
@@ -265,11 +265,11 @@ func (m *LogViewer) View() string {
 	}
 
 	// Keybindings hint
-	hint := "↑↓←→:scroll s:tail w:wrap g/G:top/end Alt+L:close"
+	hint := "↑↓←→:scroll s:tail w:wrap g/G:top/end q:close"
 	padding := m.width - len(status) - len(hint)
 	if padding < 0 {
 		padding = 0
-		hint = "Alt+L:close"
+		hint = "q:close"
 		padding = m.width - len(status) - len(hint)
 		if padding < 0 {
 			padding = 0

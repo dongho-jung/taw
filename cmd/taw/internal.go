@@ -72,8 +72,12 @@ var toggleNewCmd = &cobra.Command{
 				// Run new-task in the existing window
 				tawBin, _ := os.Executable()
 				newTaskCmd := fmt.Sprintf("%s internal new-task %s", tawBin, sessionName)
-				tm.SendKeysLiteral(w.ID, newTaskCmd)
-				tm.SendKeys(w.ID, "Enter")
+				if err := tm.SendKeysLiteral(w.ID, newTaskCmd); err != nil {
+					return fmt.Errorf("failed to send keys: %w", err)
+				}
+				if err := tm.SendKeys(w.ID, "Enter"); err != nil {
+					return fmt.Errorf("failed to send Enter: %w", err)
+				}
 				return nil
 			}
 		}
@@ -95,8 +99,12 @@ var toggleNewCmd = &cobra.Command{
 		// Send new-task command to the new window
 		tawBin, _ := os.Executable()
 		newTaskCmd := fmt.Sprintf("%s internal new-task %s", tawBin, sessionName)
-		tm.SendKeysLiteral(windowID, newTaskCmd)
-		tm.SendKeys(windowID, "Enter")
+		if err := tm.SendKeysLiteral(windowID, newTaskCmd); err != nil {
+			return fmt.Errorf("failed to send keys: %w", err)
+		}
+		if err := tm.SendKeys(windowID, "Enter"); err != nil {
+			return fmt.Errorf("failed to send Enter: %w", err)
+		}
 
 		return nil
 	},
@@ -233,9 +241,11 @@ var handleTaskCmd = &cobra.Command{
 			}
 		}
 
-		// Setup symlinks
+		// Setup symlinks (error is non-fatal)
 		tawHome, _ := getTawHome()
-		t.SetupSymlinks(tawHome, app.ProjectDir)
+		if err := t.SetupSymlinks(tawHome, app.ProjectDir); err != nil {
+			logging.Warn("Failed to setup symlinks: %v", err)
+		}
 
 		// Create tmux window
 		tm := tmux.New(sessionName)
@@ -252,10 +262,14 @@ var handleTaskCmd = &cobra.Command{
 		}
 
 		// Save window ID
-		t.SaveWindowID(windowID)
+		if err := t.SaveWindowID(windowID); err != nil {
+			logging.Warn("Failed to save window ID: %v", err)
+		}
 
-		// Split window for user pane
-		tm.SplitWindow(windowID, true, "")
+		// Split window for user pane (error is non-fatal)
+		if err := tm.SplitWindow(windowID, true, ""); err != nil {
+			logging.Warn("Failed to split window: %v", err)
+		}
 
 		// Build system prompt
 		globalPrompt, _ := os.ReadFile(app.GetGlobalPromptPath())
@@ -271,9 +285,13 @@ var handleTaskCmd = &cobra.Command{
 		userPrompt.WriteString(fmt.Sprintf("**Project**: %s\n\n", app.ProjectDir))
 		userPrompt.WriteString(t.Content)
 
-		// Save prompts
-		os.WriteFile(t.GetSystemPromptPath(), []byte(systemPrompt), 0644)
-		os.WriteFile(t.GetUserPromptPath(), []byte(userPrompt.String()), 0644)
+		// Save prompts (errors are non-fatal but should be logged)
+		if err := os.WriteFile(t.GetSystemPromptPath(), []byte(systemPrompt), 0644); err != nil {
+			logging.Warn("Failed to save system prompt: %v", err)
+		}
+		if err := os.WriteFile(t.GetUserPromptPath(), []byte(userPrompt.String()), 0644); err != nil {
+			logging.Warn("Failed to save user prompt: %v", err)
+		}
 
 		// Get taw binary path for end-task
 		tawBin, _ := os.Executable()
@@ -295,8 +313,12 @@ var handleTaskCmd = &cobra.Command{
 
 		claudeCmd := fmt.Sprintf("%s && claude --dangerously-skip-permissions --system-prompt \"$(cat '%s')\"",
 			envVars.String(), t.GetSystemPromptPath())
-		tm.SendKeysLiteral(windowID+".0", claudeCmd)
-		tm.SendKeys(windowID+".0", "Enter")
+		if err := tm.SendKeysLiteral(windowID+".0", claudeCmd); err != nil {
+			return fmt.Errorf("failed to send Claude command: %w", err)
+		}
+		if err := tm.SendKeys(windowID+".0", "Enter"); err != nil {
+			return fmt.Errorf("failed to send Enter: %w", err)
+		}
 
 		// Wait for Claude to be ready
 		claudeClient := claude.New()
@@ -304,8 +326,10 @@ var handleTaskCmd = &cobra.Command{
 			logging.Warn("Timeout waiting for Claude: %v", err)
 		}
 
-		// Send trust response if needed
-		claudeClient.SendTrustResponse(tm, windowID+".0")
+		// Send trust response if needed (error is non-fatal)
+		if err := claudeClient.SendTrustResponse(tm, windowID+".0"); err != nil {
+			logging.Debug("Failed to send trust response: %v", err)
+		}
 
 		// Wait a bit more for Claude to be fully ready
 		time.Sleep(500 * time.Millisecond)
@@ -336,7 +360,10 @@ var endTaskCmd = &cobra.Command{
 
 		// Find task by window ID
 		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
-		tasks, _ := mgr.ListTasks()
+		tasks, err := mgr.ListTasks()
+		if err != nil {
+			return fmt.Errorf("failed to list tasks: %w", err)
+		}
 
 		var targetTask *task.Task
 		for _, t := range tasks {
@@ -370,41 +397,56 @@ var endTaskCmd = &cobra.Command{
 		if app.IsGitRepo {
 			if gitClient.HasChanges(workDir) {
 				logging.Log("Committing changes")
-				gitClient.AddAll(workDir)
+				if err := gitClient.AddAll(workDir); err != nil {
+					logging.Warn("Failed to add changes: %v", err)
+				}
 				diffStat, _ := gitClient.GetDiffStat(workDir)
 				message := fmt.Sprintf("chore: auto-commit on task end\n\n%s", diffStat)
-				gitClient.Commit(workDir, message)
+				if err := gitClient.Commit(workDir, message); err != nil {
+					logging.Warn("Failed to commit: %v", err)
+				}
 			}
 
 			// Push changes
 			logging.Log("Pushing changes")
-			gitClient.Push(workDir, "origin", targetTask.Name, true)
+			if err := gitClient.Push(workDir, "origin", targetTask.Name, true); err != nil {
+				logging.Warn("Failed to push: %v", err)
+			}
 
 			// Handle auto-merge mode
-			if app.Config.OnComplete == config.OnCompleteAutoMerge {
+			if app.Config != nil && app.Config.OnComplete == config.OnCompleteAutoMerge {
 				logging.Log("auto-merge: merging to main...")
 
 				// Get main branch name
 				mainBranch := gitClient.GetMainBranch(app.ProjectDir)
 
 				// Fetch and checkout main in PROJECT_DIR
-				gitClient.Fetch(app.ProjectDir, "origin")
+				if err := gitClient.Fetch(app.ProjectDir, "origin"); err != nil {
+					logging.Warn("Failed to fetch: %v", err)
+				}
 				if err := gitClient.Checkout(app.ProjectDir, mainBranch); err != nil {
 					logging.Warn("Failed to checkout %s: %v", mainBranch, err)
 				} else {
 					// Pull latest
-					gitClient.Pull(app.ProjectDir)
+					if err := gitClient.Pull(app.ProjectDir); err != nil {
+						logging.Warn("Failed to pull: %v", err)
+					}
 
 					// Merge task branch (--no-ff)
 					mergeMsg := fmt.Sprintf("Merge branch '%s'", targetTask.Name)
 					if err := gitClient.Merge(app.ProjectDir, targetTask.Name, true, mergeMsg); err != nil {
 						logging.Warn("Merge failed: %v - may need manual resolution", err)
 						// Abort merge on conflict
-						gitClient.MergeAbort(app.ProjectDir)
+						if abortErr := gitClient.MergeAbort(app.ProjectDir); abortErr != nil {
+							logging.Warn("Failed to abort merge: %v", abortErr)
+						}
 					} else {
 						// Push merged main
-						gitClient.Push(app.ProjectDir, "origin", mainBranch, false)
-						logging.Log("Merged to %s", mainBranch)
+						if err := gitClient.Push(app.ProjectDir, "origin", mainBranch, false); err != nil {
+							logging.Warn("Failed to push merged main: %v", err)
+						} else {
+							logging.Log("Merged to %s", mainBranch)
+						}
 					}
 				}
 			}
@@ -412,15 +454,22 @@ var endTaskCmd = &cobra.Command{
 
 		// Cleanup task
 		logging.Log("Cleanup started")
-		mgr.CleanupTask(targetTask)
-		logging.Log("Cleanup completed")
+		if err := mgr.CleanupTask(targetTask); err != nil {
+			logging.Warn("Cleanup failed: %v", err)
+		} else {
+			logging.Log("Cleanup completed")
+		}
 
 		// Kill window
-		tm.KillWindow(windowID)
+		if err := tm.KillWindow(windowID); err != nil {
+			logging.Warn("Failed to kill window: %v", err)
+		}
 
 		// Process queue
 		tawBin, _ := os.Executable()
-		exec.Command(tawBin, "internal", "process-queue", sessionName).Start()
+		if err := exec.Command(tawBin, "internal", "process-queue", sessionName).Start(); err != nil {
+			logging.Debug("Failed to start process-queue: %v", err)
+		}
 
 		return nil
 	},
@@ -586,16 +635,23 @@ var popupShellCmd = &cobra.Command{
 		// Check if popup is open
 		isOpen, _ := tm.GetOption("@taw_popup_open")
 		if isOpen == "1" {
-			tm.SetOption("@taw_popup_open", "0", false)
-			// Popup will close automatically
+			// Close popup using display-popup -C
+			tm.SetOption("@taw_popup_open", "", true)
+			tm.Run("display-popup", "-C")
 			return nil
 		}
 
-		tm.SetOption("@taw_popup_open", "1", false)
+		tm.SetOption("@taw_popup_open", "1", true)
 
-		app, err := getAppFromSession(sessionName)
-		if err != nil {
-			return err
+		// Get current pane's working directory (worktree path)
+		panePath, err := tm.Display("#{pane_current_path}")
+		if err != nil || panePath == "" {
+			// Fallback to project dir
+			app, err := getAppFromSession(sessionName)
+			if err != nil {
+				return err
+			}
+			panePath = app.ProjectDir
 		}
 
 		shell := os.Getenv("SHELL")
@@ -603,12 +659,17 @@ var popupShellCmd = &cobra.Command{
 			shell = "/bin/bash"
 		}
 
+		// Build shell command that clears state on exit
+		shellCmd := fmt.Sprintf("%s; tmux -L 'taw-%s' set-option -g @taw_popup_open '' 2>/dev/null || true",
+			shell, sessionName)
+
 		return tm.DisplayPopup(tmux.PopupOpts{
-			Width:  "80%",
-			Height: "80%",
-			Title:  "Shell",
-			Close:  true,
-		}, fmt.Sprintf("cd %s && %s", app.ProjectDir, shell))
+			Width:     "80%",
+			Height:   "60%",
+			Title:     " Shell ",
+			Close:     true,
+			Directory: panePath,
+		}, shellCmd)
 	},
 }
 
@@ -620,19 +681,21 @@ var toggleLogCmd = &cobra.Command{
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
+		// Check if log popup is open
+		isOpen, _ := tm.GetOption("@taw_log_open")
+		if isOpen == "1" {
+			// Close popup using display-popup -C
+			tm.SetOption("@taw_log_open", "", true)
+			tm.Run("display-popup", "-C")
+			return nil
+		}
+
 		app, err := getAppFromSession(sessionName)
 		if err != nil {
 			return err
 		}
 
-		// Check if log popup is open
-		isOpen, _ := tm.GetOption("@taw_log_open")
-		if isOpen == "1" {
-			tm.SetOption("@taw_log_open", "0", false)
-			return nil
-		}
-
-		tm.SetOption("@taw_log_open", "1", false)
+		tm.SetOption("@taw_log_open", "1", true)
 
 		logPath := app.GetLogPath()
 
@@ -642,12 +705,16 @@ var toggleLogCmd = &cobra.Command{
 			tawBin = "taw"
 		}
 
+		// Build command that clears state on exit
+		logCmd := fmt.Sprintf("%s internal log-viewer %s; tmux -L 'taw-%s' set-option -g @taw_log_open '' 2>/dev/null || true",
+			tawBin, logPath, sessionName)
+
 		return tm.DisplayPopup(tmux.PopupOpts{
 			Width:  "90%",
 			Height: "80%",
-			Title:  "Log Viewer",
+			Title:  " Log Viewer (↑↓:scroll  g/G:top/end  s:tail  w:wrap  q:quit) ",
 			Close:  true,
-		}, fmt.Sprintf("%s internal log-viewer %s", tawBin, logPath))
+		}, logCmd)
 	},
 }
 
@@ -693,16 +760,25 @@ var toggleHelpCmd = &cobra.Command{
 			return fmt.Errorf("failed to create temp file: %w", err)
 		}
 		tmpPath := tmpFile.Name()
-		tmpFile.WriteString(helpContent)
+		if _, err := tmpFile.WriteString(helpContent); err != nil {
+			tmpFile.Close()
+			return fmt.Errorf("failed to write help content: %w", err)
+		}
 		tmpFile.Close()
 
-		// Clear state and remove temp file when popup closes
-		popupCmd := fmt.Sprintf("less '%s'; rm -f '%s'; tmux -L 'taw-%s' set-option -g @taw_help_open ''", tmpPath, tmpPath, sessionName)
+		// Build command with lesskey bindings for Alt+H and Alt+/ to quit
+		// Creates a temp keyfile, uses LESSKEYIN to load it, then cleans up
+		popupCmd := fmt.Sprintf(
+			"KEYFILE=$(mktemp) && printf '#command\\n\\\\eh quit\\n\\\\e/ quit\\n' > \"$KEYFILE\" && "+
+				"LESSKEYIN=\"$KEYFILE\" less '%s'; "+
+				"rm -f '%s' \"$KEYFILE\" 2>/dev/null || true; "+
+				"tmux -L 'taw-%s' set-option -g @taw_help_open '' 2>/dev/null || true",
+			tmpPath, tmpPath, sessionName)
 
 		return tm.DisplayPopup(tmux.PopupOpts{
 			Width:  "80%",
 			Height: "80%",
-			Title:  " Help (q to close) ",
+			Title:  " Help (⌥h or q to close) ",
 			Close:  true,
 		}, popupCmd)
 	},
@@ -815,7 +891,10 @@ func openEditor(workDir string) (string, error) {
 # Describe your task below:
 
 `
-	tmpFile.WriteString(template)
+	if _, err := tmpFile.WriteString(template); err != nil {
+		tmpFile.Close()
+		return "", fmt.Errorf("failed to write template: %w", err)
+	}
 	tmpFile.Close()
 
 	// Build editor command with options
