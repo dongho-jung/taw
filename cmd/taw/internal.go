@@ -242,15 +242,23 @@ var handleTaskCmd = &cobra.Command{
 		}
 		logging.Log("Tab-lock created successfully")
 
-		// Setup worktree if git mode
+		// Setup worktree if git mode (skip if worktree already exists - reopen case)
 		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
-			timer := logging.StartTimer("worktree setup")
-			if err := mgr.SetupWorktree(t); err != nil {
-				timer.StopWithResult(false, err.Error())
-				t.RemoveTabLock()
-				return fmt.Errorf("failed to setup worktree: %w", err)
+			worktreeDir := t.GetWorktreeDir()
+			if _, err := os.Stat(worktreeDir); os.IsNotExist(err) {
+				// Worktree doesn't exist, create it
+				timer := logging.StartTimer("worktree setup")
+				if err := mgr.SetupWorktree(t); err != nil {
+					timer.StopWithResult(false, err.Error())
+					t.RemoveTabLock()
+					return fmt.Errorf("failed to setup worktree: %w", err)
+				}
+				timer.StopWithResult(true, fmt.Sprintf("branch=%s, path=%s", taskName, t.WorktreeDir))
+			} else {
+				// Worktree already exists (reopen case)
+				logging.Log("Worktree already exists, reusing: %s", worktreeDir)
+				t.WorktreeDir = worktreeDir
 			}
-			timer.StopWithResult(true, fmt.Sprintf("branch=%s, path=%s", taskName, t.WorktreeDir))
 		}
 
 		// Setup symlinks (error is non-fatal)
@@ -478,6 +486,7 @@ var endTaskCmd = &cobra.Command{
 			}
 
 			// Handle auto-merge mode
+			mergeSuccess := true // Track merge result to decide cleanup
 			if app.Config != nil && app.Config.OnComplete == config.OnCompleteAutoMerge {
 				logging.Log("auto-merge: starting merge process")
 
@@ -486,6 +495,15 @@ var endTaskCmd = &cobra.Command{
 				logging.Log("Main branch: %s", mainBranch)
 
 				mergeTimer := logging.StartTimer("auto-merge")
+
+				// Stash any uncommitted changes in project dir before checkout
+				hasLocalChanges := gitClient.HasChanges(app.ProjectDir)
+				if hasLocalChanges {
+					logging.Log("Stashing local changes in project dir...")
+					if err := gitClient.StashPush(app.ProjectDir, "taw-auto-merge-temp"); err != nil {
+						logging.Warn("Failed to stash changes: %v", err)
+					}
+				}
 
 				// Fetch and checkout main in PROJECT_DIR
 				logging.Log("Fetching from origin...")
@@ -496,6 +514,7 @@ var endTaskCmd = &cobra.Command{
 				if err := gitClient.Checkout(app.ProjectDir, mainBranch); err != nil {
 					logging.Warn("Failed to checkout %s: %v", mainBranch, err)
 					mergeTimer.StopWithResult(false, "checkout failed")
+					mergeSuccess = false
 				} else {
 					// Pull latest
 					logging.Log("Pulling latest changes...")
@@ -513,21 +532,41 @@ var endTaskCmd = &cobra.Command{
 							logging.Warn("Failed to abort merge: %v", abortErr)
 						}
 						mergeTimer.StopWithResult(false, "merge conflict")
+						mergeSuccess = false
 					} else {
 						// Push merged main
 						logging.Log("Pushing merged main to origin...")
 						if err := gitClient.Push(app.ProjectDir, "origin", mainBranch, false); err != nil {
 							logging.Warn("Failed to push merged main: %v", err)
 							mergeTimer.StopWithResult(false, "push failed")
+							mergeSuccess = false
 						} else {
 							mergeTimer.StopWithResult(true, fmt.Sprintf("merged %s into %s", targetTask.Name, mainBranch))
 						}
 					}
 				}
+
+				// Restore stashed changes
+				if hasLocalChanges {
+					logging.Log("Restoring stashed changes...")
+					if err := gitClient.StashPop(app.ProjectDir); err != nil {
+						logging.Warn("Failed to restore stashed changes: %v", err)
+					}
+				}
+
+				// If merge failed, rename window to warning and skip cleanup
+				if !mergeSuccess {
+					logging.Warn("Merge failed - keeping task for manual resolution")
+					warningWindowName := constants.EmojiWarning + targetTask.Name
+					if err := tm.RenameWindow(windowID, warningWindowName); err != nil {
+						logging.Warn("Failed to rename window: %v", err)
+					}
+					return nil // Exit without cleanup - keep worktree and branch
+				}
 			}
 		}
 
-		// Cleanup task
+		// Cleanup task (only reached if merge succeeded or not in auto-merge mode)
 		cleanupTimer := logging.StartTimer("task cleanup")
 		if err := mgr.CleanupTask(targetTask); err != nil {
 			cleanupTimer.StopWithResult(false, err.Error())

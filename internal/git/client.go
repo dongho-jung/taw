@@ -40,6 +40,8 @@ type Client interface {
 	GetUntrackedFiles(dir string) ([]string, error)
 	StashCreate(dir string) (string, error)
 	StashApply(dir, stashHash string) error
+	StashPush(dir, message string) error
+	StashPop(dir string) error
 
 	// Commit
 	Add(dir, path string) error
@@ -296,6 +298,18 @@ func (c *gitClient) StashCreate(dir string) (string, error) {
 
 func (c *gitClient) StashApply(dir, stashHash string) error {
 	return c.run(dir, "stash", "apply", stashHash)
+}
+
+func (c *gitClient) StashPush(dir, message string) error {
+	args := []string{"stash", "push"}
+	if message != "" {
+		args = append(args, "-m", message)
+	}
+	return c.run(dir, args...)
+}
+
+func (c *gitClient) StashPop(dir string) error {
+	return c.run(dir, "stash", "pop")
 }
 
 // Commit
