@@ -22,12 +22,16 @@ install: build
 	@echo "Installing $(BINARY_NAME) to ~/.local/bin..."
 	@mkdir -p ~/.local/bin
 	@cp $(BINARY_NAME) ~/.local/bin/
+	@xattr -cr ~/.local/bin/$(BINARY_NAME)
+	@codesign -fs - ~/.local/bin/$(BINARY_NAME)
 	@echo "Done! Make sure ~/.local/bin is in your PATH"
 
 ## Install globally to /usr/local/bin (requires sudo)
 install-global: build
 	@echo "Installing $(BINARY_NAME) to /usr/local/bin..."
 	sudo cp $(BINARY_NAME) /usr/local/bin/
+	sudo xattr -cr /usr/local/bin/$(BINARY_NAME)
+	sudo codesign -fs - /usr/local/bin/$(BINARY_NAME)
 	@echo "Done!"
 
 ## Clean build artifacts

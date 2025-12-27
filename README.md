@@ -24,6 +24,8 @@ make install
 go install github.com/donghojung/taw@latest
 ```
 
+> **Note (macOS)**: `make install`은 자동으로 `xattr -cr` 및 `codesign -fs -`를 수행하여 `zsh: killed` 오류를 방지합니다.
+
 ## 디렉토리 구조
 
 ```
