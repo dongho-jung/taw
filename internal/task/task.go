@@ -95,11 +95,6 @@ func (t *Task) GetUserPromptPath() string {
 	return filepath.Join(t.AgentDir, ".user-prompt")
 }
 
-// GetAttachPath returns the path to the attach symlink.
-func (t *Task) GetAttachPath() string {
-	return filepath.Join(t.AgentDir, "attach")
-}
-
 // GetOriginPath returns the path to the origin symlink.
 func (t *Task) GetOriginPath() string {
 	return filepath.Join(t.AgentDir, "origin")
@@ -212,7 +207,7 @@ func (t *Task) GetWindowName() string {
 	return emoji + name
 }
 
-// SetupSymlinks creates the origin and attach symlinks.
+// SetupSymlinks creates the origin symlink.
 func (t *Task) SetupSymlinks(tawHome, projectDir string) error {
 	// Create origin symlink to project root
 	originPath := t.GetOriginPath()
@@ -227,17 +222,6 @@ func (t *Task) SetupSymlinks(tawHome, projectDir string) error {
 
 	if err := os.Symlink(relPath, originPath); err != nil {
 		return fmt.Errorf("failed to create origin symlink: %w", err)
-	}
-
-	// Create attach symlink to taw binary
-	attachPath := t.GetAttachPath()
-	if err := os.Remove(attachPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove old attach symlink: %w", err)
-	}
-
-	attachTarget := filepath.Join(tawHome, "_taw", "bin", "attach")
-	if err := os.Symlink(attachTarget, attachPath); err != nil {
-		return fmt.Errorf("failed to create attach symlink: %w", err)
 	}
 
 	return nil

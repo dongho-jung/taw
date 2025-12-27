@@ -34,6 +34,11 @@ const (
 	WindowCreationTimeout = 30 * time.Second
 )
 
+// Tmux command timeout
+const (
+	TmuxCommandTimeout = 10 * time.Second
+)
+
 // Default configuration values
 const (
 	DefaultMainBranch  = "main"

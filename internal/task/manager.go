@@ -110,16 +110,20 @@ func (m *Manager) GetTask(name string) (*Task, error) {
 		return nil, fmt.Errorf("failed to load task content: %w", err)
 	}
 
-	// Load window ID if exists
+	// Load window ID if exists (error is non-fatal)
 	if task.HasTabLock() {
-		task.LoadWindowID()
+		if _, err := task.LoadWindowID(); err != nil {
+			// Window ID file might be corrupted or missing - continue anyway
+		}
 	}
 
-	// Load PR number if exists
-	task.LoadPRNumber()
+	// Load PR number if exists (error is non-fatal)
+	if _, err := task.LoadPRNumber(); err != nil {
+		// PR file might be corrupted - continue anyway
+	}
 
-	// Set worktree directory
-	if m.isGitRepo && m.config.WorkMode == config.WorkModeWorktree {
+	// Set worktree directory (with nil check for config)
+	if m.isGitRepo && m.config != nil && m.config.WorkMode == config.WorkModeWorktree {
 		task.WorktreeDir = task.GetWorktreeDir()
 	}
 
@@ -155,6 +159,10 @@ func (m *Manager) ListTasks() ([]*Task, error) {
 
 // FindIncompleteTasks finds tasks that have a tab-lock but no active window.
 func (m *Manager) FindIncompleteTasks(sessionName string) ([]*Task, error) {
+	if m.tmuxClient == nil {
+		return nil, fmt.Errorf("tmux client not set")
+	}
+
 	tasks, err := m.ListTasks()
 	if err != nil {
 		return nil, err
@@ -198,7 +206,7 @@ func (m *Manager) FindIncompleteTasks(sessionName string) ([]*Task, error) {
 
 // FindCorruptedTasks finds tasks with corrupted worktrees.
 func (m *Manager) FindCorruptedTasks() ([]*Task, error) {
-	if !m.isGitRepo || m.config.WorkMode != config.WorkModeWorktree {
+	if !m.isGitRepo || m.config == nil || m.config.WorkMode != config.WorkModeWorktree {
 		return nil, nil
 	}
 
@@ -317,23 +325,29 @@ func (m *Manager) isTaskMerged(task *Task, mainBranch string) bool {
 
 // CleanupTask cleans up a task's resources.
 func (m *Manager) CleanupTask(task *Task) error {
-	if m.isGitRepo && m.config.WorkMode == config.WorkModeWorktree {
+	if m.isGitRepo && m.config != nil && m.config.WorkMode == config.WorkModeWorktree {
 		worktreeDir := task.GetWorktreeDir()
 
 		// Remove worktree
 		if _, err := os.Stat(worktreeDir); err == nil {
 			if err := m.gitClient.WorktreeRemove(m.projectDir, worktreeDir, true); err != nil {
 				// Try force remove if normal remove fails
-				os.RemoveAll(worktreeDir)
+				if removeErr := os.RemoveAll(worktreeDir); removeErr != nil {
+					// Log but continue - cleanup should not fail entirely
+				}
 			}
 		}
 
-		// Prune worktrees
-		m.gitClient.WorktreePrune(m.projectDir)
+		// Prune worktrees (error is non-fatal)
+		if err := m.gitClient.WorktreePrune(m.projectDir); err != nil {
+			// Log but continue
+		}
 
-		// Delete branch
+		// Delete branch (error is non-fatal)
 		if m.gitClient.BranchExists(m.projectDir, task.Name) {
-			m.gitClient.BranchDelete(m.projectDir, task.Name, true)
+			if err := m.gitClient.BranchDelete(m.projectDir, task.Name, true); err != nil {
+				// Log but continue
+			}
 		}
 	}
 
@@ -343,17 +357,17 @@ func (m *Manager) CleanupTask(task *Task) error {
 
 // SetupWorktree creates a git worktree for the task.
 func (m *Manager) SetupWorktree(task *Task) error {
-	if !m.isGitRepo || m.config.WorkMode != config.WorkModeWorktree {
+	if !m.isGitRepo || m.config == nil || m.config.WorkMode != config.WorkModeWorktree {
 		return nil
 	}
 
 	worktreeDir := task.GetWorktreeDir()
 	task.WorktreeDir = worktreeDir
 
-	// Stash any uncommitted changes
+	// Stash any uncommitted changes (error is non-fatal)
 	stashHash, _ := m.gitClient.StashCreate(m.projectDir)
 
-	// Get untracked files
+	// Get untracked files (error is non-fatal)
 	untrackedFiles, _ := m.gitClient.GetUntrackedFiles(m.projectDir)
 
 	// Create worktree with new branch
@@ -361,27 +375,33 @@ func (m *Manager) SetupWorktree(task *Task) error {
 		return fmt.Errorf("failed to create worktree: %w", err)
 	}
 
-	// Apply stash to worktree if there were changes
+	// Apply stash to worktree if there were changes (error is non-fatal)
 	if stashHash != "" {
-		m.gitClient.StashApply(worktreeDir, stashHash)
+		if err := m.gitClient.StashApply(worktreeDir, stashHash); err != nil {
+			// Stash apply can fail if there are conflicts - continue anyway
+		}
 	}
 
-	// Copy untracked files to worktree
+	// Copy untracked files to worktree (error is non-fatal)
 	if len(untrackedFiles) > 0 {
-		git.CopyUntrackedFiles(untrackedFiles, m.projectDir, worktreeDir)
+		if err := git.CopyUntrackedFiles(untrackedFiles, m.projectDir, worktreeDir); err != nil {
+			// Continue even if copying fails
+		}
 	}
 
-	// Create .claude symlink in worktree
+	// Create .claude symlink in worktree (error is non-fatal)
 	claudeLink := filepath.Join(worktreeDir, constants.ClaudeLink)
 	claudeTarget := filepath.Join(m.tawDir, constants.ClaudeLink)
-	os.Symlink(claudeTarget, claudeLink)
+	if err := os.Symlink(claudeTarget, claudeLink); err != nil {
+		// Symlink might already exist or fail for other reasons - continue anyway
+	}
 
 	return nil
 }
 
 // GetWorkingDirectory returns the working directory for a task.
 func (m *Manager) GetWorkingDirectory(task *Task) string {
-	if m.isGitRepo && m.config.WorkMode == config.WorkModeWorktree {
+	if m.isGitRepo && m.config != nil && m.config.WorkMode == config.WorkModeWorktree {
 		return task.GetWorktreeDir()
 	}
 	return m.projectDir

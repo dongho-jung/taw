@@ -78,12 +78,13 @@ type WindowOpts struct {
 
 // PopupOpts contains options for display-popup.
 type PopupOpts struct {
-	Width   string
-	Height  string
-	Title   string
-	Style   string
-	Close   bool // -E flag: close on exit
+	Width       string
+	Height      string
+	Title       string
+	Style       string
+	Close       bool   // -E flag: close on exit
 	BorderStyle string
+	Directory   string // -d flag: working directory
 }
 
 // BindOpts contains options for key binding.
@@ -132,17 +133,24 @@ func (c *tmuxClient) cmdContext(ctx context.Context, args ...string) *exec.Cmd {
 }
 
 func (c *tmuxClient) Run(args ...string) error {
-	cmd := c.cmd(args...)
+	ctx, cancel := context.WithTimeout(context.Background(), constants.TmuxCommandTimeout)
+	defer cancel()
+	cmd := c.cmdContext(ctx, args...)
 	return cmd.Run()
 }
 
 func (c *tmuxClient) RunWithOutput(args ...string) (string, error) {
-	cmd := c.cmd(args...)
+	ctx, cancel := context.WithTimeout(context.Background(), constants.TmuxCommandTimeout)
+	defer cancel()
+	cmd := c.cmdContext(ctx, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("tmux command timeout: %w", err)
+		}
 		return "", fmt.Errorf("%w: %s", err, stderr.String())
 	}
 
@@ -326,6 +334,9 @@ func (c *tmuxClient) DisplayPopup(opts PopupOpts, command string) error {
 	}
 	if opts.Height != "" {
 		args = append(args, "-h", opts.Height)
+	}
+	if opts.Directory != "" {
+		args = append(args, "-d", opts.Directory)
 	}
 	if opts.Title != "" {
 		args = append(args, "-T", opts.Title)

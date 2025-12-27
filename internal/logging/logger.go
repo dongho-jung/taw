@@ -73,6 +73,7 @@ func (l *fileLogger) SetTask(task string) {
 }
 
 func (l *fileLogger) getContext() string {
+	// Note: caller should hold the lock when calling this method
 	if l.task != "" {
 		return fmt.Sprintf("%s:%s", l.script, l.task)
 	}
@@ -104,7 +105,10 @@ func (l *fileLogger) Log(format string, args ...interface{}) {
 	context := l.getContext()
 
 	line := fmt.Sprintf("[%s] [%s] %s\n", timestamp, context, msg)
-	l.file.WriteString(line)
+	if _, err := l.file.WriteString(line); err != nil {
+		// Log file write failed - output to stderr as fallback
+		fmt.Fprintf(os.Stderr, "Failed to write to log file: %v\n", err)
+	}
 }
 
 func (l *fileLogger) Warn(format string, args ...interface{}) {
@@ -118,7 +122,9 @@ func (l *fileLogger) Warn(format string, args ...interface{}) {
 		timestamp := time.Now().Format("2006-01-02 15:04:05")
 		context := l.getContext()
 		line := fmt.Sprintf("[%s] [%s] WARN: %s\n", timestamp, context, msg)
-		l.file.WriteString(line)
+		if _, err := l.file.WriteString(line); err != nil {
+			// Silently fail - we already output to stderr
+		}
 	}
 }
 
@@ -133,7 +139,9 @@ func (l *fileLogger) Error(format string, args ...interface{}) {
 		timestamp := time.Now().Format("2006-01-02 15:04:05")
 		context := l.getContext()
 		line := fmt.Sprintf("[%s] [%s] ERROR: %s\n", timestamp, context, msg)
-		l.file.WriteString(line)
+		if _, err := l.file.WriteString(line); err != nil {
+			// Silently fail - we already output to stderr
+		}
 	}
 }
 

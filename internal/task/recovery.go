@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/donghojung/taw/internal/git"
 )
@@ -141,32 +142,40 @@ func (r *RecoveryManager) getWorktreeHead(worktreeDir string) (string, error) {
 	// Read .git file to get gitdir
 	data, err := os.ReadFile(gitFile)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read .git file: %w", err)
 	}
 
-	// Parse gitdir line
-	var gitdir string
-	if _, err := fmt.Sscanf(string(data), "gitdir: %s", &gitdir); err != nil {
-		return "", fmt.Errorf("invalid .git file format")
+	// Parse gitdir line - format is "gitdir: /path/to/gitdir"
+	content := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(content, "gitdir: ") {
+		return "", fmt.Errorf("invalid .git file format: missing 'gitdir:' prefix")
+	}
+	gitdir := strings.TrimPrefix(content, "gitdir: ")
+	gitdir = strings.TrimSpace(gitdir)
+
+	if gitdir == "" {
+		return "", fmt.Errorf("invalid .git file format: empty gitdir path")
 	}
 
 	// Read HEAD file from gitdir
 	headFile := filepath.Join(gitdir, "HEAD")
 	headData, err := os.ReadFile(headFile)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read HEAD file: %w", err)
 	}
 
 	// HEAD could be a ref or a commit hash
-	head := string(headData)
-	if len(head) >= 4 && head[:4] == "ref:" {
+	head := strings.TrimSpace(string(headData))
+	if strings.HasPrefix(head, "ref: ") {
 		// It's a reference, resolve it
-		refPath := filepath.Join(gitdir, "..", head[5:])
+		refName := strings.TrimPrefix(head, "ref: ")
+		refName = strings.TrimSpace(refName)
+		refPath := filepath.Join(gitdir, "..", refName)
 		refData, err := os.ReadFile(refPath)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to resolve ref %s: %w", refName, err)
 		}
-		return string(refData), nil
+		return strings.TrimSpace(string(refData)), nil
 	}
 
 	return head, nil
