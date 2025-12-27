@@ -278,6 +278,12 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	tm.SetOption("status-right", " ⌥n:new ⌥e:end ⌥m:merge ⌥p:shell ⌥l:log ⌥u:queue ⌥/:help ⌥q:quit ", true)
 	tm.SetOption("status-right-length", "100", true)
 
+	// Window status format - removes index numbers (0:, 1:, 2:) and asterisk (*)
+	// Uses colors for visual distinction between current and other windows
+	tm.SetOption("window-status-format", "#[fg=colour244] #W ", true)
+	tm.SetOption("window-status-current-format", "#[fg=colour255,bg=colour238,bold] #W ", true)
+	tm.SetOption("window-status-separator", "", true)
+
 	// Enable mouse mode
 	tm.SetOption("mouse", "on", true)
 
