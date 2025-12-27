@@ -170,7 +170,8 @@ func (m *Manager) ListTasks() ([]*Task, error) {
 	return tasks, nil
 }
 
-// FindIncompleteTasks finds tasks that have a tab-lock but no active window.
+// FindIncompleteTasks finds tasks that should have a window but don't.
+// This includes tasks with tab-lock but no window, and tasks with worktree but no window.
 func (m *Manager) FindIncompleteTasks(sessionName string) ([]*Task, error) {
 	if m.tmuxClient == nil {
 		return nil, fmt.Errorf("tmux client not set")
@@ -188,27 +189,67 @@ func (m *Manager) FindIncompleteTasks(sessionName string) ([]*Task, error) {
 		windows = nil
 	}
 
+	// Build map of active window IDs and task names from window names
 	activeWindowIDs := make(map[string]bool)
+	activeTaskNames := make(map[string]bool)
+	taskEmojis := []string{
+		constants.EmojiWorking,
+		constants.EmojiWaiting,
+		constants.EmojiDone,
+		constants.EmojiWarning,
+	}
 	for _, w := range windows {
 		activeWindowIDs[w.ID] = true
+		// Extract task name from window name (e.g., "⚙️task-name" -> "task-name")
+		for _, emoji := range taskEmojis {
+			if strings.HasPrefix(w.Name, emoji) {
+				taskName := strings.TrimPrefix(w.Name, emoji)
+				activeTaskNames[taskName] = true
+				break
+			}
+		}
+	}
+
+	// Get main branch for merged check
+	mainBranch := ""
+	if m.isGitRepo {
+		mainBranch = m.gitClient.GetMainBranch(m.projectDir)
 	}
 
 	var incomplete []*Task
 	for _, task := range tasks {
-		if !task.HasTabLock() {
+		// Skip if task already has a window (by task name)
+		if activeTaskNames[task.Name] {
 			continue
 		}
 
-		windowID, err := task.LoadWindowID()
-		if err != nil {
-			// Has tab-lock but no window ID file - incomplete
-			task.Status = StatusPending
-			incomplete = append(incomplete, task)
+		// Skip if task is merged
+		if mainBranch != "" && m.isTaskMerged(task, mainBranch) {
 			continue
 		}
 
-		// Check if window is still active
-		if !activeWindowIDs[windowID] {
+		// Check if this task should be reopened:
+		// 1. Has tab-lock (was being handled) but window is gone
+		// 2. Has worktree (in git mode) - task is active
+		// 3. Has task content file - task exists
+		shouldReopen := false
+
+		if task.HasTabLock() {
+			// Had a window before, check if it's still there
+			windowID, err := task.LoadWindowID()
+			if err != nil || !activeWindowIDs[windowID] {
+				shouldReopen = true
+			}
+		} else if m.isGitRepo && m.config != nil && m.config.WorkMode == config.WorkModeWorktree {
+			// In worktree mode, check if worktree exists
+			worktreeDir := task.GetWorktreeDir()
+			if _, err := os.Stat(worktreeDir); err == nil {
+				// Worktree exists but no window - should reopen
+				shouldReopen = true
+			}
+		}
+
+		if shouldReopen {
 			task.Status = StatusPending
 			incomplete = append(incomplete, task)
 		}

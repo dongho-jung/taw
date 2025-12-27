@@ -242,15 +242,23 @@ var handleTaskCmd = &cobra.Command{
 		}
 		logging.Log("Tab-lock created successfully")
 
-		// Setup worktree if git mode
+		// Setup worktree if git mode (skip if worktree already exists - reopen case)
 		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
-			timer := logging.StartTimer("worktree setup")
-			if err := mgr.SetupWorktree(t); err != nil {
-				timer.StopWithResult(false, err.Error())
-				t.RemoveTabLock()
-				return fmt.Errorf("failed to setup worktree: %w", err)
+			worktreeDir := t.GetWorktreeDir()
+			if _, err := os.Stat(worktreeDir); os.IsNotExist(err) {
+				// Worktree doesn't exist, create it
+				timer := logging.StartTimer("worktree setup")
+				if err := mgr.SetupWorktree(t); err != nil {
+					timer.StopWithResult(false, err.Error())
+					t.RemoveTabLock()
+					return fmt.Errorf("failed to setup worktree: %w", err)
+				}
+				timer.StopWithResult(true, fmt.Sprintf("branch=%s, path=%s", taskName, t.WorktreeDir))
+			} else {
+				// Worktree already exists (reopen case)
+				logging.Log("Worktree already exists, reusing: %s", worktreeDir)
+				t.WorktreeDir = worktreeDir
 			}
-			timer.StopWithResult(true, fmt.Sprintf("branch=%s, path=%s", taskName, t.WorktreeDir))
 		}
 
 		// Setup symlinks (error is non-fatal)

@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -201,6 +202,25 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 		updateGitignore(app.ProjectDir)
 	}
 
+	// Reopen incomplete tasks (tasks with worktree but no window)
+	mgr.SetTmuxClient(tm)
+	incomplete, err := mgr.FindIncompleteTasks(app.SessionName)
+	if err == nil && len(incomplete) > 0 {
+		logging.Log("Found %d incomplete tasks to reopen", len(incomplete))
+		for _, t := range incomplete {
+			logging.Log("Reopening incomplete task: %s", t.Name)
+			// Remove old tab-lock so handle-task can create a new one
+			t.RemoveTabLock()
+			// Re-run handle-task to create window and restart Claude
+			handleCmd := exec.Command(tawBin, "internal", "handle-task", app.SessionName, t.AgentDir)
+			if err := handleCmd.Start(); err != nil {
+				logging.Warn("Failed to reopen task %s: %v", t.Name, err)
+			} else {
+				fmt.Printf("🔄 Reopening task: %s\n", t.Name)
+			}
+		}
+	}
+
 	// Send new-task command to the _ window
 	// Use SendKeysLiteral for the command and SendKeys for Enter
 	newTaskCmd := fmt.Sprintf("%s internal new-task %s", tawBin, app.SessionName)
@@ -248,13 +268,22 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 		}
 	}
 
-	// Reopen incomplete tasks
+	// Reopen incomplete tasks (tasks with tab-lock but no window)
 	incomplete, err := mgr.FindIncompleteTasks(app.SessionName)
 	if err == nil && len(incomplete) > 0 {
-		logging.Log("Found %d incomplete tasks", len(incomplete))
+		logging.Log("Found %d incomplete tasks to reopen", len(incomplete))
+		tawBin, _ := os.Executable()
 		for _, t := range incomplete {
 			logging.Log("Reopening incomplete task: %s (reason: window not found)", t.Name)
-			// TODO: Implement reopen logic
+			// Remove old tab-lock so handle-task can create a new one
+			t.RemoveTabLock()
+			// Re-run handle-task to create window and restart Claude
+			handleCmd := exec.Command(tawBin, "internal", "handle-task", app.SessionName, t.AgentDir)
+			if err := handleCmd.Start(); err != nil {
+				logging.Warn("Failed to reopen task %s: %v", t.Name, err)
+			} else {
+				fmt.Printf("🔄 Reopening task: %s\n", t.Name)
+			}
 		}
 	}
 
@@ -280,8 +309,10 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 
 	// Window status format - removes index numbers (0:, 1:, 2:) and asterisk (*)
 	// Uses colors for visual distinction between current and other windows
-	tm.SetOption("window-status-format", "#[fg=colour244] #W ", true)
-	tm.SetOption("window-status-current-format", "#[fg=colour255,bg=colour238,bold] #W ", true)
+	// Inactive: light grey text for readability without competing with active
+	// Active: dark text on cyan background for high contrast and visibility
+	tm.SetOption("window-status-format", "#[fg=colour250] #W ", true)
+	tm.SetOption("window-status-current-format", "#[fg=colour16,bg=colour39,bold] #W ", true)
 	tm.SetOption("window-status-separator", "", true)
 
 	// Enable mouse mode
