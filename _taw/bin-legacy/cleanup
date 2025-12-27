@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# TAW Cleanup Script
+# Usage: cleanup <task_name> <taw_dir> <project_dir> <worktree_dir>
+# Called by /done slash command when agent completes a task
+
+TASK_NAME="$1"
+TAW_DIR="$2"
+PROJECT_DIR="$3"
+WORKTREE_DIR="$4"
+
+if [ -z "$TASK_NAME" ] || [ -z "$TAW_DIR" ] || [ -z "$PROJECT_DIR" ]; then
+    echo "Usage: cleanup <task_name> <taw_dir> <project_dir> [worktree_dir]"
+    exit 1
+fi
+
+# Find TAW_HOME from symlink
+if [ -L "$TAW_DIR/new-task" ]; then
+    NEW_TASK_TARGET="$(readlink "$TAW_DIR/new-task")"
+    TAW_HOME="$(cd "$(dirname "$NEW_TASK_TARGET")/../.." && pwd)"
+else
+    echo "Error: Cannot determine TAW_HOME"
+    exit 1
+fi
+
+# Source common utilities
+source "$TAW_HOME/_taw/bin/_common.sh"
+
+PROJECT_NAME=$(basename "$PROJECT_DIR")
+AGENT_DIR="$TAW_DIR/agents/$TASK_NAME"
+WINDOW_ID_FILE="$AGENT_DIR/.tab-lock/window_id"
+
+# Check if this is git mode
+IS_GIT_MODE=false
+if [ -f "$TAW_DIR/.is-git-repo" ]; then
+    IS_GIT_MODE=true
+fi
+
+echo "=== TAW Cleanup ==="
+echo "TASK_NAME: $TASK_NAME"
+echo "PROJECT_DIR: $PROJECT_DIR"
+echo "IS_GIT_MODE: $IS_GIT_MODE"
+echo ""
+
+# Read saved window_id if exists
+WINDOW_ID=""
+if [ -f "$WINDOW_ID_FILE" ]; then
+    WINDOW_ID=$(cat "$WINDOW_ID_FILE")
+    echo "WINDOW_ID: $WINDOW_ID"
+fi
+
+# Clean up task (worktree, branch, agent dir)
+cleanup_task "$TASK_NAME" "$PROJECT_DIR" "$AGENT_DIR" "$IS_GIT_MODE"
+
+echo ""
+echo "=== Cleanup complete ==="
+
+# Close tmux window (with delay to show message)
+if [ -n "$WINDOW_ID" ]; then
+    echo "Closing window in 1 second..."
+    (sleep 1 && tm "$PROJECT_NAME" kill-window -t "$WINDOW_ID" 2>/dev/null) &
+fi

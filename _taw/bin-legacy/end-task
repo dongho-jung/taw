@@ -1,0 +1,267 @@
+#!/bin/bash
+
+# TAW End Task
+# Completes the current task: commit, PR/merge (based on ON_COMPLETE), cleanup
+# Called from ⌥ e keybinding
+#
+# Usage:
+#   end-task <session> <window_id>         - Full completion workflow
+#   end-task <session> <window_id> --force - Skip merge check, cleanup immediately
+
+set -e
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/_common.sh"
+
+TAW_HOME=$(get_taw_home)
+
+# Arguments
+SESSION_NAME="$1"
+WINDOW_ID="$2"
+FORCE_MODE="$3"
+
+if [ -z "$SESSION_NAME" ] || [ -z "$WINDOW_ID" ]; then
+    echo "Usage: end-task <session_name> <window_id> [--force]"
+    exit 1
+fi
+
+# Get task name from window (remove emoji prefix)
+get_task_name() {
+    local window_name
+    window_name=$(tm "$SESSION_NAME" display-message -t "$WINDOW_ID" -p '#{window_name}' 2>/dev/null) || return 1
+    # Remove emoji prefix (🤖 💬 ✅ ⚠️)
+    echo "$window_name" | sed 's/^[🤖💬✅⚠️]*//'
+}
+
+TASK_NAME=$(get_task_name)
+if [ -z "$TASK_NAME" ]; then
+    echo "Could not determine task name from window"
+    exit 1
+fi
+
+# Get pane path and find project directory (uses common function)
+PANE_PATH=$(tm "$SESSION_NAME" display-message -t "$WINDOW_ID" -p '#{pane_current_path}' 2>/dev/null)
+PROJECT_DIR=$(find_project_dir_from_path "$PANE_PATH")
+
+if [ -z "$PROJECT_DIR" ]; then
+    echo "Could not find .taw directory"
+    exit 1
+fi
+
+TAW_DIR="$PROJECT_DIR/.taw"
+AGENT_DIR="$TAW_DIR/agents/$TASK_NAME"
+WORKTREE_DIR="$AGENT_DIR/worktree"
+
+# Initialize logging
+init_logging "$TAW_DIR" "end-task" "$TASK_NAME"
+
+log "=== End task ==="
+debug "PROJECT_DIR=$PROJECT_DIR, AGENT_DIR=$AGENT_DIR"
+
+# Check if agent directory exists
+if [ ! -d "$AGENT_DIR" ]; then
+    log "Agent directory not found: $AGENT_DIR"
+    # Just close the window
+    tm "$SESSION_NAME" kill-window -t "$WINDOW_ID" 2>/dev/null || true
+    exit 0
+fi
+
+# Check if this is git mode
+IS_GIT_MODE=false
+if [ -f "$TAW_DIR/.is-git-repo" ]; then
+    IS_GIT_MODE=true
+fi
+
+# Get ON_COMPLETE setting
+ON_COMPLETE=$(read_config "$TAW_DIR" "on_complete" "$DEFAULT_ON_COMPLETE")
+log "ON_COMPLETE=$ON_COMPLETE"
+
+# Get work directory (worktree or project dir)
+WORK_DIR="$PROJECT_DIR"
+if [ "$IS_GIT_MODE" = true ] && [ -d "$WORKTREE_DIR" ]; then
+    WORK_DIR="$WORKTREE_DIR"
+fi
+
+# === Step 1: Commit uncommitted changes (git mode only, skip if --force) ===
+if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ] && [ -d "$WORK_DIR" ]; then
+    cd "$WORK_DIR"
+
+    # Check for uncommitted changes
+    if [ -n "$(git status -s 2>/dev/null)" ]; then
+        log "Found uncommitted changes, committing..."
+
+        # Stage all changes
+        git add -A
+
+        # Get diff summary for commit message
+        DIFF_STAT=$(git diff --cached --stat 2>/dev/null | tail -1 || echo "changes")
+
+        # Create simple commit message
+        git commit -m "chore: auto-commit on task end
+
+$DIFF_STAT" 2>/dev/null || true
+
+        log "Changes committed"
+    fi
+fi
+
+# === Step 2: PR/Merge based on ON_COMPLETE (git mode only, skip if --force) ===
+MERGED=false
+
+if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ] && [ -d "$WORK_DIR" ]; then
+    cd "$WORK_DIR"
+
+    case "$ON_COMPLETE" in
+        auto-merge)
+            log "auto-merge: pushing and merging..."
+
+            # Push branch
+            git push -u origin "$TASK_NAME" 2>/dev/null || true
+
+            # Get main branch name
+            MAIN_BRANCH=$(git -C "$PROJECT_DIR" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+
+            # Save current branch in PROJECT_DIR before switching
+            CURRENT_BRANCH=$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+
+            # Fetch latest main
+            git -C "$PROJECT_DIR" fetch origin "$MAIN_BRANCH" 2>/dev/null || true
+
+            # Checkout main branch in PROJECT_DIR
+            if ! git -C "$PROJECT_DIR" checkout "$MAIN_BRANCH" 2>/dev/null; then
+                log "Failed to checkout $MAIN_BRANCH"
+                tm "$SESSION_NAME" display-message "Failed to checkout $MAIN_BRANCH. Resolve manually."
+                exit 0
+            fi
+
+            # Pull latest main
+            git -C "$PROJECT_DIR" pull origin "$MAIN_BRANCH" 2>/dev/null || true
+
+            if git -C "$PROJECT_DIR" merge "$TASK_NAME" --no-ff -m "Merge branch '$TASK_NAME'" 2>/dev/null; then
+                git -C "$PROJECT_DIR" push origin "$MAIN_BRANCH" 2>/dev/null || true
+                MERGED=true
+                log "Merged to $MAIN_BRANCH"
+            else
+                log "Merge conflict detected, attempting auto-resolve..."
+
+                # Try to auto-resolve conflicts
+                if try_auto_resolve_conflicts "$PROJECT_DIR"; then
+                    log "Conflicts auto-resolved!"
+                    git -C "$PROJECT_DIR" push origin "$MAIN_BRANCH" 2>/dev/null || true
+                    MERGED=true
+                    log "Merged to $MAIN_BRANCH (after auto-resolve)"
+                else
+                    # Auto-resolve failed, abort and show in user pane
+                    git -C "$PROJECT_DIR" merge --abort 2>/dev/null || true
+                    log "Merge conflict - cannot auto-resolve, showing in user pane"
+
+                    # Update window status to 💬
+                    local display_name="${TASK_NAME:0:12}"
+                    tm "$SESSION_NAME" rename-window -t "$WINDOW_ID" "${EMOJI_WAITING}${display_name}" 2>/dev/null || true
+
+                    # Run end-task-ui in user pane to show conflict details
+                    tm "$SESSION_NAME" send-keys -t "${WINDOW_ID}.1" "$TAW_HOME/_taw/bin/end-task-ui '$SESSION_NAME' '$WINDOW_ID'" Enter
+
+                    exit 0
+                fi
+            fi
+            ;;
+
+        auto-pr)
+            log "auto-pr: pushing and creating PR..."
+
+            # Push branch
+            git push -u origin "$TASK_NAME" 2>/dev/null || true
+
+            # Check if PR already exists
+            if ! gh pr view 2>/dev/null; then
+                # Create PR
+                PR_TITLE="$TASK_NAME"
+                PR_BODY="## Summary
+- Task: $TASK_NAME
+
+## Changes
+$(git log --oneline origin/main..$TASK_NAME 2>/dev/null || echo "- See commits")"
+
+                if gh pr create --title "$PR_TITLE" --body "$PR_BODY" 2>/dev/null; then
+                    # Save PR number
+                    gh pr view --json number -q '.number' > "$AGENT_DIR/.pr" 2>/dev/null || true
+                    log "PR created"
+                fi
+            else
+                log "PR already exists"
+            fi
+
+            # Check if PR is merged
+            PR_FILE="$AGENT_DIR/.pr"
+            if [ -f "$PR_FILE" ]; then
+                PR_NUMBER=$(cat "$PR_FILE")
+                PR_STATE=$(gh pr view "$PR_NUMBER" --json merged -q '.merged' 2>/dev/null || echo "false")
+                if [ "$PR_STATE" = "true" ]; then
+                    MERGED=true
+                fi
+            fi
+            ;;
+
+        auto-commit|confirm|*)
+            log "Pushing branch..."
+            # Just push the branch
+            git push -u origin "$TASK_NAME" 2>/dev/null || true
+            ;;
+    esac
+fi
+
+# === Step 3: Merge Status Check (git mode only, skip if --force) ===
+if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ] && [ "$MERGED" = false ]; then
+    # Check if PR exists and is merged
+    PR_FILE="$AGENT_DIR/.pr"
+    if [ -f "$PR_FILE" ]; then
+        PR_NUMBER=$(cat "$PR_FILE")
+        PR_STATE=$(gh pr view "$PR_NUMBER" --json merged -q '.merged' 2>/dev/null || echo "false")
+        if [ "$PR_STATE" = "true" ]; then
+            MERGED=true
+            log "PR #$PR_NUMBER is merged"
+        fi
+    fi
+
+    # If no PR or PR not merged, check if branch is merged to main
+    if [ "$MERGED" = false ]; then
+        git -C "$PROJECT_DIR" fetch origin main 2>/dev/null || true
+        if git -C "$PROJECT_DIR" branch --merged main 2>/dev/null | grep -q "\\b$TASK_NAME\\b"; then
+            MERGED=true
+            log "Branch $TASK_NAME is merged to main"
+        fi
+    fi
+
+    # If not merged and not auto-merge mode, ask for confirmation
+    if [ "$MERGED" = false ] && [ "$ON_COMPLETE" != "auto-merge" ]; then
+        log "Task not merged, requesting confirmation"
+        tm "$SESSION_NAME" confirm-before -p "Task '$TASK_NAME' is NOT merged. Delete anyway? (y/n)" \
+            "run-shell '$TAW_HOME/_taw/bin/end-task \"$SESSION_NAME\" \"$WINDOW_ID\" --force'"
+        exit 0
+    fi
+fi
+
+# === Step 4: Cleanup ===
+log "Starting cleanup"
+
+# 1. Kill claude process (send Ctrl+C)
+debug "Stopping claude..."
+tm "$SESSION_NAME" send-keys -t "${WINDOW_ID}.0" C-c 2>/dev/null || true
+sleep 0.3
+tm "$SESSION_NAME" send-keys -t "${WINDOW_ID}.0" C-c 2>/dev/null || true
+sleep 0.3
+
+# 2. Clean up task (worktree, branch, agent dir)
+cleanup_task "$TASK_NAME" "$PROJECT_DIR" "$AGENT_DIR" "$IS_GIT_MODE"
+
+# 3. Close window
+debug "Closing window..."
+tm "$SESSION_NAME" kill-window -t "$WINDOW_ID" 2>/dev/null || true
+
+log "Cleanup completed"
+
+# 4. Process queue (start next queued task if any)
+debug "Checking queue for next task..."
+"$TAW_HOME/_taw/bin/process-queue" "$SESSION_NAME" &

@@ -1,0 +1,347 @@
+#!/bin/bash
+
+# TAW Handle Task
+# Creates tmux window and starts claude agent for a task
+
+set -e
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/_common.sh"
+
+# Parse arguments
+NO_INPUT=false
+REOPEN=false
+TASK_DIR=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-input)
+            NO_INPUT=true
+            shift
+            ;;
+        --reopen)
+            REOPEN=true
+            shift
+            ;;
+        *)
+            TASK_DIR="$1"
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$TASK_DIR" ] || [ ! -d "$TASK_DIR" ]; then
+    echo "Usage: handle-task [--no-input] [--reopen] <task-directory>"
+    exit 1
+fi
+
+TASK_FILE="$TASK_DIR/task"
+if [ ! -f "$TASK_FILE" ]; then
+    echo "Error: task file not found in $TASK_DIR"
+    exit 1
+fi
+
+TAW_HOME=$(get_taw_home)
+
+# Derive paths from task directory
+# Task dir: /project/.taw/agents/task-name
+TASK_NAME=$(basename "$TASK_DIR")
+AGENTS_DIR=$(dirname "$TASK_DIR")
+TAW_DIR=$(dirname "$AGENTS_DIR")
+PROJECT_DIR=$(dirname "$TAW_DIR")
+PROJECT_NAME=$(basename "$PROJECT_DIR")
+SESSION_NAME="$PROJECT_NAME"
+
+# Initialize logging with task name
+init_logging "$TAW_DIR" "handle-task" "$TASK_NAME"
+
+# Check if this is a git repo (marker file created by taw)
+IS_GIT_REPO=false
+if [ -f "$TAW_DIR/.is-git-repo" ]; then
+    IS_GIT_REPO=true
+fi
+
+# Read config settings
+WORK_MODE=$(read_config "$TAW_DIR" "work_mode" "$DEFAULT_WORK_MODE")
+ON_COMPLETE=$(read_config "$TAW_DIR" "on_complete" "$DEFAULT_ON_COMPLETE")
+debug "Config: work_mode=$WORK_MODE, on_complete=$ON_COMPLETE"
+
+# Use .global-prompt symlink (points to appropriate PROMPT based on git mode)
+GLOBAL_PROMPT="$TAW_DIR/.global-prompt"
+PROJECT_PROMPT="$TAW_DIR/PROMPT.md"
+
+# Atomic check-and-create using mkdir (prevents race conditions)
+# mkdir fails if directory already exists, making it safe for concurrent access
+TAB_MARKER="$TASK_DIR/.tab-lock"
+debug "Checking tab marker: $TAB_MARKER"
+
+# For reopen mode: remove old .tab-lock first
+if [ "$REOPEN" = true ] && [ -d "$TAB_MARKER" ]; then
+    debug "Reopen mode: removing old .tab-lock"
+    rm -rf "$TAB_MARKER"
+fi
+
+if ! mkdir "$TAB_MARKER" 2>/dev/null; then
+    log "Task already being processed: $TASK_NAME"
+    debug "Task already processed, exiting"
+    exit 0
+fi
+
+# Clean up .tab-lock on error (but keep it on success for window_id)
+TASK_COMPLETED=false
+cleanup_on_error() {
+    if [ "$TASK_COMPLETED" = false ] && [ -d "$TAB_MARKER" ]; then
+        debug "Cleaning up .tab-lock due to error"
+        rm -rf "$TAB_MARKER"
+    fi
+}
+trap cleanup_on_error EXIT
+
+log "New task detected: $TASK_NAME"
+debug "New task: $TASK_NAME (IS_GIT_REPO=$IS_GIT_REPO)"
+
+# Create origin and attach symlinks (use -sf to avoid TOCTOU race)
+ln -sf ../../.. "$TASK_DIR/origin" 2>/dev/null || warn "Failed to create origin symlink"
+ln -sf "$TAW_HOME/_taw/bin/attach" "$TASK_DIR/attach" 2>/dev/null || warn "Failed to create attach symlink"
+
+# Set working directory based on git mode and config
+debug "Setting up working directory..."
+# Use worktree only if: git repo + work_mode is worktree
+USE_WORKTREE=false
+if [ "$IS_GIT_REPO" = true ] && [ "$WORK_MODE" = "worktree" ]; then
+    USE_WORKTREE=true
+fi
+debug "USE_WORKTREE=$USE_WORKTREE"
+
+if [ "$USE_WORKTREE" = true ]; then
+    # Create worktree for this task
+    WORK_DIR="$TASK_DIR/worktree"
+    if [ ! -d "$WORK_DIR" ]; then
+        log "Creating worktree: $WORK_DIR"
+        debug "Creating worktree: $WORK_DIR"
+        git -C "$PROJECT_DIR" worktree prune 2>/dev/null || true
+
+        # Check for uncommitted changes (staged + unstaged)
+        # Use git stash create to get a hash without touching the stack
+        STASH_HASH=""
+        HAS_UNTRACKED=false
+
+        if ! git -C "$PROJECT_DIR" diff --quiet 2>/dev/null || ! git -C "$PROJECT_DIR" diff --cached --quiet 2>/dev/null; then
+            debug "Detected uncommitted changes, creating stash commit..."
+            # git stash create returns a commit hash without modifying refs/stash
+            STASH_HASH=$(git -C "$PROJECT_DIR" stash create 2>/dev/null)
+            debug "Stash hash: $STASH_HASH"
+        fi
+
+        # Check for untracked files (stash create doesn't include them)
+        UNTRACKED_LIST="$TASK_DIR/.untracked-files"
+        git -C "$PROJECT_DIR" ls-files --others --exclude-standard > "$UNTRACKED_LIST" 2>/dev/null
+        if [ -s "$UNTRACKED_LIST" ]; then
+            HAS_UNTRACKED=true
+            debug "Detected untracked files, will copy separately"
+        fi
+
+        debug "Running: git worktree add $WORK_DIR -b $TASK_NAME"
+        # Use timeout to prevent hanging on slow/frozen git operations
+        if ! timeout 30 git -C "$PROJECT_DIR" worktree add "$WORK_DIR" -b "$TASK_NAME" 2>> "$TAW_DIR/log"; then
+            # Branch might already exist, try without -b
+            debug "First attempt failed, trying without -b flag..."
+            if ! timeout 30 git -C "$PROJECT_DIR" worktree add "$WORK_DIR" "$TASK_NAME" 2>> "$TAW_DIR/log"; then
+                log "Failed to create worktree for $TASK_NAME (timeout or error)"
+                debug "Failed to create worktree!"
+                exit 1
+            fi
+        fi
+
+        # Apply stashed changes to worktree using hash (original dir unchanged)
+        if [ -n "$STASH_HASH" ]; then
+            debug "Applying stash $STASH_HASH to worktree..."
+            if ! git -C "$WORK_DIR" stash apply "$STASH_HASH" 2>> "$TAW_DIR/log"; then
+                log "Warning: stash apply had conflicts in $TASK_NAME"
+                echo "⚠️  Warning: Uncommitted changes may have conflicts. Check worktree." >> "$TASK_DIR/log"
+            fi
+        fi
+
+        # Copy untracked files to worktree
+        if [ "$HAS_UNTRACKED" = true ]; then
+            debug "Copying untracked files to worktree..."
+            while IFS= read -r file; do
+                if [ -n "$file" ] && [ -f "$PROJECT_DIR/$file" ]; then
+                    mkdir -p "$WORK_DIR/$(dirname "$file")"
+                    cp "$PROJECT_DIR/$file" "$WORK_DIR/$file" 2>/dev/null || true
+                fi
+            done < "$UNTRACKED_LIST"
+        fi
+        rm -f "$UNTRACKED_LIST"
+
+        log "Worktree created: $WORK_DIR"
+        debug "Worktree created successfully"
+    else
+        debug "Worktree already exists: $WORK_DIR"
+    fi
+else
+    # Main mode or non-git: work directly in project directory
+    WORK_DIR="$PROJECT_DIR"
+    if [ "$IS_GIT_REPO" = true ]; then
+        log "Main mode: working in $WORK_DIR"
+        debug "Main mode (work_mode=main): WORK_DIR=$WORK_DIR"
+    else
+        log "Non-git mode: working in $WORK_DIR"
+        debug "Non-git mode: WORK_DIR=$WORK_DIR"
+    fi
+fi
+
+# Ensure .claude symlink exists in WORK_DIR for slash commands
+# Only create symlink in worktree mode (isolated directory)
+# Never create in main/non-git mode to avoid polluting project root
+if [ "$USE_WORKTREE" = true ]; then
+    if [ ! -L "$WORK_DIR/.claude" ] && [ ! -d "$WORK_DIR/.claude" ]; then
+        # Verify target exists before creating symlink
+        if [ -d "$TAW_DIR/.claude" ] || [ -L "$TAW_DIR/.claude" ]; then
+            debug "Creating .claude symlink in worktree"
+            ln -sf "$TAW_DIR/.claude" "$WORK_DIR/.claude" 2>/dev/null || warn "Failed to create .claude symlink"
+        else
+            warn ".claude directory not found at $TAW_DIR/.claude - slash commands may not work"
+        fi
+    fi
+fi
+
+# Build system prompt from global and project PROMPT files
+system_prompt=""
+if [ -f "$GLOBAL_PROMPT" ]; then
+    system_prompt=$(cat "$GLOBAL_PROMPT")
+fi
+if [ -f "$PROJECT_PROMPT" ]; then
+    if [ -n "$system_prompt" ]; then
+        system_prompt="$system_prompt"$'\n\n---\n\n'
+    fi
+    system_prompt="$system_prompt$(cat "$PROJECT_PROMPT")"
+fi
+
+# Read task content
+task_content=""
+if [ -f "$TASK_FILE" ]; then
+    task_content=$(cat "$TASK_FILE")
+fi
+
+# Build the user prompt with task context
+if [ "$USE_WORKTREE" = true ]; then
+    user_prompt="# Task: $TASK_NAME
+
+**Worktree**: $WORK_DIR
+**Project**: $PROJECT_DIR
+
+$task_content"
+else
+    user_prompt="# Task: $TASK_NAME
+
+**Project**: $PROJECT_DIR
+
+$task_content"
+fi
+
+# Save prompts to files (hidden)
+echo "$system_prompt" > "$TASK_DIR/.system-prompt"
+echo "$user_prompt" > "$TASK_DIR/.user-prompt"
+
+# Create new window with truncated name and working emoji
+display_name=$(truncate_name "$TASK_NAME")
+window_name="${EMOJI_WORKING}${display_name}"
+debug "Creating tmux window: $window_name"
+
+# Get window ID for reliable targeting (-d: don't switch focus to new window)
+window_id=$(tm "$SESSION_NAME" new-window -d -t "$SESSION_NAME" -n "$window_name" -c "$WORK_DIR" -P -F "#{window_id}")
+debug "Window created: $window_id"
+# Save window_id for cleanup - store in lock directory
+echo "$window_id" > "$TAB_MARKER/window_id"
+
+sleep 0.3
+
+# Split horizontally (creates right pane for user)
+debug "Splitting window horizontally..."
+tm "$SESSION_NAME" split-window -t "$window_id" -h -c "$WORK_DIR"
+sleep 0.2
+
+debug "Agent pane: ${window_id}.0"
+
+# Local wrapper for send_shell_cmd (uses common function with session/window context)
+_send_shell_cmd() {
+    send_shell_cmd "$SESSION_NAME" "$window_id" "$1"
+}
+
+# Local wrapper for send_to_claude (uses common function with session/window context)
+_send_to_claude() {
+    send_to_claude "$SESSION_NAME" "$window_id" "$1"
+}
+
+# Local wrapper for wait_for_claude_ready with logging
+_wait_for_claude_ready() {
+    log "Waiting for claude to be ready..."
+    if wait_for_claude_ready "$SESSION_NAME" "$window_id"; then
+        log "Claude ready"
+        return 0
+    else
+        log "Timeout waiting for claude"
+        return 1
+    fi
+}
+
+# Helper to kill orphaned pane on failure
+kill_agent_pane() {
+    debug "Killing orphaned agent pane..."
+    tm "$SESSION_NAME" send-keys -t "${window_id}.0" C-c 2>/dev/null || true
+    sleep 0.2
+    tm "$SESSION_NAME" kill-window -t "$window_id" 2>/dev/null || true
+}
+
+# Start claude interactively with system prompt
+# Set environment variables (WORKTREE_DIR only in worktree mode)
+debug "Starting claude with system prompt..."
+if [ "$USE_WORKTREE" = true ]; then
+    debug "Worktree mode: setting WORKTREE_DIR"
+    _send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' ON_COMPLETE='$ON_COMPLETE' TAW_HOME='$TAW_HOME' SESSION_NAME='$SESSION_NAME' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$TASK_DIR/.system-prompt')\""
+else
+    debug "Main/non-git mode: no WORKTREE_DIR"
+    _send_shell_cmd "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' ON_COMPLETE='$ON_COMPLETE' TAW_HOME='$TAW_HOME' SESSION_NAME='$SESSION_NAME' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$TASK_DIR/.system-prompt')\""
+fi
+
+# Wait for claude to be ready
+debug "Waiting for claude to start..."
+if ! _wait_for_claude_ready; then
+    log "Failed to start claude for $TASK_NAME - killing orphaned pane"
+    debug "FAILED: claude did not start properly"
+    kill_agent_pane
+    exit 1
+fi
+
+# Check if confirmation is needed
+debug "Checking for trust confirmation..."
+screen_content=$(get_pane_content "$SESSION_NAME" "$window_id")
+if echo "$screen_content" | grep -qiE "trust|Trust this project|y/n|\[y\]|Are you sure"; then
+    debug "Trust confirmation needed, sending 'y'"
+    _send_shell_cmd "y"
+    debug "Waiting for claude to be ready again..."
+    if ! _wait_for_claude_ready; then
+        log "Failed after trust confirmation for $TASK_NAME"
+        kill_agent_pane
+        exit 1
+    fi
+fi
+
+# Wait a bit more to ensure claude is fully ready for input
+sleep 0.5
+
+# Send the task instruction to claude (unless --no-input flag)
+if [ "$NO_INPUT" = true ]; then
+    debug "Skipping task input (--no-input flag)"
+    log "Created window: $window_name (no input sent - reopen mode)"
+else
+    debug "Sending task instruction to claude..."
+    _send_to_claude "ultrathink Read and execute the task from '$TASK_DIR/.user-prompt'"
+    log "Created window: $window_name, sent task to claude"
+    debug "Task sent successfully. Window: $window_name"
+fi
+
+# Mark task as completed (prevents cleanup_on_error from removing .tab-lock)
+TASK_COMPLETED=true

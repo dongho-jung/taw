@@ -1,0 +1,127 @@
+#!/bin/bash
+
+# TAW Attach - Reattach to an existing task
+# Creates window with agent pane and starts claude
+# Works with both git and non-git modes
+
+set -e
+
+# Determine paths from script location (attach is symlinked into agent dir)
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)"
+AGENT_DIR="$SCRIPT_PATH"
+TASK_NAME="$(basename "$AGENT_DIR")"
+TAW_DIR="$(cd "$AGENT_DIR/../.." && pwd)"
+PROJECT_DIR="$(cd "$TAW_DIR/.." && pwd)"
+WORKTREE_DIR="$AGENT_DIR/worktree"
+
+# Find TAW_HOME by reading the symlink target of new-task
+if [ -L "$TAW_DIR/new-task" ]; then
+    NEW_TASK_TARGET="$(readlink "$TAW_DIR/new-task")"
+    TAW_HOME="$(cd "$(dirname "$NEW_TASK_TARGET")/../.." && pwd)"
+else
+    echo "Error: Cannot determine TAW_HOME"
+    exit 1
+fi
+
+# Source common utilities
+source "$TAW_HOME/_taw/bin/_common.sh"
+
+PROJECT_NAME="$(basename "$PROJECT_DIR")"
+SESSION_NAME="$PROJECT_NAME"
+
+# Check if this is git mode
+IS_GIT_MODE=false
+if [ -f "$TAW_DIR/.is-git-repo" ]; then
+    IS_GIT_MODE=true
+fi
+
+# Use .global-prompt symlink (consistent with handle-task)
+GLOBAL_PROMPT="$TAW_DIR/.global-prompt"
+PROJECT_PROMPT="$TAW_DIR/PROMPT.md"
+
+# Check if inside tmux
+if [ -z "$TMUX" ]; then
+    echo "Error: Not inside tmux session."
+    echo "Run 'taw' first to start the session."
+    exit 1
+fi
+
+# Check if session matches (use taw-specific socket)
+CURRENT_SESSION="$(tm "$SESSION_NAME" display-message -p '#S' 2>/dev/null)" || CURRENT_SESSION=""
+if [ "$CURRENT_SESSION" != "$SESSION_NAME" ]; then
+    echo "Error: Current session '$CURRENT_SESSION' doesn't match project session '$SESSION_NAME'"
+    echo "Make sure the tmux session 'taw-$SESSION_NAME' is running."
+    exit 1
+fi
+
+# Set working directory based on git mode
+if [ "$IS_GIT_MODE" = true ]; then
+    WORK_DIR="$WORKTREE_DIR"
+    # Check if worktree exists, create if not
+    if [ ! -d "$WORKTREE_DIR" ]; then
+        echo "Creating worktree..."
+        git -C "$PROJECT_DIR" worktree prune 2>/dev/null || true
+        if ! git -C "$PROJECT_DIR" worktree add "$WORKTREE_DIR" -b "$TASK_NAME" 2>/dev/null; then
+            if ! git -C "$PROJECT_DIR" worktree add "$WORKTREE_DIR" "$TASK_NAME" 2>/dev/null; then
+                echo "Error: Failed to create worktree"
+                exit 1
+            fi
+        fi
+    fi
+else
+    # Non-git mode: work directly in project directory
+    WORK_DIR="$PROJECT_DIR"
+fi
+
+# Build system prompt
+system_prompt=""
+if [ -f "$GLOBAL_PROMPT" ]; then
+    system_prompt=$(cat "$GLOBAL_PROMPT")
+fi
+if [ -f "$PROJECT_PROMPT" ]; then
+    if [ -n "$system_prompt" ]; then
+        system_prompt="$system_prompt"$'\n\n---\n\n'
+    fi
+    system_prompt="$system_prompt$(cat "$PROJECT_PROMPT")"
+fi
+
+# Save system prompt
+echo "$system_prompt" > "$AGENT_DIR/.system-prompt"
+
+display_name=$(truncate_name "$TASK_NAME")
+window_name="${EMOJI_WORKING}${display_name}"
+
+# Create new window (use taw-specific socket via tm helper)
+window_id=$(tm "$SESSION_NAME" new-window -n "$window_name" -c "$WORK_DIR" -P -F "#{window_id}")
+sleep 0.3
+
+# Split horizontally for user pane
+tm "$SESSION_NAME" split-window -t "$window_id" -h -c "$WORK_DIR"
+
+# Select agent pane (left)
+tm "$SESSION_NAME" select-pane -t "${window_id}.0"
+
+# Start claude with system prompt (include WINDOW_ID, WORKTREE_DIR only in git mode)
+# Note: paths are single-quoted to handle spaces correctly
+debug "Starting claude with system prompt..."
+if [ "$IS_GIT_MODE" = true ]; then
+    send_shell_cmd "$SESSION_NAME" "$window_id" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\""
+else
+    send_shell_cmd "$SESSION_NAME" "$window_id" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\""
+fi
+
+# Wait for claude to be ready (uses common function)
+debug "Waiting for claude to start..."
+if ! wait_for_claude_ready "$SESSION_NAME" "$window_id"; then
+    warn "Timeout waiting for claude to start"
+fi
+
+# Check if trust confirmation is needed
+screen_content=$(get_pane_content "$SESSION_NAME" "$window_id")
+if echo "$screen_content" | grep -qiE "trust|Trust this project|y/n|\[y\]|Are you sure"; then
+    debug "Trust confirmation needed, sending 'y'"
+    send_shell_cmd "$SESSION_NAME" "$window_id" "y"
+    wait_for_claude_ready "$SESSION_NAME" "$window_id" || true
+fi
+
+echo "Attached to task: $TASK_NAME"

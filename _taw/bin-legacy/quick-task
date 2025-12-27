@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# TAW Quick Task
+# Adds a task to the queue for processing after current task completes
+#
+# Usage:
+#   quick-task <session_name>          - Show popup to enter task
+#   quick-task <session_name> --list   - List queued tasks
+#   quick-task <session_name> --clear  - Clear all queued tasks
+
+set -e
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/_common.sh"
+
+# Arguments
+SESSION_NAME="$1"
+COMMAND="${2:-}"
+
+if [ -z "$SESSION_NAME" ]; then
+    echo "Usage: quick-task <session_name> [--list|--clear]"
+    exit 1
+fi
+
+# Find project directory from session name (uses common function)
+PROJECT_DIR=$(find_project_dir_from_session "$SESSION_NAME")
+if [ -z "$PROJECT_DIR" ]; then
+    echo "Could not find project directory for session: $SESSION_NAME"
+    exit 1
+fi
+
+TAW_DIR="$PROJECT_DIR/.taw"
+QUEUE_DIR="$TAW_DIR/.queue"
+TAW_HOME=$(get_taw_home)
+
+# Ensure queue directory exists
+mkdir -p "$QUEUE_DIR"
+
+# Handle commands
+case "$COMMAND" in
+    --list)
+        echo "=== Queued Tasks ==="
+        if [ -z "$(ls -A "$QUEUE_DIR" 2>/dev/null)" ]; then
+            echo "(empty)"
+        else
+            for task_file in "$QUEUE_DIR"/*.task; do
+                [ -f "$task_file" ] || continue
+                num=$(basename "$task_file" .task)
+                echo "[$num] $(cat "$task_file")"
+            done
+        fi
+        exit 0
+        ;;
+    --clear)
+        rm -f "$QUEUE_DIR"/*.task 2>/dev/null || true
+        echo "Queue cleared."
+        exit 0
+        ;;
+esac
+
+# Get next task number
+get_next_num() {
+    local max=0
+    for f in "$QUEUE_DIR"/*.task 2>/dev/null; do
+        [ -f "$f" ] || continue
+        local num=$(basename "$f" .task | sed 's/^0*//')
+        [ -z "$num" ] && num=0
+        [ "$num" -gt "$max" ] && max=$num
+    done
+    printf "%03d" $((max + 1))
+}
+
+# Create temporary script for popup input
+TMP_SCRIPT=$(mktemp)
+cat > "$TMP_SCRIPT" << 'SCRIPT'
+#!/bin/bash
+QUEUE_DIR="$1"
+NEXT_NUM="$2"
+
+# Disable job control messages
+set +m
+
+# Read single line input
+echo -n "Quick task: "
+read -r task_input
+
+if [ -n "$task_input" ]; then
+    echo "$task_input" > "$QUEUE_DIR/${NEXT_NUM}.task"
+    echo ""
+    echo "Added to queue: $task_input"
+    sleep 0.5
+fi
+SCRIPT
+chmod +x "$TMP_SCRIPT"
+
+NEXT_NUM=$(get_next_num)
+
+# Show popup (60 chars wide, 5 lines tall)
+tmux -L "taw-$SESSION_NAME" display-popup \
+    -E \
+    -w 60 -h 5 \
+    -T " Quick Task (Enter to save, Ctrl+C to cancel) " \
+    "$TMP_SCRIPT '$QUEUE_DIR' '$NEXT_NUM'"
+
+rm -f "$TMP_SCRIPT"
