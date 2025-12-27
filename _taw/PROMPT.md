@@ -82,8 +82,9 @@ echo "ON_COMPLETE=$ON_COMPLETE"  # 먼저 확인
 3. Log: "작업 완료 - end-task 호출"
 4. **end-task 호출** (이게 merge, cleanup, window 닫기를 자동으로 처리):
    ```bash
-   "$TAW_BIN" internal end-task "$SESSION_NAME" "$WINDOW_ID"
+   "$TAW_DIR/agents/$TASK_NAME/end-task"
    ```
+   **NOTE**: 환경변수 대신 태스크별 end-task 스크립트를 사용합니다. 이 스크립트는 태스크 생성 시 자동으로 만들어집니다.
 
 **CRITICAL**: `auto-merge`에서는 PR 생성 안 함! end-task가 자동으로 main에 merge하고 정리합니다.
 

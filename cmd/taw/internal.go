@@ -302,6 +302,18 @@ var handleTaskCmd = &cobra.Command{
 		// Get taw binary path for end-task
 		tawBin, _ := os.Executable()
 
+		// Create task-specific end-task script
+		// This allows Claude to call end-task without needing environment variables
+		endTaskScript := filepath.Join(t.AgentDir, "end-task")
+		endTaskContent := fmt.Sprintf(`#!/bin/bash
+# Auto-generated end-task script for this task
+# Claude can call this directly without environment variables
+exec "%s" internal end-task "%s" "%s"
+`, tawBin, sessionName, windowID)
+		if err := os.WriteFile(endTaskScript, []byte(endTaskContent), 0755); err != nil {
+			logging.Warn("Failed to create end-task script: %v", err)
+		}
+
 		// Build environment variables and Claude command
 		// These are used by PROMPT.md for auto-merge, auto-pr, etc.
 		var envVars strings.Builder

@@ -67,6 +67,7 @@ taw/                           # 이 레포
     │   └── 001.task           # 대기 중인 태스크 (순서대로 처리)
     └── agents/{task-name}/    # 태스크별 작업 공간
         ├── task               # 태스크 내용
+        ├── end-task           # 태스크별 end-task 스크립트 (Claude가 auto-merge 시 호출)
         ├── origin             # -> 프로젝트 루트 (symlink)
         ├── worktree/          # git worktree (git 모드에서만 자동 생성)
         ├── .tab-lock/         # 탭 생성 락 (atomic mkdir로 race condition 방지)
