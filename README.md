@@ -65,6 +65,8 @@ taw/                           # 이 레포
     ├── .claude                # -> _taw/claude (symlink)
     ├── .queue/                # 빠른 태스크 큐 (⌥ u로 추가)
     │   └── 001.task           # 대기 중인 태스크 (순서대로 처리)
+    ├── history/               # 태스크 히스토리 저장 디렉토리
+    │   └── YYMMDD_HHMMSS_task-name  # 태스크 종료 시 agent pane 캡처
     └── agents/{task-name}/    # 태스크별 작업 공간
         ├── task               # 태스크 내용
         ├── end-task           # 태스크별 end-task 스크립트 (Claude가 auto-merge 시 호출)
@@ -304,3 +306,20 @@ brew install tmux gh
 [2025-12-28 03:49:45.081] [INFO ] [handle-task:my-task] [RunE] worktree setup started
 [2025-12-28 03:49:45.234] [INFO ] [handle-task:my-task] [RunE] worktree setup completed in 153ms: branch=my-task, path=/path/to/worktree
 ```
+
+## 태스크 히스토리
+
+태스크가 종료될 때 agent pane의 전체 내용이 자동으로 캡처되어 저장됩니다.
+
+### 저장 위치
+
+```
+.taw/history/
+└── YYMMDD_HHMMSS_task-name  # 예: 241228_134501_my-feature
+```
+
+### 활용 예시
+
+- 이전 태스크에서 agent가 수행한 작업 확인
+- 문제 해결 과정 추적
+- 학습 및 개선을 위한 참고 자료
