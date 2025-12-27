@@ -65,20 +65,8 @@ var toggleNewCmd = &cobra.Command{
 
 		for _, w := range windows {
 			if strings.HasPrefix(w.Name, constants.EmojiNew) {
-				// Window exists, select it and run new-task
-				if err := tm.SelectWindow(w.ID); err != nil {
-					return err
-				}
-				// Run new-task in the existing window
-				tawBin, _ := os.Executable()
-				newTaskCmd := fmt.Sprintf("%s internal new-task %s", tawBin, sessionName)
-				if err := tm.SendKeysLiteral(w.ID, newTaskCmd); err != nil {
-					return fmt.Errorf("failed to send keys: %w", err)
-				}
-				if err := tm.SendKeys(w.ID, "Enter"); err != nil {
-					return fmt.Errorf("failed to send Enter: %w", err)
-				}
-				return nil
+				// Window exists, just select it (don't send command again to avoid pasting into vim/editor)
+				return tm.SelectWindow(w.ID)
 			}
 		}
 
