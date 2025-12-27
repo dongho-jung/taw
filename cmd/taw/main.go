@@ -343,13 +343,11 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	tm.SetOption("window-status-current-format", "#[fg=colour231,bg=colour24,bold] #W ", true)
 	tm.SetOption("window-status-separator", "", true)
 
-	// Pane styling for visual distinction between focused and unfocused panes
-	tm.SetOption("pane-border-style", "fg=colour238", true)                // Dim border for inactive panes
-	tm.SetOption("pane-active-border-style", "fg=colour39,bold", true)     // Bright cyan border for active pane
-	tm.SetOption("window-style", "fg=colour245,bg=colour234", true)        // Slightly dimmed text and bg for inactive panes
-	tm.SetOption("window-active-style", "fg=terminal,bg=terminal", true)   // Normal colors for active pane
+	// Pane border styling for visual distinction
+	tm.SetOption("pane-border-style", "fg=colour238", true)            // Dim border for inactive panes
+	tm.SetOption("pane-active-border-style", "fg=colour39,bold", true) // Bright cyan border for active pane
 
-	// Popup styling - use terminal colors to override window-style inheritance
+	// Popup styling
 	tm.SetOption("popup-style", "fg=terminal,bg=terminal", true)
 	tm.SetOption("popup-border-style", "fg=colour244", true)
 
