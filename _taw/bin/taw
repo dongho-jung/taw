@@ -442,11 +442,14 @@ setup_tmux_config() {
     # Configure tmux session
     tm set -t "$SESSION_NAME" mouse on
 
-    # Highlight focused pane with distinct border color
-    # Active pane: cyan border (stands out in most terminals)
+    # Highlight focused pane with distinct styling
+    # Active pane: bright green border (highly visible)
     # Inactive pane: dim gray border
+    # Also dim inactive panes slightly to make active pane stand out
     tm set -t "$SESSION_NAME" pane-border-style "fg=colour238"
-    tm set -t "$SESSION_NAME" pane-active-border-style "fg=cyan,bold"
+    tm set -t "$SESSION_NAME" pane-active-border-style "fg=green,bold"
+    tm set -t "$SESSION_NAME" window-style "bg=colour233"           # Inactive pane: slightly dimmed
+    tm set -t "$SESSION_NAME" window-active-style "bg=terminal"     # Active pane: normal background
 
     # Unbind root table keys only (preserve prefix table to avoid "table prefix doesn't exist" error)
     # All bindings use Alt key to avoid conflicts with shell keybindings
