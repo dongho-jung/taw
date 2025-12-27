@@ -15,7 +15,7 @@ Claude Code 기반 자율 에이전트 작업 환경
   ⌥ ←/→       이전/다음 window로 이동
 
 ### 태스크 관리
-  ⌥ n         새 태스크 생성 (에디터 열림)
+  ⌥ n         new window 토글 (task ↔ new window)
   ⌥ e         태스크 완료 (commit → PR/merge → cleanup, ON_COMPLETE 설정 따름)
   ⌥ m         완료된 태스크 일괄 머지 (✅ 상태 태스크 모두 merge + end)
   ⌥ p         팝업 쉘 열기/닫기 (현재 worktree 경로)

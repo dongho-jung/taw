@@ -388,24 +388,24 @@ reopen_incomplete_tasks() {
     done
 }
 
-# Ensure ⭐️main window exists and is at leftmost position (index 0)
-ensure_main_window() {
-    local main_exists
-    main_exists=$(tm list-windows -t "$SESSION_NAME" -F "#{window_name}" 2>/dev/null | grep -c "^⭐️main$" || true)
+# Ensure ⭐️new window exists and is at leftmost position (index 0)
+ensure_new_window() {
+    local new_exists
+    new_exists=$(tm list-windows -t "$SESSION_NAME" -F "#{window_name}" 2>/dev/null | grep -c "^⭐️new$" || true)
 
-    if [ "$main_exists" -eq 0 ]; then
-        log "Creating ⭐️main window..."
+    if [ "$new_exists" -eq 0 ]; then
+        log "Creating ⭐️new window..."
         # Create at index 0
-        tm new-window -t "$SESSION_NAME:0" -n "⭐️main" -c "$PROJECT_DIR"
+        tm new-window -t "$SESSION_NAME:0" -n "⭐️new" -c "$PROJECT_DIR"
         # Run new-task in it (loop so it restarts after each task)
-        tm send-keys -t "$SESSION_NAME:⭐️main" "while true; do '$TAW_HOME/_taw/bin/new-task' || true; done" Enter
+        tm send-keys -t "$SESSION_NAME:⭐️new" "while true; do '$TAW_HOME/_taw/bin/new-task' || true; done" Enter
     else
         # Ensure it's at index 0 (leftmost)
-        local main_index
-        main_index=$(tm list-windows -t "$SESSION_NAME" -F "#{window_index} #{window_name}" 2>/dev/null | grep "⭐️main$" | awk '{print $1}')
-        if [ "$main_index" != "0" ]; then
-            debug "Moving ⭐️main from index $main_index to 0"
-            tm move-window -s "$SESSION_NAME:⭐️main" -t "$SESSION_NAME:0"
+        local new_index
+        new_index=$(tm list-windows -t "$SESSION_NAME" -F "#{window_index} #{window_name}" 2>/dev/null | grep "⭐️new$" | awk '{print $1}')
+        if [ "$new_index" != "0" ]; then
+            debug "Moving ⭐️new from index $new_index to 0"
+            tm move-window -s "$SESSION_NAME:⭐️new" -t "$SESSION_NAME:0"
         fi
     fi
 }
@@ -457,13 +457,13 @@ setup_tmux_config() {
 
     # Re-add mouse bindings (unbind-key -a removes them)
     # These are required for mouse mode to work properly
-    tm bind -n MouseDown1Pane select-pane -t = \; send-keys -M
+    tm bind -n MouseDown1Pane select-pane -t = '\;' send-keys -M
     tm bind -n MouseDown1Status select-window -t =
     tm bind -n MouseDown3Pane if-shell -F -t = "#{mouse_any_flag}" "select-pane -t=; send-keys -M" "select-pane -t="
     tm bind -n MouseDrag1Pane if-shell -F -t = "#{mouse_any_flag}" "if -Ft= '#{pane_in_mode}' 'copy-mode -M' 'send-keys -M'" "copy-mode -M"
     tm bind -n MouseDrag1Border resize-pane -M
     tm bind -n WheelUpPane if-shell -F -t = "#{mouse_any_flag}" "send-keys -M" "if -Ft= '#{pane_in_mode}' 'send-keys -M' 'copy-mode -et='"
-    tm bind -n WheelDownPane select-pane -t = \; send-keys -M
+    tm bind -n WheelDownPane select-pane -t = '\;' send-keys -M
 
     # Core navigation
     tm bind -n M-Tab select-pane -t :.+     # Cycle panes
@@ -471,8 +471,9 @@ setup_tmux_config() {
     tm bind -n M-Right next-window          # Next window
 
     # Task management: Alt + key
-    # M-n: focus main window (⭐️main) where new-task runs
-    tm bind -n M-n run-shell "tmux -L 'taw-$SESSION_NAME' select-window -t '$SESSION_NAME:⭐️main'"
+    # M-n: toggle between new window (⭐️new) and previous task window
+    # If current window is ⭐️new, switch to last window; otherwise switch to ⭐️new
+    tm bind -n M-n run-shell "if [ \"\$(tmux -L 'taw-$SESSION_NAME' display-message -p '#{window_name}')\" = '⭐️new' ]; then tmux -L 'taw-$SESSION_NAME' last-window; else tmux -L 'taw-$SESSION_NAME' select-window -t '$SESSION_NAME:⭐️new'; fi"
     tm bind -n M-e run-shell "tmux -L 'taw-$SESSION_NAME' send-keys -t ':.1' \"$TAW_HOME/_taw/bin/end-task-ui '$SESSION_NAME' '#{window_id}'\" Enter"
     tm bind -n M-p run-shell "$TAW_HOME/_taw/bin/popup-shell '$SESSION_NAME'"
     tm bind -n M-u run-shell "$TAW_HOME/_taw/bin/quick-task '$SESSION_NAME'"
@@ -485,7 +486,7 @@ setup_tmux_config() {
     # Status line: 2 lines - windows on top, hints on bottom
     tm set -t "$SESSION_NAME" status 2
     tm set -t "$SESSION_NAME" status-format[0] "#[align=left]#{W:#[fg=white bg=default] #W #[default],#[fg=white bg=blue bold] #W #[default]}"
-    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ⌥tab:pane  ⌥←→:window  ⌥n:main  ⌥e:end  ⌥m:merge  ⌥p:popup  ⌥l:log  ⌥u:queue  ⌥q:quit  ⌥h:help"
+    tm set -t "$SESSION_NAME" status-format[1] "#[align=left fg=brightblack] ⌥tab:pane  ⌥←→:window  ⌥n:new  ⌥e:end  ⌥m:merge  ⌥p:popup  ⌥l:log  ⌥u:queue  ⌥q:quit  ⌥h:help"
 
     debug "Tmux config and keybindings applied"
 }
@@ -509,18 +510,18 @@ start_session() {
 
     echo "Starting session '$SESSION_NAME'..."
 
-    # Start tmux session with ⭐️main window at index 0
+    # Start tmux session with ⭐️new window at index 0
     cd "$PROJECT_DIR"
-    tm new-session -d -s "$SESSION_NAME" -n "⭐️main" -c "$PROJECT_DIR"
+    tm new-session -d -s "$SESSION_NAME" -n "⭐️new" -c "$PROJECT_DIR"
     log "Tmux session created: $SESSION_NAME"
 
     # Apply tmux configuration and keybindings
     setup_tmux_config
     log "Tmux configured"
 
-    # Run new-task in the main window (loop so it restarts after each task)
-    debug "Running new-task in ⭐️main window..."
-    tm send-keys -t "$SESSION_NAME:⭐️main" "while true; do '$TAW_HOME/_taw/bin/new-task' || true; done" Enter
+    # Run new-task in the new window (loop so it restarts after each task)
+    debug "Running new-task in ⭐️new window..."
+    tm send-keys -t "$SESSION_NAME:⭐️new" "while true; do '$TAW_HOME/_taw/bin/new-task' || true; done" Enter
 
     # Auto-cleanup merged tasks (before reopening, so merged tasks are cleaned up first)
     debug "Checking for merged tasks to cleanup..."
@@ -607,9 +608,9 @@ if is_session_running; then
         # Update tmux config and keybindings (ensures latest bindings on reattach)
         setup_tmux_config
 
-        # Ensure ⭐️main window exists (reopen if closed) and is at leftmost
-        debug "Ensuring main window..."
-        ensure_main_window
+        # Ensure ⭐️new window exists (reopen if closed) and is at leftmost
+        debug "Ensuring new window..."
+        ensure_new_window
 
         # Reopen any incomplete tasks
         debug "Checking for incomplete tasks..."
