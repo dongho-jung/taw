@@ -222,7 +222,7 @@ brew install tmux gh
 |------|--------|
 | Pane 순환 | `⌥ Tab` |
 | Window 이동 | `⌥ ←/→` |
-| 새 태스크 | `⌥ n` |
+| new window 토글 | `⌥ n` (task ↔ new window) |
 | 태스크 완료 | `⌥ e` (user pane에서 진행상황 표시, commit → PR/merge → cleanup) |
 | 완료 태스크 일괄 머지 | `⌥ m` (✅ 상태 태스크 모두 merge + end) |
 | 팝업 쉘 | `⌥ p` (현재 worktree에서 쉘 열기/닫기) |
