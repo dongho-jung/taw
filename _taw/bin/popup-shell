@@ -110,5 +110,5 @@ tmux -L "taw-$SESSION_NAME" display-popup \
     -w 80% -h 60% \
     -d "$PANE_PATH" \
     -T " Shell " \
-    -s 'fg=default,bg=default' \
+    -s 'fg=terminal,bg=terminal' \
     "$SHELL_CMD; tmux -L 'taw-$SESSION_NAME' set-option -g @taw_popup_open '' 2>/dev/null || true"

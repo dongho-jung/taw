@@ -43,6 +43,6 @@ else
     # The lesskey file is created, used, and cleaned up all within the popup shell
     # Note: The cleanup command runs when less exits (naturally or via key binding)
     tm display-popup -E -w 80% -h 80% -T " Help (⌥/ or q to close) " \
-        -s 'fg=default,bg=default' \
+        -s 'fg=terminal,bg=terminal' \
         "KEYFILE=\$(mktemp) && printf '#command\n\\\\e/ quit\n' > \"\$KEYFILE\" && LESSKEYIN=\"\$KEYFILE\" less '$TAW_HOME/_taw/HELP.md'; tmux -L 'taw-$SESSION_NAME' set-option -g @taw_help_open '' 2>/dev/null || true; rm -f \"\$KEYFILE\" 2>/dev/null || true"
 fi

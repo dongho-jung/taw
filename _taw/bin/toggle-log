@@ -84,6 +84,6 @@ else
     # - s: toggle tail mode
     # - q, Esc, Alt+L: quit
     tm display-popup -E -w 90% -h 80% -T " Log Viewer (↑↓:scroll  /:search  f:highlight  F:filter  q:quit) " \
-        -s 'fg=default,bg=default' \
+        -s 'fg=terminal,bg=terminal' \
         "'$TAW_HOME/_taw/bin/log-viewer' '$LOG_FILE' '$SESSION_NAME'"
 fi

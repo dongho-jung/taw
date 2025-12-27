@@ -104,7 +104,7 @@ tmux -L "taw-$SESSION_NAME" display-popup \
     -E \
     -w 60 -h 5 \
     -T " Quick Task (Enter to save, Ctrl+C to cancel) " \
-    -s 'fg=default,bg=default' \
+    -s 'fg=terminal,bg=terminal' \
     "$TMP_SCRIPT '$QUEUE_DIR' '$NEXT_NUM'"
 
 rm -f "$TMP_SCRIPT"
