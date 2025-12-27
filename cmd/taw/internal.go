@@ -496,39 +496,43 @@ var endTaskCmd = &cobra.Command{
 
 				mergeTimer := logging.StartTimer("auto-merge")
 
-				// Stash any uncommitted changes in project dir before checkout
-				hasLocalChanges := gitClient.HasChanges(app.ProjectDir)
-				if hasLocalChanges {
-					logging.Log("Stashing local changes in project dir...")
-					if err := gitClient.StashPush(app.ProjectDir, "taw-auto-merge-temp"); err != nil {
-						logging.Warn("Failed to stash changes: %v", err)
-					}
+				// Use a temporary worktree for merge to avoid affecting project dir state
+				// This is idempotent and isolated from any uncommitted changes in project dir
+				mergeDir := filepath.Join(app.TawDir, "merge-"+targetTask.Name)
+
+				// Clean up any existing merge worktree (idempotent)
+				if _, err := os.Stat(mergeDir); err == nil {
+					logging.Log("Cleaning up existing merge worktree...")
+					os.RemoveAll(mergeDir)
+					gitClient.WorktreePrune(app.ProjectDir)
 				}
 
-				// Fetch and checkout main in PROJECT_DIR
+				// Fetch latest from origin
 				logging.Log("Fetching from origin...")
 				if err := gitClient.Fetch(app.ProjectDir, "origin"); err != nil {
 					logging.Warn("Failed to fetch: %v", err)
 				}
-				logging.Log("Checking out %s...", mainBranch)
-				if err := gitClient.Checkout(app.ProjectDir, mainBranch); err != nil {
-					logging.Warn("Failed to checkout %s: %v", mainBranch, err)
-					mergeTimer.StopWithResult(false, "checkout failed")
+
+				// Create temporary worktree for main branch
+				logging.Log("Creating merge worktree for %s...", mainBranch)
+				if err := gitClient.WorktreeAdd(app.ProjectDir, mergeDir, mainBranch, false); err != nil {
+					logging.Warn("Failed to create merge worktree: %v", err)
+					mergeTimer.StopWithResult(false, "worktree creation failed")
 					mergeSuccess = false
 				} else {
-					// Pull latest
+					// Pull latest in merge worktree
 					logging.Log("Pulling latest changes...")
-					if err := gitClient.Pull(app.ProjectDir); err != nil {
+					if err := gitClient.Pull(mergeDir); err != nil {
 						logging.Warn("Failed to pull: %v", err)
 					}
 
 					// Merge task branch (--no-ff)
 					logging.Log("Merging branch %s into %s...", targetTask.Name, mainBranch)
 					mergeMsg := fmt.Sprintf("Merge branch '%s'", targetTask.Name)
-					if err := gitClient.Merge(app.ProjectDir, targetTask.Name, true, mergeMsg); err != nil {
+					if err := gitClient.Merge(mergeDir, targetTask.Name, true, mergeMsg); err != nil {
 						logging.Warn("Merge failed: %v - may need manual resolution", err)
 						// Abort merge on conflict
-						if abortErr := gitClient.MergeAbort(app.ProjectDir); abortErr != nil {
+						if abortErr := gitClient.MergeAbort(mergeDir); abortErr != nil {
 							logging.Warn("Failed to abort merge: %v", abortErr)
 						}
 						mergeTimer.StopWithResult(false, "merge conflict")
@@ -536,7 +540,7 @@ var endTaskCmd = &cobra.Command{
 					} else {
 						// Push merged main
 						logging.Log("Pushing merged main to origin...")
-						if err := gitClient.Push(app.ProjectDir, "origin", mainBranch, false); err != nil {
+						if err := gitClient.Push(mergeDir, "origin", mainBranch, false); err != nil {
 							logging.Warn("Failed to push merged main: %v", err)
 							mergeTimer.StopWithResult(false, "push failed")
 							mergeSuccess = false
@@ -544,14 +548,14 @@ var endTaskCmd = &cobra.Command{
 							mergeTimer.StopWithResult(true, fmt.Sprintf("merged %s into %s", targetTask.Name, mainBranch))
 						}
 					}
-				}
 
-				// Restore stashed changes
-				if hasLocalChanges {
-					logging.Log("Restoring stashed changes...")
-					if err := gitClient.StashPop(app.ProjectDir); err != nil {
-						logging.Warn("Failed to restore stashed changes: %v", err)
+					// Clean up merge worktree
+					logging.Log("Cleaning up merge worktree...")
+					if err := gitClient.WorktreeRemove(app.ProjectDir, mergeDir, true); err != nil {
+						logging.Warn("Failed to remove merge worktree: %v", err)
+						os.RemoveAll(mergeDir)
 					}
+					gitClient.WorktreePrune(app.ProjectDir)
 				}
 
 				// If merge failed, rename window to warning and skip cleanup
