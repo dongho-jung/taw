@@ -210,10 +210,54 @@ if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ] && [ -d "$WORK_DI
                 fi
                 MERGED=true
             else
-                git -C "$PROJECT_DIR" merge --abort 2>/dev/null || true
-                print_step "fail" "Merge conflict!"
-                print_error "Resolve conflicts manually or use ⌥ e --force to skip"
-                exit 1
+                print_step "warn" "Merge conflict detected, attempting auto-resolve..."
+
+                # Try to auto-resolve conflicts
+                if try_auto_resolve_conflicts "$PROJECT_DIR"; then
+                    print_step "ok" "Conflicts auto-resolved!"
+
+                    print_step "start" "Pushing to remote..."
+                    if git -C "$PROJECT_DIR" push origin "$MAIN_BRANCH" 2>/dev/null; then
+                        print_step "ok" "Pushed to remote"
+                    else
+                        print_step "warn" "Push to remote failed"
+                    fi
+                    MERGED=true
+                else
+                    # Auto-resolve failed, show conflict details
+                    git -C "$PROJECT_DIR" merge --abort 2>/dev/null || true
+                    print_step "fail" "Cannot auto-resolve conflicts"
+
+                    echo ""
+                    echo -e "${RED}${BOLD}Merge Conflict Details:${NC}"
+                    echo ""
+
+                    # Show conflict info
+                    cd "$PROJECT_DIR"
+                    # Re-attempt merge to show conflicts
+                    git merge "$TASK_NAME" --no-ff -m "Merge branch '$TASK_NAME'" 2>/dev/null || true
+                    local conflict_info
+                    conflict_info=$(get_conflict_info "$PROJECT_DIR")
+                    echo -e "${YELLOW}$conflict_info${NC}"
+                    git merge --abort 2>/dev/null || true
+
+                    echo ""
+                    echo -e "${BOLD}Options:${NC}"
+                    echo "  1. Resolve conflicts manually in PROJECT_DIR ($PROJECT_DIR)"
+                    echo "  2. Use ⌥ e again to retry after resolving"
+                    echo "  3. Use ⌥ e --force to skip merge and cleanup anyway"
+                    echo ""
+
+                    # Update window status to 💬
+                    set_window_help_needed "$SESSION_NAME" "$WINDOW_ID" "$TASK_NAME"
+                    log "Merge conflict - needs user help"
+
+                    echo -e "${YELLOW}Window status changed to 💬 (needs help)${NC}"
+                    echo ""
+                    echo "Press Enter to dismiss..."
+                    read -r
+                    exit 1
+                fi
             fi
             ;;
 

@@ -600,6 +600,114 @@ wait_for_claude_ready() {
 }
 
 # ============================================================================
+# Merge Conflict Resolution
+# ============================================================================
+
+# Try to auto-resolve merge conflicts
+# Returns: 0 if resolved, 1 if unresolvable, 2 if no conflicts
+# Usage: try_auto_resolve_conflicts "$PROJECT_DIR"
+try_auto_resolve_conflicts() {
+    local project_dir="$1"
+
+    cd "$project_dir"
+
+    # Check if there are actual conflicts
+    local conflict_files
+    conflict_files=$(git diff --name-only --diff-filter=U 2>/dev/null)
+
+    if [ -z "$conflict_files" ]; then
+        return 2  # No conflicts
+    fi
+
+    debug "Conflict files: $conflict_files"
+
+    # Try to auto-resolve each conflicted file
+    local unresolved_count=0
+    local resolved_count=0
+
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+
+        # Check if conflict markers exist
+        if grep -q "^<<<<<<< " "$file" 2>/dev/null; then
+            # Check if it's a simple conflict (only whitespace or formatting changes)
+            # For now, we'll try accepting both changes with git checkout --merge
+
+            # Strategy 1: Try to accept ours for auto-generated files
+            if [[ "$file" == *.lock || "$file" == *package-lock.json || "$file" == *yarn.lock ]]; then
+                git checkout --ours "$file" 2>/dev/null && git add "$file" && {
+                    debug "Auto-resolved (ours) lock file: $file"
+                    resolved_count=$((resolved_count + 1))
+                    continue
+                }
+            fi
+
+            # Strategy 2: For other files, just count as unresolved
+            debug "Cannot auto-resolve: $file"
+            unresolved_count=$((unresolved_count + 1))
+        else
+            # No conflict markers, just needs to be staged
+            git add "$file" 2>/dev/null
+            resolved_count=$((resolved_count + 1))
+        fi
+    done <<< "$conflict_files"
+
+    if [ "$unresolved_count" -gt 0 ]; then
+        return 1  # Unresolvable conflicts remain
+    fi
+
+    # All conflicts resolved, try to complete the merge
+    if [ "$resolved_count" -gt 0 ]; then
+        if git commit --no-edit 2>/dev/null; then
+            return 0  # Successfully resolved
+        fi
+    fi
+
+    return 1
+}
+
+# Get list of conflicted files with details
+# Usage: conflict_info=$(get_conflict_info "$PROJECT_DIR")
+get_conflict_info() {
+    local project_dir="$1"
+
+    cd "$project_dir"
+
+    local conflict_files
+    conflict_files=$(git diff --name-only --diff-filter=U 2>/dev/null)
+
+    if [ -z "$conflict_files" ]; then
+        echo "No conflicts detected"
+        return 0
+    fi
+
+    local count=0
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        count=$((count + 1))
+    done <<< "$conflict_files"
+
+    echo "Conflicted files ($count):"
+    echo "$conflict_files" | while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        echo "  - $file"
+    done
+}
+
+# Update window status to help needed
+# Usage: set_window_help_needed "$SESSION_NAME" "$WINDOW_ID" "$TASK_NAME"
+set_window_help_needed() {
+    local session="$1"
+    local window_id="$2"
+    local task_name="$3"
+
+    local display_name="${task_name:0:12}"
+    local new_name="${EMOJI_WAITING}${display_name}"
+
+    tm "$session" rename-window -t "$window_id" "$new_name" 2>/dev/null || true
+}
+
+# ============================================================================
 # Task Cleanup (shared between end-task and /done)
 # ============================================================================
 

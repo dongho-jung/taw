@@ -143,11 +143,28 @@ if [ "$IS_GIT_MODE" = true ] && [ "$FORCE_MODE" != "--force" ] && [ -d "$WORK_DI
                 MERGED=true
                 log "Merged to $MAIN_BRANCH"
             else
-                # Merge conflict - abort, notify, and EXIT (don't cleanup)
-                git -C "$PROJECT_DIR" merge --abort 2>/dev/null || true
-                log "Merge conflict, stopping without cleanup"
-                tm "$SESSION_NAME" display-message "Merge conflict! Resolve manually or use ⌥ e --force to skip"
-                exit 0
+                log "Merge conflict detected, attempting auto-resolve..."
+
+                # Try to auto-resolve conflicts
+                if try_auto_resolve_conflicts "$PROJECT_DIR"; then
+                    log "Conflicts auto-resolved!"
+                    git -C "$PROJECT_DIR" push origin "$MAIN_BRANCH" 2>/dev/null || true
+                    MERGED=true
+                    log "Merged to $MAIN_BRANCH (after auto-resolve)"
+                else
+                    # Auto-resolve failed, abort and show in user pane
+                    git -C "$PROJECT_DIR" merge --abort 2>/dev/null || true
+                    log "Merge conflict - cannot auto-resolve, showing in user pane"
+
+                    # Update window status to 💬
+                    local display_name="${TASK_NAME:0:12}"
+                    tm "$SESSION_NAME" rename-window -t "$WINDOW_ID" "${EMOJI_WAITING}${display_name}" 2>/dev/null || true
+
+                    # Run end-task-ui in user pane to show conflict details
+                    tm "$SESSION_NAME" send-keys -t "${WINDOW_ID}.1" "$TAW_HOME/_taw/bin/end-task-ui '$SESSION_NAME' '$WINDOW_ID'" Enter
+
+                    exit 0
+                fi
             fi
             ;;
 
