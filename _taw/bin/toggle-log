@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# Toggle live log popup window
+# If log popup is open, close it. If closed, open it.
+# Uses tmux user option for reliable state tracking (same pattern as toggle-help)
+# Shows tail -f style log with scroll capability using less +F
+
+set -e
+
+SESSION_NAME="${1:-}"
+if [ -z "$SESSION_NAME" ]; then
+    echo "Usage: toggle-log SESSION_NAME" >&2
+    exit 1
+fi
+
+# Resolve TAW_HOME if not set
+if [ -z "$TAW_HOME" ]; then
+    SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)"
+    TAW_HOME="$(cd "$SCRIPT_PATH/../.." && pwd)"
+fi
+
+# tmux helper
+tm() {
+    tmux -L "taw-$SESSION_NAME" "$@"
+}
+
+# Find project directory from tmux session
+find_project_dir() {
+    local pane_path
+    pane_path=$(tm list-panes -s -F '#{pane_current_path}' 2>/dev/null | head -1)
+
+    if [ -z "$pane_path" ]; then
+        return 1
+    fi
+
+    # Walk up to find .taw directory
+    local dir="$pane_path"
+    while [ "$dir" != "/" ]; do
+        if [ -d "$dir/.taw" ]; then
+            echo "$dir"
+            return 0
+        fi
+        dir=$(dirname "$dir")
+    done
+    return 1
+}
+
+# Check if log popup is currently open (using tmux user option)
+LOG_OPEN=$(tm show-options -gqv @taw_log_open 2>/dev/null || echo "")
+
+if [ "$LOG_OPEN" = "1" ]; then
+    # Log popup is currently shown - close it
+    # Opening a new popup that immediately exits will close the existing one
+    tm set-option -g @taw_log_open ""
+    tm display-popup -E "true" 2>/dev/null || true
+else
+    # Log popup is not shown - open it
+    PROJECT_DIR=$(find_project_dir)
+
+    if [ -z "$PROJECT_DIR" ]; then
+        tm display-message "Error: Could not find project directory"
+        exit 1
+    fi
+
+    LOG_FILE="$PROJECT_DIR/.taw/log"
+
+    if [ ! -f "$LOG_FILE" ]; then
+        tm display-message "Error: Log file not found: $LOG_FILE"
+        exit 1
+    fi
+
+    tm set-option -g @taw_log_open "1"
+
+    # Use less +F for tail -f like behavior with scroll capability
+    # Press Ctrl+C to stop following, then can scroll with j/k/arrows
+    # Press F to resume following
+    # Alt+L (\el) and q to quit
+    # Create lesskey configuration inside the popup command
+    tm display-popup -E -w 90% -h 80% -T " Live Log (F=follow, Ctrl+C=scroll, ⌥l or q to close) " \
+        "KEYFILE=\$(mktemp) && printf '#command\n\\\\el quit\n' > \"\$KEYFILE\" && LESSKEYIN=\"\$KEYFILE\" less +F '$LOG_FILE'; tmux -L 'taw-$SESSION_NAME' set-option -g @taw_log_open '' 2>/dev/null || true; rm -f \"\$KEYFILE\""
+fi

@@ -13,6 +13,7 @@ Claude Code 기반 자율 에이전트 작업 환경
   ⌥ e         태스크 완료 (commit → PR/merge → cleanup, ON_COMPLETE 설정 따름)
   ⌥ m         완료된 태스크 일괄 머지 (✅ 상태 태스크 모두 merge + end)
   ⌥ p         팝업 쉘 열기/닫기 (현재 worktree 경로)
+  ⌥ l         실시간 로그 보기 (tail -f 스타일, 스크롤 가능)
   ⌥ u         빠른 태스크 큐 추가 (완료 후 자동 처리)
 
 ### 세션
