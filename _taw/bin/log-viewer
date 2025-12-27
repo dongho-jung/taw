@@ -53,6 +53,12 @@ FILTER_WORD=""
 TAIL_MODE=true
 FILE_MTIME=""
 
+# Global arrays (declare at script level for Bash 3.2 compatibility)
+LINES_CACHE=()
+FILTERED_LINES=()
+SEARCH_MATCHES=()
+CURRENT_MATCH_IDX=-1
+
 # Get terminal dimensions
 get_dimensions() {
     TERM_LINES=$(tput lines 2>/dev/null || echo 24)
@@ -63,8 +69,7 @@ get_dimensions() {
 # Load log file into arrays
 load_file() {
     local i=0
-    unset LINES_CACHE
-    declare -ga LINES_CACHE=()
+    LINES_CACHE=()  # Reset array (Bash 3.2 compatible)
 
     while IFS= read -r line || [ -n "$line" ]; do
         LINES_CACHE[i]="$line"
@@ -77,8 +82,7 @@ load_file() {
 # Apply filter if set
 apply_filter() {
     local i=0
-    unset FILTERED_LINES
-    declare -ga FILTERED_LINES=()
+    FILTERED_LINES=()  # Reset array (Bash 3.2 compatible)
 
     if [ -z "$FILTER_WORD" ]; then
         for line in "${LINES_CACHE[@]}"; do
@@ -98,8 +102,7 @@ apply_filter() {
 # Find all search matches in current (filtered) lines
 find_matches() {
     local idx=0
-    unset SEARCH_MATCHES
-    declare -ga SEARCH_MATCHES=()
+    SEARCH_MATCHES=()  # Reset array (Bash 3.2 compatible)
     CURRENT_MATCH_IDX=-1
 
     if [ -z "$SEARCH_PATTERN" ]; then
