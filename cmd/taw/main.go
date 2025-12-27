@@ -349,6 +349,10 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	tm.SetOption("window-style", "fg=colour231,bg=default", true)          // White text with default bg for inactive panes
 	tm.SetOption("window-active-style", "fg=terminal,bg=terminal", true)   // Normal colors for active pane
 
+	// Popup styling - use terminal colors to override window-style inheritance
+	tm.SetOption("popup-style", "fg=terminal,bg=terminal", true)
+	tm.SetOption("popup-border-style", "fg=colour244", true)
+
 	// Enable mouse mode
 	tm.SetOption("mouse", "on", true)
 
