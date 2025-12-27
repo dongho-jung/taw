@@ -32,32 +32,56 @@ $TAW_DIR/agents/$TASK_NAME/
 
 ## ⚠️ Plan Mode (CRITICAL - 반드시 먼저 실행)
 
-Claude Code가 Plan Mode로 시작됩니다. **코드 작성 전에 반드시 Plan을 세우세요.**
+Claude Code가 Plan Mode로 시작됩니다. **코드 작성 전에 반드시 Plan을 세우고 AskUserQuestion으로 승인받으세요.**
 
-### Plan 필수 포함 항목
+### Plan Mode 진행 순서
 
-Plan에는 **반드시 다음 항목이 포함**되어야 합니다:
+1. **프로젝트 분석**: 코드베이스, 빌드/테스트 명령어 파악
+2. **Plan 작성**: 작업 단계와 검증 방법 정리
+3. **⚠️ AskUserQuestion으로 확인받기** (아래 형식 필수)
+4. **승인 후 ExitPlanMode로 실행 모드 전환**
 
-```markdown
-## 작업 계획
-1. [구체적인 작업 단계들...]
+### AskUserQuestion 사용 (REQUIRED)
 
-## ✅ 성공 검증 방법 (REQUIRED)
-이 작업의 성공 여부를 **어떻게 검증할지** 명시:
+Plan 작성 후, **반드시 AskUserQuestion tool을 사용**하여 다음 3가지를 구조화된 질문으로 확인받으세요.
 
-### 자동 검증 가능 (auto-merge 허용)
-- [ ] 빌드 성공: `npm run build` / `go build` / `cargo build`
-- [ ] 테스트 통과: `npm test` / `go test` / `pytest`
-- [ ] 린트 통과: `npm run lint` / `golangci-lint`
-- [ ] 타입 체크: `tsc --noEmit` / `mypy`
+**다중 질문 형식 (필수):**
 
-### 자동 검증 불가 (💬 상태로 전환)
-- [ ] UI/UX 변경 - 사용자 눈으로 확인 필요
-- [ ] 외부 API 연동 - 실제 호출 테스트 필요
-- [ ] 성능 개선 - 벤치마크 비교 필요
-- [ ] 문서 수정 - 내용 검토 필요
-- [ ] 설정 변경 - 실제 환경에서 확인 필요
 ```
+AskUserQuestion:
+  questions:
+    - question: "다음 작업 계획으로 진행해도 될까요?\n\n1. 첫 번째 단계 설명\n2. 두 번째 단계 설명\n3. ..."
+      header: "작업 계획"
+      multiSelect: false
+      options:
+        - label: "승인"
+          description: "작업 계획이 적절합니다"
+        - label: "수정 필요"
+          description: "작업 계획에 수정이 필요합니다"
+
+    - question: "다음 검증 방법으로 확인할까요?\n\n- 빌드: `go build ./...`\n- 테스트: `go test ./...`"
+      header: "검증 방법"
+      multiSelect: false
+      options:
+        - label: "승인"
+          description: "검증 방법이 적절합니다"
+        - label: "수정 필요"
+          description: "검증 방법에 수정이 필요합니다"
+
+    - question: "이 작업은 자동 검증이 가능한가요?"
+      header: "자동 검증"
+      multiSelect: false
+      options:
+        - label: "✅ 가능"
+          description: "테스트/빌드로 성공 여부 자동 확인 가능"
+        - label: "❌ 불가"
+          description: "시각적 확인, 수동 테스트 등 필요"
+```
+
+**각 질문에서 확인할 내용:**
+1. **작업 계획**: 구체적인 단계별 설명 (question 안에 계획 포함)
+2. **검증 방법**: 어떤 명령어로 검증할지 (question 안에 명령어 포함)
+3. **자동 검증 가능 여부**: 가능/불가 선택 (옵션으로 선택)
 
 ### 검증 가능 여부 판단 기준
 
