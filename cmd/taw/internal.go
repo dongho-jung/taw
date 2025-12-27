@@ -65,20 +65,8 @@ var toggleNewCmd = &cobra.Command{
 
 		for _, w := range windows {
 			if strings.HasPrefix(w.Name, constants.EmojiNew) {
-				// Window exists, select it and run new-task
-				if err := tm.SelectWindow(w.ID); err != nil {
-					return err
-				}
-				// Run new-task in the existing window
-				tawBin, _ := os.Executable()
-				newTaskCmd := fmt.Sprintf("%s internal new-task %s", tawBin, sessionName)
-				if err := tm.SendKeysLiteral(w.ID, newTaskCmd); err != nil {
-					return fmt.Errorf("failed to send keys: %w", err)
-				}
-				if err := tm.SendKeys(w.ID, "Enter"); err != nil {
-					return fmt.Errorf("failed to send Enter: %w", err)
-				}
-				return nil
+				// Window exists, just select it (don't send command again to avoid pasting into vim/editor)
+				return tm.SelectWindow(w.ID)
 			}
 		}
 
@@ -242,15 +230,23 @@ var handleTaskCmd = &cobra.Command{
 		}
 		logging.Log("Tab-lock created successfully")
 
-		// Setup worktree if git mode
+		// Setup worktree if git mode (skip if worktree already exists - reopen case)
 		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
-			timer := logging.StartTimer("worktree setup")
-			if err := mgr.SetupWorktree(t); err != nil {
-				timer.StopWithResult(false, err.Error())
-				t.RemoveTabLock()
-				return fmt.Errorf("failed to setup worktree: %w", err)
+			worktreeDir := t.GetWorktreeDir()
+			if _, err := os.Stat(worktreeDir); os.IsNotExist(err) {
+				// Worktree doesn't exist, create it
+				timer := logging.StartTimer("worktree setup")
+				if err := mgr.SetupWorktree(t); err != nil {
+					timer.StopWithResult(false, err.Error())
+					t.RemoveTabLock()
+					return fmt.Errorf("failed to setup worktree: %w", err)
+				}
+				timer.StopWithResult(true, fmt.Sprintf("branch=%s, path=%s", taskName, t.WorktreeDir))
+			} else {
+				// Worktree already exists (reopen case)
+				logging.Log("Worktree already exists, reusing: %s", worktreeDir)
+				t.WorktreeDir = worktreeDir
 			}
-			timer.StopWithResult(true, fmt.Sprintf("branch=%s, path=%s", taskName, t.WorktreeDir))
 		}
 
 		// Setup symlinks (error is non-fatal)
