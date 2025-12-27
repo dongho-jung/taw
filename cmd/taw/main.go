@@ -338,8 +338,8 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	tm.SetOption("status-right-length", "100", true)
 
 	// Window status format - removes index numbers (0:, 1:, 2:) and asterisk (*)
-	// Uses colors for visual distinction between current and other windows
-	tm.SetOption("window-status-format", "#[fg=colour250] #W ", true)
+	// Current window uses blue background and bold for visual distinction
+	tm.SetOption("window-status-format", "#[fg=colour231] #W ", true)
 	tm.SetOption("window-status-current-format", "#[fg=colour231,bg=colour24,bold] #W ", true)
 	tm.SetOption("window-status-separator", "", true)
 
