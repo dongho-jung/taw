@@ -831,6 +831,7 @@ var popupShellCmd = &cobra.Command{
 		switch shellName {
 		case "zsh":
 			// For zsh: create temp ZDOTDIR with .zshrc that binds Alt+P
+			// Use || true to suppress non-zero exit codes from commands like 'less'
 			shellCmd = fmt.Sprintf(
 				"TMPZD=$(mktemp -d) && "+
 					"cat > \"$TMPZD/.zshrc\" << 'RCEOF'\n"+
@@ -838,11 +839,12 @@ var popupShellCmd = &cobra.Command{
 					"_taw_close_popup() { %s; exit; }\n"+
 					"bindkey -s '\\ep' '\\C-u_taw_close_popup\\n'\n"+
 					"RCEOF\n"+
-					"ZDOTDIR=\"$TMPZD\" zsh; "+
+					"ZDOTDIR=\"$TMPZD\" zsh || true; "+
 					"rm -rf \"$TMPZD\" 2>/dev/null; %s",
 				cleanupCmd, cleanupCmd)
 		default:
 			// For bash: use --rcfile with temp file
+			// Use || true to suppress non-zero exit codes from commands like 'less'
 			shellCmd = fmt.Sprintf(
 				"TMPRC=$(mktemp) && "+
 					"cat > \"$TMPRC\" << 'RCEOF'\n"+
@@ -850,7 +852,7 @@ var popupShellCmd = &cobra.Command{
 					"_taw_close_popup() { %s; exit; }\n"+
 					"bind '\"\\ep\": \"\\C-u_taw_close_popup\\n\"'\n"+
 					"RCEOF\n"+
-					"bash --rcfile \"$TMPRC\"; "+
+					"bash --rcfile \"$TMPRC\" || true; "+
 					"rm -f \"$TMPRC\" 2>/dev/null; %s",
 				cleanupCmd, cleanupCmd)
 		}

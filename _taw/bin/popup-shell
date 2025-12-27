@@ -86,16 +86,17 @@ tmux -L "taw-$SESSION_NAME" set-option -g @taw_popup_open ""
 tmux -L "taw-$SESSION_NAME" set-option -g @taw_popup_open "1"
 
 # Build shell command based on shell type
+# Use || true to suppress non-zero exit codes from commands like 'less'
 case "$SHELL_NAME" in
     zsh)
         # Zsh doesn't support --rcfile, so we create a temp ZDOTDIR
         TMP_ZDOTDIR=$(mktemp -d)
         mv "$TMP_RCFILE" "$TMP_ZDOTDIR/.zshrc"
-        SHELL_CMD="ZDOTDIR='$TMP_ZDOTDIR' zsh; rm -rf '$TMP_ZDOTDIR'"
+        SHELL_CMD="ZDOTDIR='$TMP_ZDOTDIR' zsh || true; rm -rf '$TMP_ZDOTDIR'"
         ;;
     *)
         # Bash supports --rcfile directly
-        SHELL_CMD="bash --rcfile '$TMP_RCFILE'; rm -f '$TMP_RCFILE'"
+        SHELL_CMD="bash --rcfile '$TMP_RCFILE' || true; rm -f '$TMP_RCFILE'"
         ;;
 esac
 
