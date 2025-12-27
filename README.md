@@ -282,3 +282,25 @@ brew install tmux gh
 로그 뷰어 하단에 현재 상태가 표시됩니다:
 - `[TAIL]` - Tail 모드 활성화 (새 로그 자동 추적)
 - `[WRAP]` - Word Wrap 모드 활성화
+
+### 로그 형식
+
+로그는 상세한 정보를 포함합니다:
+
+```
+[2025-12-28 03:49:45.081] [INFO ] [handle-task:my-task] [RunE] Task started successfully
+```
+
+형식: `[timestamp] [level] [script:task] [caller] message`
+
+- **timestamp**: 밀리초 단위 시간
+- **level**: INFO, WARN, ERROR, DEBUG
+- **script:task**: 스크립트와 태스크 컨텍스트
+- **caller**: 로그를 남긴 함수명
+- **message**: 로그 메시지 (key=value 형태의 상세 정보 포함)
+
+시간이 걸리는 작업은 시작/완료 로그와 함께 소요 시간이 기록됩니다:
+```
+[2025-12-28 03:49:45.081] [INFO ] [handle-task:my-task] [RunE] worktree setup started
+[2025-12-28 03:49:45.234] [INFO ] [handle-task:my-task] [RunE] worktree setup completed in 153ms: branch=my-task, path=/path/to/worktree
+```

@@ -127,21 +127,30 @@ func runMain(cmd *cobra.Command, args []string) error {
 
 	// Check if session already exists
 	if tm.HasSession(application.SessionName) {
-		logging.Log("Attaching to existing session")
+		logging.Log("Attaching to existing session: %s", application.SessionName)
 		return attachToSession(application, tm)
 	}
 
 	// Start new session
-	logging.Log("=== Session start ===")
+	logging.Log("=== New session start ===")
+	logging.Log("Project: %s", application.ProjectDir)
+	logging.Log("Session: %s", application.SessionName)
+	logging.Log("Git repo: %v", application.IsGitRepo)
+	if application.Config != nil {
+		logging.Log("Config: WorkMode=%s, OnComplete=%s", application.Config.WorkMode, application.Config.OnComplete)
+	}
 	return startNewSession(application, tm)
 }
 
 // startNewSession creates a new tmux session
 func startNewSession(app *app.App, tm tmux.Client) error {
+	logging.Log("Starting new tmux session...")
+
 	// Clean up merged tasks before starting new session
 	mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
 	merged, err := mgr.FindMergedTasks()
-	if err == nil {
+	if err == nil && len(merged) > 0 {
+		logging.Log("Found %d merged tasks to clean up", len(merged))
 		for _, t := range merged {
 			logging.Log("Auto-cleaning merged task: %s", t.Name)
 			mgr.CleanupTask(t)
@@ -204,18 +213,22 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 
 // attachToSession attaches to an existing session
 func attachToSession(app *app.App, tm tmux.Client) error {
+	logging.Log("Running pre-attach cleanup and recovery...")
+
 	// Run cleanup and recovery before attaching
 	mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
 	mgr.SetTmuxClient(tm)
 
 	// Auto cleanup merged tasks
 	merged, err := mgr.FindMergedTasks()
-	if err == nil {
+	if err == nil && len(merged) > 0 {
+		logging.Log("Found %d merged tasks to clean up", len(merged))
 		for _, t := range merged {
 			logging.Log("Auto-cleaning merged task: %s", t.Name)
 			// Close window first if exists
 			if t.HasTabLock() {
 				if windowID, err := t.LoadWindowID(); err == nil && windowID != "" {
+					logging.Log("Killing window %s for merged task %s", windowID, t.Name)
 					tm.KillWindow(windowID)
 				}
 			}
@@ -226,7 +239,8 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 
 	// Clean up orphaned windows (windows without agent directory)
 	orphanedWindows, err := mgr.FindOrphanedWindows()
-	if err == nil {
+	if err == nil && len(orphanedWindows) > 0 {
+		logging.Log("Found %d orphaned windows to close", len(orphanedWindows))
 		for _, windowID := range orphanedWindows {
 			logging.Log("Closing orphaned window: %s", windowID)
 			tm.KillWindow(windowID)
@@ -236,13 +250,15 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 
 	// Reopen incomplete tasks
 	incomplete, err := mgr.FindIncompleteTasks(app.SessionName)
-	if err == nil {
+	if err == nil && len(incomplete) > 0 {
+		logging.Log("Found %d incomplete tasks", len(incomplete))
 		for _, t := range incomplete {
-			logging.Log("Reopening incomplete task: %s", t.Name)
+			logging.Log("Reopening incomplete task: %s (reason: window not found)", t.Name)
 			// TODO: Implement reopen logic
 		}
 	}
 
+	logging.Log("Attaching to session: %s", app.SessionName)
 	// Attach to session
 	return tm.AttachSession(app.SessionName)
 }
