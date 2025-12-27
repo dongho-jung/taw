@@ -321,6 +321,9 @@ func (c *tmuxClient) CapturePane(target string, lines int) (string, error) {
 	args := []string{"capture-pane", "-t", target, "-p"}
 	if lines > 0 {
 		args = append(args, "-S", fmt.Sprintf("-%d", lines))
+	} else if lines < 0 {
+		// Capture all scrollback history
+		args = append(args, "-S", "-")
 	}
 	return c.RunWithOutput(args...)
 }

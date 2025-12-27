@@ -65,6 +65,8 @@ taw/                           # 이 레포
     ├── .claude                # -> _taw/claude (symlink)
     ├── .queue/                # 빠른 태스크 큐 (⌥ u로 추가)
     │   └── 001.task           # 대기 중인 태스크 (순서대로 처리)
+    ├── history/               # 태스크 완료 시 agent pane 캡처 기록
+    │   └── YYMMDD_HHMMSS_taskname  # 타임스탬프_태스크명 형식
     └── agents/{task-name}/    # 태스크별 작업 공간
         ├── task               # 태스크 내용
         ├── end-task           # 태스크별 end-task 스크립트 (Claude가 auto-merge 시 호출)
@@ -129,6 +131,21 @@ Agent가 사용할 수 있는 slash commands:
 - worktree, 브랜치, 에이전트 디렉토리 자동 정리
 - 열려있는 window도 자동으로 닫힘
 - 정리된 태스크는 `✅ Cleaned up merged task: <task-name>` 메시지로 표시
+
+### 태스크 히스토리 (Agent Pane Capture)
+
+태스크가 완료(`⌥ e` 또는 auto-merge)되면 자동으로 agent pane의 전체 내용이 `.taw/history/`에 저장됩니다.
+
+```
+.taw/history/
+├── 251228_143025_add-login-feature
+├── 251228_152010_fix-bug-123
+└── 251228_161545_refactor-auth
+```
+
+- 파일명 형식: `YYMMDD_HHMMSS_태스크명`
+- 전체 스크롤백 히스토리 포함 (Claude의 모든 출력 기록)
+- 작업 로그 참조, 디버깅, 학습 목적으로 활용 가능
 
 ### 손상된 Worktree 복구
 

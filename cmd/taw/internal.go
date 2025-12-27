@@ -242,15 +242,23 @@ var handleTaskCmd = &cobra.Command{
 		}
 		logging.Log("Tab-lock created successfully")
 
-		// Setup worktree if git mode
+		// Setup worktree if git mode (skip if worktree already exists - reopen case)
 		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
-			timer := logging.StartTimer("worktree setup")
-			if err := mgr.SetupWorktree(t); err != nil {
-				timer.StopWithResult(false, err.Error())
-				t.RemoveTabLock()
-				return fmt.Errorf("failed to setup worktree: %w", err)
+			worktreeDir := t.GetWorktreeDir()
+			if _, err := os.Stat(worktreeDir); os.IsNotExist(err) {
+				// Worktree doesn't exist, create it
+				timer := logging.StartTimer("worktree setup")
+				if err := mgr.SetupWorktree(t); err != nil {
+					timer.StopWithResult(false, err.Error())
+					t.RemoveTabLock()
+					return fmt.Errorf("failed to setup worktree: %w", err)
+				}
+				timer.StopWithResult(true, fmt.Sprintf("branch=%s, path=%s", taskName, t.WorktreeDir))
+			} else {
+				// Worktree already exists (reopen case)
+				logging.Log("Worktree already exists, reusing: %s", worktreeDir)
+				t.WorktreeDir = worktreeDir
 			}
-			timer.StopWithResult(true, fmt.Sprintf("branch=%s, path=%s", taskName, t.WorktreeDir))
 		}
 
 		// Setup symlinks (error is non-fatal)
@@ -525,6 +533,11 @@ var endTaskCmd = &cobra.Command{
 					}
 				}
 			}
+		}
+
+		// Save agent pane capture to history before cleanup
+		if err := saveAgentPaneCapture(tm, windowID, app.TawDir, targetTask.Name); err != nil {
+			logging.Warn("Failed to save agent pane capture: %v", err)
 		}
 
 		// Cleanup task
@@ -916,6 +929,34 @@ var recoverTaskCmd = &cobra.Command{
 		fmt.Printf("Task %s recovered successfully\n", taskName)
 		return nil
 	},
+}
+
+// saveAgentPaneCapture captures the agent pane content and saves it to .taw/history
+func saveAgentPaneCapture(tm tmux.Client, windowID string, tawDir string, taskName string) error {
+	// Create history directory if it doesn't exist
+	historyDir := filepath.Join(tawDir, "history")
+	if err := os.MkdirAll(historyDir, 0755); err != nil {
+		return fmt.Errorf("failed to create history directory: %w", err)
+	}
+
+	// Capture agent pane (pane 0) - get full scrollback history (-1 means all)
+	content, err := tm.CapturePane(windowID+".0", -1)
+	if err != nil {
+		return fmt.Errorf("failed to capture pane: %w", err)
+	}
+
+	// Generate filename: YYMMDD_HHMMSS_taskname
+	timestamp := time.Now().Format("060102_150405")
+	filename := fmt.Sprintf("%s_%s", timestamp, taskName)
+	filePath := filepath.Join(historyDir, filename)
+
+	// Write content to file
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write capture file: %w", err)
+	}
+
+	logging.Log("Saved agent pane capture: %s", filePath)
+	return nil
 }
 
 // getAppFromSession creates an App from session name
