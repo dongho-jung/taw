@@ -358,6 +358,10 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	tm.SetOption("mode-keys", "vi", true)
 	tm.SetOption("set-clipboard", "on", true)
 
+	// Allow escape sequences to pass through to the terminal (tmux 3.3+)
+	// Enables OSC 52 clipboard, terminal images, hyperlinks, etc.
+	tm.SetOption("allow-passthrough", "all", true)
+
 	// Auto-copy to system clipboard when mouse selection ends
 	// In copy-mode, commands must use "send-keys -X" format
 	tm.Bind(tmux.BindOpts{
