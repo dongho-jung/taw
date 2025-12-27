@@ -144,10 +144,13 @@ PR #42 생성 완료
 
 ## Window Status
 
+Window ID는 이미 `$WINDOW_ID` 환경변수로 설정되어 있습니다:
+
 ```bash
-tmux rename-window -t $WINDOW_ID "🤖${TASK_NAME:0:12}"  # Working
-tmux rename-window -t $WINDOW_ID "💬${TASK_NAME:0:12}"  # Need help
-tmux rename-window -t $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done
+# tmux 명령어로 직접 상태 변경 (tmux 세션 내에서)
+tmux rename-window "🤖${TASK_NAME:0:12}"  # Working
+tmux rename-window "💬${TASK_NAME:0:12}"  # Need help
+tmux rename-window "✅${TASK_NAME:0:12}"  # Done
 ```
 
 ---

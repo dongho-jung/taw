@@ -35,6 +35,10 @@ if [ -f "$TAW_DIR/.is-git-repo" ]; then
     IS_GIT_MODE=true
 fi
 
+# Read config settings (consistent with handle-task)
+ON_COMPLETE=$(read_config "$TAW_DIR" "on_complete" "$DEFAULT_ON_COMPLETE")
+debug "Config: on_complete=$ON_COMPLETE"
+
 # Use .global-prompt symlink (consistent with handle-task)
 GLOBAL_PROMPT="$TAW_DIR/.global-prompt"
 PROJECT_PROMPT="$TAW_DIR/PROMPT.md"
@@ -91,8 +95,14 @@ echo "$system_prompt" > "$AGENT_DIR/.system-prompt"
 display_name=$(truncate_name "$TASK_NAME")
 window_name="${EMOJI_WORKING}${display_name}"
 
-# Create new window (use taw-specific socket via tm helper)
-window_id=$(tm "$SESSION_NAME" new-window -n "$window_name" -c "$WORK_DIR" -P -F "#{window_id}")
+# Create new window (use taw-specific socket via tm helper, -d to not switch focus)
+window_id=$(tm "$SESSION_NAME" new-window -d -n "$window_name" -c "$WORK_DIR" -P -F "#{window_id}")
+
+# Save window_id for incomplete task detection
+TAB_MARKER="$AGENT_DIR/.tab-lock"
+mkdir -p "$TAB_MARKER"
+echo "$window_id" > "$TAB_MARKER/window_id"
+
 sleep 0.3
 
 # Split horizontally for user pane
@@ -105,9 +115,9 @@ tm "$SESSION_NAME" select-pane -t "${window_id}.0"
 # Note: paths are single-quoted to handle spaces correctly
 debug "Starting claude with system prompt..."
 if [ "$IS_GIT_MODE" = true ]; then
-    send_shell_cmd "$SESSION_NAME" "$window_id" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\""
+    send_shell_cmd "$SESSION_NAME" "$window_id" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WORKTREE_DIR='$WORK_DIR' WINDOW_ID='$window_id' ON_COMPLETE='$ON_COMPLETE' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\""
 else
-    send_shell_cmd "$SESSION_NAME" "$window_id" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\""
+    send_shell_cmd "$SESSION_NAME" "$window_id" "export TASK_NAME='$TASK_NAME' TAW_DIR='$TAW_DIR' PROJECT_DIR='$PROJECT_DIR' WINDOW_ID='$window_id' ON_COMPLETE='$ON_COMPLETE' && claude --dangerously-skip-permissions --system-prompt \"\$(cat '$AGENT_DIR/.system-prompt')\""
 fi
 
 # Wait for claude to be ready (uses common function)

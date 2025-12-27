@@ -20,8 +20,12 @@ if [ -z "$SESSION_NAME" ]; then
     exit 1
 fi
 
-# Derive paths from session name
-PROJECT_DIR="$(pwd)"
+# Find project directory from session name (uses common function)
+PROJECT_DIR=$(find_project_dir_from_session "$SESSION_NAME")
+if [ -z "$PROJECT_DIR" ]; then
+    echo "Could not find project directory for session: $SESSION_NAME"
+    exit 1
+fi
 TAW_DIR="$PROJECT_DIR/.taw"
 AGENTS_DIR="$TAW_DIR/agents"
 

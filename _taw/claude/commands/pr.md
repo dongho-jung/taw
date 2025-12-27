@@ -68,9 +68,9 @@ git diff --stat main..HEAD 2>/dev/null || git diff --stat master..HEAD 2>/dev/nu
    )"
    ```
 
-6. **IMPORTANT**: After PR is created, save the PR number using actual values from Step 1:
+6. **IMPORTANT**: After PR is created, save the PR number using environment variables:
    ```bash
-   gh pr view --json number -q '.number' | tee {TAW_DIR}/agents/{TASK_NAME}/.pr
+   gh pr view --json number -q '.number' | tee "$TAW_DIR/agents/$TASK_NAME/.pr"
    ```
 
 7. Open the created PR URL in browser:
