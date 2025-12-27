@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/donghojung/taw/internal/constants"
+	"github.com/donghojung/taw/internal/logging"
 	"github.com/donghojung/taw/internal/tmux"
 )
 
@@ -66,31 +67,43 @@ Respond with ONLY the task name, nothing else.`, content)
 		constants.ClaudeNameGenTimeout3,
 	}
 
+	logging.Debug("GenerateTaskName: starting with %d timeout attempts", len(timeouts))
+
 	var lastErr error
-	for _, timeout := range timeouts {
+	for i, timeout := range timeouts {
+		logging.Debug("GenerateTaskName: attempt %d with timeout=%v", i+1, timeout)
 		name, err := c.runClaude(prompt, timeout)
 		if err != nil {
+			logging.Debug("GenerateTaskName: attempt %d failed: %v", i+1, err)
 			lastErr = err
 			continue
 		}
 
+		logging.Debug("GenerateTaskName: raw response=%q", name)
+
 		// Validate the name
-		name = sanitizeTaskName(name)
-		if TaskNamePattern.MatchString(name) {
-			return name, nil
+		sanitized := sanitizeTaskName(name)
+		logging.Debug("GenerateTaskName: sanitized=%q", sanitized)
+
+		if TaskNamePattern.MatchString(sanitized) {
+			logging.Debug("GenerateTaskName: valid name generated: %s", sanitized)
+			return sanitized, nil
 		}
 
-		lastErr = fmt.Errorf("invalid task name format: %s", name)
+		lastErr = fmt.Errorf("invalid task name format: raw=%q, sanitized=%q", name, sanitized)
+		logging.Debug("GenerateTaskName: invalid format: %v", lastErr)
 	}
 
-	// Fallback to timestamp-based name
-	fallback := fmt.Sprintf("task-%s", time.Now().Format("060102150405"))
-	return fallback, lastErr
+	// Return error - let caller decide fallback
+	logging.Debug("GenerateTaskName: all attempts failed, returning error: %v", lastErr)
+	return "", lastErr
 }
 
 func (c *claudeClient) runClaude(prompt string, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+
+	logging.Debug("runClaude: executing claude -p --model haiku with timeout=%v", timeout)
 
 	cmd := exec.CommandContext(ctx, "claude", "-p", "--model", "haiku")
 	cmd.Stdin = strings.NewReader(prompt)
@@ -100,10 +113,14 @@ func (c *claudeClient) runClaude(prompt string, timeout time.Duration) (string, 
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("claude command failed: %w: %s", err, stderr.String())
+		errMsg := stderr.String()
+		logging.Debug("runClaude: command failed: err=%v, stderr=%q", err, errMsg)
+		return "", fmt.Errorf("claude command failed: %w: %s", err, errMsg)
 	}
 
-	return strings.TrimSpace(stdout.String()), nil
+	result := strings.TrimSpace(stdout.String())
+	logging.Debug("runClaude: success, output=%q", result)
+	return result, nil
 }
 
 // sanitizeTaskName cleans up a task name to match the required format.

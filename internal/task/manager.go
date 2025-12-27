@@ -12,6 +12,7 @@ import (
 	"github.com/donghojung/taw/internal/constants"
 	"github.com/donghojung/taw/internal/git"
 	"github.com/donghojung/taw/internal/github"
+	"github.com/donghojung/taw/internal/logging"
 	"github.com/donghojung/taw/internal/tmux"
 )
 
@@ -51,23 +52,35 @@ func (m *Manager) SetTmuxClient(client tmux.Client) {
 // It generates a task name using Claude and creates the task directory atomically.
 func (m *Manager) CreateTask(content string) (*Task, error) {
 	// Generate task name using Claude
+	logging.Log("Generating task name with Claude: content_length=%d", len(content))
+	timer := logging.StartTimer("task name generation")
+
 	name, err := m.claudeClient.GenerateTaskName(content)
 	if err != nil {
 		// Use fallback name if Claude fails
-		name = fmt.Sprintf("task-%d", os.Getpid())
+		fallbackName := fmt.Sprintf("task-%d", os.Getpid())
+		timer.StopWithResult(false, fmt.Sprintf("error=%v, fallback=%s", err, fallbackName))
+		logging.Warn("Claude name generation failed, using fallback: error=%v, fallback=%s", err, fallbackName)
+		name = fallbackName
+	} else {
+		timer.StopWithResult(true, fmt.Sprintf("name=%s", name))
+		logging.Log("Task name generated: %s", name)
 	}
 
 	// Create task directory atomically
 	agentDir, err := m.createTaskDirectory(name)
 	if err != nil {
+		logging.Error("Failed to create task directory: %v", err)
 		return nil, fmt.Errorf("failed to create task directory: %w", err)
 	}
+	logging.Log("Task directory created: %s", agentDir)
 
 	task := New(name, agentDir)
 
 	// Save task content
 	if err := task.SaveContent(content); err != nil {
 		task.Remove()
+		logging.Error("Failed to save task content: %v", err)
 		return nil, fmt.Errorf("failed to save task content: %w", err)
 	}
 
