@@ -30,13 +30,61 @@ $TAW_DIR/agents/$TASK_NAME/
 
 ---
 
+## ⚠️ Plan Mode (CRITICAL - 반드시 먼저 실행)
+
+Claude Code가 Plan Mode로 시작됩니다. **코드 작성 전에 반드시 Plan을 세우세요.**
+
+### Plan 필수 포함 항목
+
+Plan에는 **반드시 다음 항목이 포함**되어야 합니다:
+
+```markdown
+## 작업 계획
+1. [구체적인 작업 단계들...]
+
+## ✅ 성공 검증 방법 (REQUIRED)
+이 작업의 성공 여부를 **어떻게 검증할지** 명시:
+
+### 자동 검증 가능 (auto-merge 허용)
+- [ ] 빌드 성공: `npm run build` / `go build` / `cargo build`
+- [ ] 테스트 통과: `npm test` / `go test` / `pytest`
+- [ ] 린트 통과: `npm run lint` / `golangci-lint`
+- [ ] 타입 체크: `tsc --noEmit` / `mypy`
+
+### 자동 검증 불가 (💬 상태로 전환)
+- [ ] UI/UX 변경 - 사용자 눈으로 확인 필요
+- [ ] 외부 API 연동 - 실제 호출 테스트 필요
+- [ ] 성능 개선 - 벤치마크 비교 필요
+- [ ] 문서 수정 - 내용 검토 필요
+- [ ] 설정 변경 - 실제 환경에서 확인 필요
+```
+
+### 검증 가능 여부 판단 기준
+
+**자동 검증 가능 (✅ auto-merge 허용)**:
+- 프로젝트에 테스트가 있고 관련 테스트를 실행할 수 있음
+- 빌드/컴파일 명령어로 성공 여부 확인 가능
+- 린트/타입체크 등 자동화된 검증 도구 있음
+
+**자동 검증 불가 (💬 상태로 전환)**:
+- 테스트가 없거나 해당 변경에 대한 테스트 불가
+- 시각적 확인이 필요한 UI 변경
+- 사용자 상호작용이 필요한 기능
+- 외부 시스템과의 연동
+- 성능/동작 확인이 필요한 변경
+
+---
+
 ## Autonomous Workflow
 
-### Phase 1: Understand
+### Phase 1: Plan (Plan Mode)
 1. Read task: `cat $TAW_DIR/agents/$TASK_NAME/task`
 2. Analyze project (package.json, Makefile, Cargo.toml, etc.)
 3. Identify build/test commands
-4. Log: "프로젝트 분석 완료 - [프로젝트 타입], [테스트 명령어]"
+4. **Write Plan** including:
+   - 작업 단계
+   - **성공 검증 방법** (자동 검증 가능 여부 명시)
+5. Get user approval via ExitPlanMode
 
 ### Phase 2: Execute
 1. Make changes incrementally
@@ -45,12 +93,13 @@ $TAW_DIR/agents/$TASK_NAME/
    - Commit with clear message
    - Log progress
 
-### Phase 3: Complete
-1. Ensure all tests pass
-2. Commit all changes
-3. **Check `$ON_COMPLETE` and act accordingly** (see below)
-4. Update window status to ✅
-5. Log completion
+### Phase 3: Verify & Complete
+1. **Plan에서 정의한 검증 방법 실행**
+2. 검증 결과에 따라:
+   - ✅ **모든 자동 검증 통과** → `$ON_COMPLETE`에 따라 진행
+   - ❌ **검증 실패** → 수정 후 재시도 (최대 3회)
+   - 💬 **자동 검증 불가** → 💬 상태로 전환, 사용자 확인 요청
+3. Log completion
 
 ---
 
@@ -73,21 +122,48 @@ $TAW_DIR/agents/$TASK_NAME/
 echo "ON_COMPLETE=$ON_COMPLETE"  # 먼저 확인
 ```
 
-#### `auto-merge` 모드 (완전 자동)
+#### `auto-merge` 모드 (조건부 자동)
+
+**⚠️ CRITICAL: auto-merge는 검증 성공 시에만 실행!**
+
 ```
-커밋 → push → end-task 호출 → (자동으로 merge + cleanup + window 닫기)
+검증 실행 → 성공? → 커밋 → push → end-task 호출
+                 ↓ 실패 또는 검증 불가
+              💬 상태로 전환
 ```
+
+**auto-merge 실행 조건 (모두 충족해야 함)**:
+1. ✅ Plan에서 "자동 검증 가능"으로 명시한 경우
+2. ✅ 빌드 성공 (빌드 명령어가 있는 경우)
+3. ✅ 테스트 통과 (테스트가 있는 경우)
+4. ✅ 린트/타입체크 통과 (있는 경우)
+
+**auto-merge 금지 (💬 상태로 전환)**:
+- ❌ Plan에서 "자동 검증 불가"로 명시한 경우
+- ❌ 테스트가 없거나 해당 변경에 대한 테스트가 없는 경우
+- ❌ UI/UX 변경, 설정 변경, 문서 변경 등 눈으로 확인 필요한 경우
+- ❌ 검증 과정에서 실패가 발생한 경우
+
+**검증 성공 시 auto-merge 진행**:
 1. 모든 변경사항 커밋
 2. `git push -u origin $TASK_NAME`
-3. Log: "작업 완료 - end-task 호출"
+3. Log: "검증 완료 - end-task 호출"
 4. **end-task 호출** - 태스크 시작 시 받은 **End-Task Script** 경로의 절대경로를 사용:
    - user prompt에 **End-Task Script** 경로가 있습니다 (예: `/path/to/.taw/agents/task-name/end-task`)
    - 이 절대 경로를 그대로 bash에서 실행하세요
    - 예: `/Users/xxx/projects/yyy/.taw/agents/my-task/end-task`
 
+**검증 불가 또는 실패 시 💬 상태로 전환**:
+1. 모든 변경사항 커밋
+2. `git push -u origin $TASK_NAME`
+3. `tmux rename-window "💬${TASK_NAME:0:12}"`
+4. Log: "작업 완료 - 사용자 확인 필요 (검증 불가/실패)"
+5. 사용자에게 메시지: "검증이 필요합니다. 확인 후 ⌥e를 눌러 완료하세요."
+
 **CRITICAL**:
 - `auto-merge`에서는 PR 생성 안 함! end-task가 자동으로 main에 merge하고 정리합니다.
 - 반드시 절대 경로를 사용하세요. 환경변수(`$TAW_DIR` 등)는 bash에서 사용할 수 없습니다.
+- **검증 없이 auto-merge 절대 금지!** 확실하지 않으면 💬 상태로 두세요.
 
 #### `auto-pr` 모드
 ```

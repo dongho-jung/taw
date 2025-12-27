@@ -306,14 +306,30 @@ var handleTaskCmd = &cobra.Command{
 		endTaskScriptPath := filepath.Join(t.AgentDir, "end-task")
 		userPrompt.WriteString(fmt.Sprintf("**End-Task Script**: %s\n\n", endTaskScriptPath))
 
+		// Add Plan Mode instructions (always shown since we start in plan mode)
+		userPrompt.WriteString("## 📋 PLAN MODE (필수)\n\n")
+		userPrompt.WriteString("You are starting in **Plan Mode**. Before writing any code:\n\n")
+		userPrompt.WriteString("1. **프로젝트 분석**: 빌드/테스트 명령어 파악\n")
+		userPrompt.WriteString("2. **Plan 작성** - 반드시 다음 포함:\n")
+		userPrompt.WriteString("   - 작업 단계\n")
+		userPrompt.WriteString("   - **✅ 성공 검증 방법** (자동 검증 가능 여부 명시)\n")
+		userPrompt.WriteString("3. Plan 승인 후 작업 시작\n\n")
+
 		// Add critical instruction for auto-merge mode
 		if app.Config.OnComplete == config.OnCompleteAutoMerge {
-			userPrompt.WriteString("## ⚠️ AUTO-MERGE MODE\n")
-			userPrompt.WriteString("When you complete this task, you MUST:\n")
-			userPrompt.WriteString("1. Commit all changes\n")
-			userPrompt.WriteString("2. Push to origin\n")
-			userPrompt.WriteString(fmt.Sprintf("3. Run this exact command: `%s`\n", endTaskScriptPath))
-			userPrompt.WriteString("This will automatically merge to main and cleanup.\n\n")
+			userPrompt.WriteString("## ⚠️ AUTO-MERGE MODE (조건부)\n\n")
+			userPrompt.WriteString("**검증 성공 시에만 auto-merge 실행!**\n\n")
+			userPrompt.WriteString("✅ **Auto-merge 허용 조건**:\n")
+			userPrompt.WriteString("- Plan에서 '자동 검증 가능'으로 명시\n")
+			userPrompt.WriteString("- 빌드/테스트/린트 모두 통과\n\n")
+			userPrompt.WriteString("❌ **Auto-merge 금지 → 💬 상태로 전환**:\n")
+			userPrompt.WriteString("- 자동 검증 불가 (UI 변경, 문서, 설정 등)\n")
+			userPrompt.WriteString("- 테스트 없음 또는 관련 테스트 없음\n")
+			userPrompt.WriteString("- 검증 실패\n\n")
+			userPrompt.WriteString("**검증 성공 시**:\n")
+			userPrompt.WriteString(fmt.Sprintf("→ `%s` 실행\n\n", endTaskScriptPath))
+			userPrompt.WriteString("**검증 불가/실패 시**:\n")
+			userPrompt.WriteString("→ `tmux rename-window \"💬...\"` 후 사용자 확인 대기\n\n")
 		}
 
 		userPrompt.WriteString("---\n\n")
@@ -355,7 +371,7 @@ exec "%s" internal end-task "%s" "%s"
 		envVars.WriteString(fmt.Sprintf("TAW_BIN='%s' ", tawBin))
 		envVars.WriteString(fmt.Sprintf("SESSION_NAME='%s'", sessionName))
 
-		claudeCmd := fmt.Sprintf("%s && claude --dangerously-skip-permissions --system-prompt \"$(cat '%s')\"",
+		claudeCmd := fmt.Sprintf("%s && claude --permission-mode plan --system-prompt \"$(cat '%s')\"",
 			envVars.String(), t.GetSystemPromptPath())
 		if err := tm.SendKeysLiteral(windowID+".0", claudeCmd); err != nil {
 			return fmt.Errorf("failed to send Claude command: %w", err)
