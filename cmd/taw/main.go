@@ -359,9 +359,10 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	tm.SetOption("set-clipboard", "on", true)
 
 	// Auto-copy to system clipboard when mouse selection ends
+	// In copy-mode, commands must use "send-keys -X" format
 	tm.Bind(tmux.BindOpts{
 		Key:     "MouseDragEnd1Pane",
-		Command: "copy-pipe-and-cancel 'pbcopy'",
+		Command: "send-keys -X copy-pipe-and-cancel 'pbcopy'",
 		Table:   "copy-mode-vi",
 	})
 
