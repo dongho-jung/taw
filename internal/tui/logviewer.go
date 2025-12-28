@@ -13,16 +13,17 @@ import (
 
 // LogViewer provides an interactive log viewer with vim-like navigation.
 type LogViewer struct {
-	logFile      string
-	lines        []string
-	scrollPos    int
+	logFile       string
+	lines         []string
+	scrollPos     int
 	horizontalPos int
-	tailMode     bool
-	wordWrap     bool
-	width        int
-	height       int
-	lastModTime  time.Time
-	err          error
+	tailMode      bool
+	wordWrap      bool
+	minLevel      int // 1-4: minimum level to display (1=all, 2=L2+, 3=L3+, 4=L4 only)
+	width         int
+	height        int
+	lastModTime   time.Time
+	err           error
 }
 
 // logUpdateMsg is sent when the log file is updated.
@@ -39,6 +40,7 @@ func NewLogViewer(logFile string) *LogViewer {
 	return &LogViewer{
 		logFile:  logFile,
 		tailMode: true,
+		minLevel: 1, // Show all levels by default
 	}
 }
 
@@ -131,6 +133,17 @@ func (m *LogViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.horizontalPos = 0
 		}
 
+	case "l":
+		// Cycle through log levels: 1 -> 2 -> 3 -> 4 -> 1
+		m.minLevel++
+		if m.minLevel > 4 {
+			m.minLevel = 1
+		}
+		m.scrollPos = 0
+		if m.tailMode {
+			m.scrollToEnd()
+		}
+
 	case "pgup":
 		m.tailMode = false
 		m.scrollUp(m.contentHeight())
@@ -163,15 +176,50 @@ func (m *LogViewer) scrollDown(n int) {
 	}
 }
 
+// getLogLevel extracts the log level (1-4) from a log line.
+// Returns 0 if no level is found (line will always be shown).
+func getLogLevel(line string) int {
+	// Look for [L1], [L2], [L3], [L4] pattern
+	// Format: [timestamp] [LN] [context] [caller] message
+	for i := 0; i < len(line)-3; i++ {
+		if line[i] == '[' && line[i+1] == 'L' && line[i+3] == ']' {
+			level := line[i+2]
+			if level >= '1' && level <= '4' {
+				return int(level - '0')
+			}
+		}
+	}
+	return 0
+}
+
+// getFilteredLines returns lines filtered by minimum log level.
+func (m *LogViewer) getFilteredLines() []string {
+	if m.minLevel <= 1 {
+		return m.lines
+	}
+
+	var filtered []string
+	for _, line := range m.lines {
+		level := getLogLevel(line)
+		// Show line if level is 0 (no level found) or >= minLevel
+		if level == 0 || level >= m.minLevel {
+			filtered = append(filtered, line)
+		}
+	}
+	return filtered
+}
+
 // getDisplayLines returns lines to display, handling word wrap if enabled.
 func (m *LogViewer) getDisplayLines() []string {
+	lines := m.getFilteredLines()
+
 	if !m.wordWrap || m.width <= 0 {
-		return m.lines
+		return lines
 	}
 
 	// Word wrap mode: wrap long lines
 	var wrapped []string
-	for _, line := range m.lines {
+	for _, line := range lines {
 		if len(line) <= m.width {
 			wrapped = append(wrapped, line)
 		} else {
@@ -252,6 +300,9 @@ func (m *LogViewer) View() string {
 	if m.wordWrap {
 		status += " [WRAP]"
 	}
+	if m.minLevel > 1 {
+		status += fmt.Sprintf(" [L%d+]", m.minLevel)
+	}
 	if status == "" {
 		status = " "
 	} else {
@@ -265,7 +316,7 @@ func (m *LogViewer) View() string {
 	}
 
 	// Keybindings hint
-	hint := "↑↓←→:scroll s:tail w:wrap g/G:top/end q:close"
+	hint := "↑↓←→:scroll s:tail w:wrap l:level g/G:top/end q:close"
 	padding := m.width - len(status) - len(hint)
 	if padding < 0 {
 		padding = 0

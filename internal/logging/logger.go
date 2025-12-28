@@ -51,7 +51,7 @@ type Timer struct {
 func (t *Timer) Stop() time.Duration {
 	elapsed := time.Since(t.start)
 	if t.logger != nil {
-		t.logger.logWithLevel("INFO", "%s completed in %v", t.operation, elapsed)
+		t.logger.logWithLevel("L2", "%s completed in %v", t.operation, elapsed)
 	}
 	return elapsed
 }
@@ -61,10 +61,10 @@ func (t *Timer) StopWithResult(success bool, detail string) time.Duration {
 	elapsed := time.Since(t.start)
 	if t.logger != nil {
 		status := "completed"
-		level := "INFO"
+		level := "L2"
 		if !success {
 			status = "failed"
-			level = "WARN"
+			level = "L3"
 		}
 		if detail != "" {
 			t.logger.logWithLevel(level, "%s %s in %v: %s", t.operation, status, elapsed, detail)
@@ -160,7 +160,7 @@ func (l *fileLogger) logWithLevel(level string, format string, args ...interface
 	caller := getCaller(3) // Skip logWithLevel, the public method, and the caller
 
 	// Format: [timestamp] [level] [context] [caller] message
-	line := fmt.Sprintf("[%s] [%-5s] [%s] [%s] %s\n", timestamp, level, context, caller, msg)
+	line := fmt.Sprintf("[%s] [%s] [%s] [%s] %s\n", timestamp, level, context, caller, msg)
 	if _, err := l.file.WriteString(line); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to write to log file: %v\n", err)
 	}
@@ -176,22 +176,22 @@ func (l *fileLogger) Debug(format string, args ...interface{}) {
 
 	msg := fmt.Sprintf(format, args...)
 	caller := getCaller(2)
-	fmt.Fprintf(os.Stderr, "[DEBUG] [%s] %s\n", caller, msg)
+	fmt.Fprintf(os.Stderr, "[L1] [%s] %s\n", caller, msg)
 
 	if l.file != nil {
 		timestamp := time.Now().Format("06-01-02 15:04:05.0")
 		context := l.getContext()
-		line := fmt.Sprintf("[%s] [DEBUG] [%s] [%s] %s\n", timestamp, context, caller, msg)
+		line := fmt.Sprintf("[%s] [L1] [%s] [%s] %s\n", timestamp, context, caller, msg)
 		l.file.WriteString(line)
 	}
 }
 
 func (l *fileLogger) Log(format string, args ...interface{}) {
-	l.logWithLevel("INFO", format, args...)
+	l.logWithLevel("L2", format, args...)
 }
 
 func (l *fileLogger) Info(format string, args ...interface{}) {
-	l.logWithLevel("INFO", format, args...)
+	l.logWithLevel("L2", format, args...)
 }
 
 func (l *fileLogger) Warn(format string, args ...interface{}) {
@@ -205,7 +205,7 @@ func (l *fileLogger) Warn(format string, args ...interface{}) {
 		timestamp := time.Now().Format("06-01-02 15:04:05.0")
 		context := l.getContext()
 		caller := getCaller(2)
-		line := fmt.Sprintf("[%s] [WARN ] [%s] [%s] %s\n", timestamp, context, caller, msg)
+		line := fmt.Sprintf("[%s] [L3] [%s] [%s] %s\n", timestamp, context, caller, msg)
 		l.file.WriteString(line)
 	}
 }
@@ -221,7 +221,7 @@ func (l *fileLogger) Error(format string, args ...interface{}) {
 		timestamp := time.Now().Format("06-01-02 15:04:05.0")
 		context := l.getContext()
 		caller := getCaller(2)
-		line := fmt.Sprintf("[%s] [ERROR] [%s] [%s] %s\n", timestamp, context, caller, msg)
+		line := fmt.Sprintf("[%s] [L4] [%s] [%s] %s\n", timestamp, context, caller, msg)
 		l.file.WriteString(line)
 	}
 }
@@ -229,7 +229,7 @@ func (l *fileLogger) Error(format string, args ...interface{}) {
 func (l *fileLogger) StartTimer(operation string) *Timer {
 	// Log start only if file is available
 	if l.file != nil {
-		l.logWithLevel("INFO", "%s started", operation)
+		l.logWithLevel("L2", "%s started", operation)
 	}
 	return &Timer{
 		operation: operation,
