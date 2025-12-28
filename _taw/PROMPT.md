@@ -48,6 +48,18 @@ Claude Code가 Plan Mode로 시작됩니다. **코드 작성 전에 반드시 Pl
 Plan을 세우면서 유저가 선택해야 할 구현 방식이 있다면 AskUserQuestion으로 질문하세요.
 선택지가 없다면 질문 없이 바로 ExitPlanMode로 진행해도 됩니다.
 
+**⚠️ 질문 시 윈도우 상태 변경 (CRITICAL)**:
+질문을 하고 사용자 응답을 기다릴 때는 반드시 윈도우 상태를 💬로 변경하세요.
+```bash
+# 질문 전 - 대기 상태로 변경
+tmux rename-window "💬${TASK_NAME:0:12}"
+```
+사용자 응답을 받고 작업을 재개할 때 🤖로 되돌리세요.
+```bash
+# 응답 받은 후 - 작업 상태로 변경
+tmux rename-window "🤖${TASK_NAME:0:12}"
+```
+
 **언제 질문할까?**
 - ✅ 구현 방식에 여러 선택지가 있을 때 (예: "A 방식 vs B 방식")
 - ✅ 라이브러리/도구 선택이 필요할 때
@@ -57,25 +69,14 @@ Plan을 세우면서 유저가 선택해야 할 구현 방식이 있다면 AskUs
 
 **예시 - 선택지가 있는 경우:**
 
+```bash
+# 1. 질문 전 윈도우 상태를 💬로 변경
+tmux rename-window "💬${TASK_NAME:0:12}"
+```
+
 ```
 AskUserQuestion:
   questions:
-    - question: |
-        ## 📋 작업 계획
-
-        1. API 클라이언트 구현
-        2. 캐시 레이어 추가
-        3. 테스트 작성
-
-        **검증**: `go test ./...`
-      header: "Plan"
-      multiSelect: false
-      options:
-        - label: "진행"
-          description: "이 계획대로 작업합니다"
-        - label: "수정 필요"
-          description: "계획을 수정해주세요"
-
     - question: "캐시 방식은 어떤 걸로 할까요?"
       header: "Cache"
       multiSelect: false
@@ -86,6 +87,11 @@ AskUserQuestion:
           description: "간단하지만 앱 재시작 시 초기화"
         - label: "파일 기반"
           description: "영속성 있음, 분산 환경 부적합"
+```
+
+```bash
+# 2. 응답 받은 후 다시 🤖로 변경
+tmux rename-window "🤖${TASK_NAME:0:12}"
 ```
 
 **예시 - 선택지가 없는 경우 (질문 불필요):**
@@ -270,10 +276,15 @@ Window ID는 이미 `$WINDOW_ID` 환경변수로 설정되어 있습니다:
 
 ```bash
 # tmux 명령어로 직접 상태 변경 (tmux 세션 내에서)
-tmux rename-window "🤖${TASK_NAME:0:12}"  # Working
-tmux rename-window "💬${TASK_NAME:0:12}"  # Need help
-tmux rename-window "✅${TASK_NAME:0:12}"  # Done
+tmux rename-window "🤖${TASK_NAME:0:12}"  # Working - 작업 중
+tmux rename-window "💬${TASK_NAME:0:12}"  # Waiting - 사용자 응답 대기 중
+tmux rename-window "✅${TASK_NAME:0:12}"  # Done - 완료
 ```
+
+**💬 상태로 변경해야 하는 경우:**
+- AskUserQuestion으로 질문할 때 (질문 전 변경!)
+- 자동 검증 불가로 사용자 확인이 필요할 때
+- 에러 3회 실패로 사용자 도움이 필요할 때
 
 ---
 
@@ -286,7 +297,7 @@ tmux rename-window "✅${TASK_NAME:0:12}"  # Done
 - 커밋 단위와 메시지
 - PR 제목과 내용
 
-**사용자에게 질문:**
+**사용자에게 질문** (질문 전 `tmux rename-window "💬..."` 필수!):
 - 요구사항이 명확히 모호할 때
 - 여러 방식 중 trade-off가 클 때
 - 외부 접근/인증 필요할 때
