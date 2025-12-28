@@ -400,6 +400,11 @@ exec "%s" internal end-task "%s" "%s"
 		// Wait a bit more for Claude to be fully ready
 		time.Sleep(500 * time.Millisecond)
 
+		// Clear scrollback history before sending task instruction
+		if err := tm.ClearHistory(windowID + ".0"); err != nil {
+			logging.Debug("Failed to clear history: %v", err)
+		}
+
 		// Send task instruction - tell Claude to read from file
 		taskInstruction := fmt.Sprintf("ultrathink Read and execute the task from '%s'", t.GetUserPromptPath())
 		logging.Log("Sending task instruction: length=%d", len(taskInstruction))

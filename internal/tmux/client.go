@@ -39,6 +39,7 @@ type Client interface {
 	SendKeys(target string, keys ...string) error
 	SendKeysLiteral(target, text string) error
 	CapturePane(target string, lines int) (string, error)
+	ClearHistory(target string) error
 
 	// Display popup
 	DisplayPopup(opts PopupOpts, command string) error
@@ -384,6 +385,10 @@ func (c *tmuxClient) CapturePane(target string, lines int) (string, error) {
 		args = append(args, "-S", fmt.Sprintf("-%d", lines))
 	}
 	return c.RunWithOutput(args...)
+}
+
+func (c *tmuxClient) ClearHistory(target string) error {
+	return c.Run("clear-history", "-t", target)
 }
 
 // Display popup
