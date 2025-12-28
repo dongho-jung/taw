@@ -863,12 +863,13 @@ var popupShellCmd = &cobra.Command{
 				cleanupCmd)
 		}
 
-		// Create shell pane at bottom 40%
+		// Create shell pane at bottom 40% spanning full window width
 		newPaneID, err := tm.SplitWindowPane(tmux.SplitOpts{
 			Horizontal: false, // vertical split (top/bottom)
 			Size:       "40%",
 			StartDir:   panePath,
 			Command:    shellCmd,
+			Full:       true, // span entire window width
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create shell pane: %w", err)

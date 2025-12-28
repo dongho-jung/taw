@@ -107,6 +107,7 @@ type SplitOpts struct {
 	StartDir   string // -c flag: working directory
 	Command    string // Command to run in the new pane
 	Before     bool   // -b flag: create pane before target
+	Full       bool   // -f flag: full-width/height split spanning entire window
 }
 
 // Window represents a tmux window.
@@ -340,6 +341,10 @@ func (c *tmuxClient) SplitWindowPane(opts SplitOpts) (string, error) {
 
 	if opts.Before {
 		args = append(args, "-b")
+	}
+
+	if opts.Full {
+		args = append(args, "-f")
 	}
 
 	if opts.Command != "" {
