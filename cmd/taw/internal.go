@@ -136,7 +136,7 @@ var newTaskCmd = &cobra.Command{
 
 			// Create task with spinner
 			var newTask *task.Task
-			spinner := tui.NewSpinner("태스크 이름 생성 중...")
+			spinner := tui.NewSpinner("Generating task name...")
 			p := tea.NewProgram(spinner)
 
 			// Run task creation in background
@@ -307,29 +307,29 @@ var handleTaskCmd = &cobra.Command{
 		userPrompt.WriteString(fmt.Sprintf("**End-Task Script**: %s\n\n", endTaskScriptPath))
 
 		// Add Plan Mode instructions (always shown since we start in plan mode)
-		userPrompt.WriteString("## 📋 PLAN MODE (필수)\n\n")
+		userPrompt.WriteString("## 📋 PLAN MODE (Required)\n\n")
 		userPrompt.WriteString("You are starting in **Plan Mode**. Before writing any code:\n\n")
-		userPrompt.WriteString("1. **프로젝트 분석**: 빌드/테스트 명령어 파악\n")
-		userPrompt.WriteString("2. **Plan 작성** - 반드시 다음 포함:\n")
-		userPrompt.WriteString("   - 작업 단계\n")
-		userPrompt.WriteString("   - **✅ 성공 검증 방법** (자동 검증 가능 여부 명시)\n")
-		userPrompt.WriteString("3. Plan 승인 후 작업 시작\n\n")
+		userPrompt.WriteString("1. **Project analysis**: Identify build/test commands.\n")
+		userPrompt.WriteString("2. **Write the Plan** including:\n")
+		userPrompt.WriteString("   - Implementation steps\n")
+		userPrompt.WriteString("   - **✅ How to validate success** (state whether automated verification is possible)\n")
+		userPrompt.WriteString("3. Start implementation after the plan is ready.\n\n")
 
 		// Add critical instruction for auto-merge mode
 		if app.Config.OnComplete == config.OnCompleteAutoMerge {
-			userPrompt.WriteString("## ⚠️ AUTO-MERGE MODE (조건부)\n\n")
-			userPrompt.WriteString("**검증 성공 시에만 auto-merge 실행!**\n\n")
-			userPrompt.WriteString("✅ **Auto-merge 허용 조건**:\n")
-			userPrompt.WriteString("- Plan에서 '자동 검증 가능'으로 명시\n")
-			userPrompt.WriteString("- 빌드/테스트/린트 모두 통과\n\n")
-			userPrompt.WriteString("❌ **Auto-merge 금지 → 💬 상태로 전환**:\n")
-			userPrompt.WriteString("- 자동 검증 불가 (UI 변경, 문서, 설정 등)\n")
-			userPrompt.WriteString("- 테스트 없음 또는 관련 테스트 없음\n")
-			userPrompt.WriteString("- 검증 실패\n\n")
-			userPrompt.WriteString("**검증 성공 시**:\n")
-			userPrompt.WriteString(fmt.Sprintf("→ `%s` 실행\n\n", endTaskScriptPath))
-			userPrompt.WriteString("**검증 불가/실패 시**:\n")
-			userPrompt.WriteString("→ `tmux rename-window \"💬...\"` 후 사용자 확인 대기\n\n")
+			userPrompt.WriteString("## ⚠️ AUTO-MERGE MODE (conditional)\n\n")
+			userPrompt.WriteString("**Run auto-merge only after verification succeeds.**\n\n")
+			userPrompt.WriteString("✅ **Auto-merge allowed when:**\n")
+			userPrompt.WriteString("- The Plan marks the change as automatically verifiable\n")
+			userPrompt.WriteString("- Build/tests/lint all pass\n\n")
+			userPrompt.WriteString("❌ **Do NOT auto-merge → switch to 💬 when:**\n")
+			userPrompt.WriteString("- Automated verification is not possible (UI/docs/config changes, etc.)\n")
+			userPrompt.WriteString("- Tests are missing or not relevant\n")
+			userPrompt.WriteString("- Verification fails\n\n")
+			userPrompt.WriteString("**If verification succeeds:**\n")
+			userPrompt.WriteString(fmt.Sprintf("→ Run `%s`\n\n", endTaskScriptPath))
+			userPrompt.WriteString("**If verification is impossible or fails:**\n")
+			userPrompt.WriteString("→ `tmux rename-window \"💬...\"` and wait for user review\n\n")
 		}
 
 		userPrompt.WriteString("---\n\n")

@@ -30,98 +30,98 @@ $TAW_DIR/agents/$TASK_NAME/
 
 ---
 
-## ⚠️ 계획 단계 (CRITICAL - 반드시 먼저 실행)
+## ⚠️ Planning Stage (CRITICAL - do this first)
 
-**코드 작성 전에 반드시 Plan을 세우세요.**
+**Always create a Plan before writing code.**
 
-### 진행 순서
+### Flow
 
-1. **프로젝트 분석**: 코드베이스, 빌드/테스트 명령어 파악
-2. **Plan 작성**: 작업 단계와 검증 방법 정리
-3. **(선택) 구현 선택지가 있으면 AskUserQuestion으로 질문**
-4. **바로 구현 시작** (별도의 승인/전환 단계 없음)
+1. **Project analysis**: Understand the codebase and build/test commands.
+2. **Write the Plan**: Outline implementation steps and verification.
+3. **Optional**: If implementation choices exist, ask via AskUserQuestion.
+4. **Start implementation immediately** (no extra approval/transition).
 
-### AskUserQuestion 사용 (선택사항)
+### AskUserQuestion usage (optional)
 
-**💡 핵심 원칙: 구현 선택지가 있을 때만 물어보기**
+**💡 Principle: ask only when the user must choose an implementation path.**
 
-Plan을 세우면서 유저가 선택해야 할 구현 방식이 있다면 AskUserQuestion으로 질문하세요.
-선택지가 없다면 질문 없이 바로 구현을 시작하세요.
+If the Plan reveals options the user must pick, ask via AskUserQuestion.
+If there are no options, start implementation without asking.
 
-**⚠️ 질문 시 윈도우 상태 변경 (CRITICAL)**:
-질문을 하고 사용자 응답을 기다릴 때는 반드시 윈도우 상태를 💬로 변경하세요.
+**⚠️ Change window state when asking (CRITICAL):**
+When you ask and wait for a reply, switch the window state to 💬.
 ```bash
-# 질문 전 - 대기 상태로 변경
+# Before asking - set to waiting
 tmux rename-window "💬${TASK_NAME:0:12}"
 ```
-사용자 응답을 받고 작업을 재개할 때 🤖로 되돌리세요.
+Switch back to 🤖 when you resume work.
 ```bash
-# 응답 받은 후 - 작업 상태로 변경
+# After receiving a response - set to working
 tmux rename-window "🤖${TASK_NAME:0:12}"
 ```
 
-**언제 질문할까?**
-- ✅ 구현 방식에 여러 선택지가 있을 때 (예: "A 방식 vs B 방식")
-- ✅ 라이브러리/도구 선택이 필요할 때
-- ✅ 아키텍처 결정이 필요할 때
-- ❌ 단순 승인만 필요할 때 → 질문 없이 바로 구현
-- ❌ "커밋 할까요?", "진행할까요?" 같은 당연한 질문 → 불필요
+**When should you ask?**
+- ✅ When multiple implementation options exist (e.g., "Approach A vs B")
+- ✅ When a library/tool choice is needed
+- ✅ When an architecture decision is required
+- ❌ When only simple approval is needed → proceed without asking
+- ❌ Obvious questions like "Should I commit?" → unnecessary
 
-**예시 - 선택지가 있는 경우:**
+**Example – options exist:**
 
 ```bash
-# 1. 질문 전 윈도우 상태를 💬로 변경
+# 1. Switch window to 💬 before asking
 tmux rename-window "💬${TASK_NAME:0:12}"
 ```
 
 ```
 AskUserQuestion:
   questions:
-    - question: "캐시 방식은 어떤 걸로 할까요?"
+    - question: "Which caching strategy should we use?"
       header: "Cache"
       multiSelect: false
       options:
         - label: "Redis (Recommended)"
-          description: "분산 환경에 적합, 별도 서버 필요"
+          description: "Great for distributed setups; requires a separate server"
         - label: "In-memory"
-          description: "간단하지만 앱 재시작 시 초기화"
-        - label: "파일 기반"
-          description: "영속성 있음, 분산 환경 부적합"
+          description: "Simple but resets when the app restarts"
+        - label: "File-based"
+          description: "Persistent but not suitable for distributed environments"
 ```
 
 ```bash
-# 2. 응답 받은 후 다시 🤖로 변경
+# 2. Switch back to 🤖 after receiving the answer
 tmux rename-window "🤖${TASK_NAME:0:12}"
 ```
 
-**예시 - 선택지가 없는 경우 (질문 불필요):**
+**Example – no options (no question):**
 
-작업이 명확하고 선택지가 없다면, 질문 없이 바로 구현을 시작하세요.
+If the work is clear and there are no choices to make, start immediately without asking.
 ```
-# 계획만 설명하고 바로 구현
-"1. 버그 수정 2. 테스트 추가. 검증: go test. 바로 시작합니다."
-→ 구현 시작 (별도 승인 단계 없음)
+# Explain the plan and start
+"1. Fix the bug 2. Add tests. Verification: go test. Starting now."
+→ Begin implementation (no extra approval)
 ```
 
-**⚠️ 불필요한 질문/승인 피하기:**
-- 승인/수정만 물어보는 단순 질문 (선택지 없으면 바로 진행) ❌
-- 같은 내용을 여러 질문으로 나누기 ❌
-- 당연한 것 물어보기 (예: "커밋 할까요?") ❌
-- **ExitPlanMode 호출 ❌** (TAW는 이 도구를 사용하지 않음)
+**⚠️ Avoid unnecessary questions/approvals:**
+- Do not ask simple approval-only questions when there is no choice. ❌
+- Do not split the same topic into multiple questions. ❌
+- Do not ask obvious things (e.g., "Should I commit?"). ❌
+- **Do not call ExitPlanMode.** TAW does not use this tool.
 
-### 검증 가능 여부 판단 기준
+### Determine if automated verification is possible
 
-**자동 검증 가능 (✅ auto-merge 허용)**:
-- 프로젝트에 테스트가 있고 관련 테스트를 실행할 수 있음
-- 빌드/컴파일 명령어로 성공 여부 확인 가능
-- 린트/타입체크 등 자동화된 검증 도구 있음
+**Automated verification possible (✅ auto-merge allowed):**
+- Tests exist and can be run for the change.
+- Build/compile commands can confirm success.
+- Automated checks like lint/typecheck are available.
 
-**자동 검증 불가 (💬 상태로 전환)**:
-- 테스트가 없거나 해당 변경에 대한 테스트 불가
-- 시각적 확인이 필요한 UI 변경
-- 사용자 상호작용이 필요한 기능
-- 외부 시스템과의 연동
-- 성능/동작 확인이 필요한 변경
+**Automated verification not possible (switch to 💬):**
+- No tests, or tests cannot cover the change.
+- UI changes requiring visual confirmation.
+- Features requiring user interaction.
+- Integrations with external systems.
+- Changes needing performance/behavior validation.
 
 ---
 
@@ -132,97 +132,97 @@ tmux rename-window "🤖${TASK_NAME:0:12}"
 2. Analyze project (package.json, Makefile, Cargo.toml, etc.)
 3. Identify build/test commands
 4. **Write Plan** including:
-   - 작업 단계
-   - **성공 검증 방법** (자동 검증 가능 여부 명시)
-5. (선택) 구현 선택지가 있으면 AskUserQuestion으로 질문
-6. **바로 구현 시작** (ExitPlanMode 호출하지 않음!)
+   - Work steps
+   - **How to validate success** (state whether automated verification is possible)
+5. Optional: Ask via AskUserQuestion if implementation choices exist
+6. **Start implementing immediately** (do not call ExitPlanMode!)
 
 ### Phase 2: Execute
 1. Make changes incrementally
 2. **After each logical change:**
    - Run tests if available → fix failures
-   - Commit with clear message
+   - Commit with a clear message
    - Log progress
 
 ### Phase 3: Verify & Complete
-1. **Plan에서 정의한 검증 방법 실행**
-2. 검증 결과에 따라:
-   - ✅ **모든 자동 검증 통과** → `$ON_COMPLETE`에 따라 진행
-   - ❌ **검증 실패** → 수정 후 재시도 (최대 3회)
-   - 💬 **자동 검증 불가** → 💬 상태로 전환, 사용자 확인 요청
+1. **Run the verification defined in the Plan.**
+2. Based on the result:
+   - ✅ **All automated checks pass** → proceed according to `$ON_COMPLETE`
+   - ❌ **Verification fails** → fix and retry (up to 3 times)
+   - 💬 **Automated verification not possible** → switch to 💬 and ask the user to review
 3. Log completion
 
 ---
 
-## 자동 실행 규칙 (CRITICAL)
+## Automatic execution rules (CRITICAL)
 
-### 코드 변경 후 자동 실행
+### After code changes
 ```
-변경 → 테스트 실행 → 실패 시 수정 → 성공 시 커밋
+Change → run tests → fix failures → commit when successful
 ```
 
-- 테스트 프레임워크 감지: package.json(npm test), Cargo.toml(cargo test), pytest, go test, make test
-- 테스트 실패: 에러 분석 → 수정 시도 → 재실행 (최대 3회)
-- 테스트 성공: conventional commit으로 커밋 (feat/fix/refactor/docs/test/chore)
+- Test framework detection: package.json (npm test), Cargo.toml (cargo test), pytest, go test, make test
+- On test failure: analyze error → attempt fix → rerun (up to 3 attempts)
+- On success: commit with a conventional commit type (feat/fix/refactor/docs/test/chore)
 
-### 작업 완료 시 자동 실행 (ON_COMPLETE 설정에 따라 다름)
+### On task completion (depends on ON_COMPLETE)
 
-**CRITICAL: `$ON_COMPLETE` 환경변수를 확인하고 해당 모드에 맞게 동작하세요!**
+**CRITICAL: Check the `$ON_COMPLETE` environment variable and follow its mode!**
 
 ```bash
-echo "ON_COMPLETE=$ON_COMPLETE"  # 먼저 확인
+echo "ON_COMPLETE=$ON_COMPLETE"  # Check first
 ```
 
-#### `auto-merge` 모드 (조건부 자동)
+#### `auto-merge` mode (conditional automation)
 
-**⚠️ CRITICAL: auto-merge는 검증 성공 시에만 실행!**
+**⚠️ CRITICAL: Only run auto-merge when verification succeeds!**
 
 ```
-검증 실행 → 성공? → 커밋 → push → end-task 호출
-                 ↓ 실패 또는 검증 불가
-              💬 상태로 전환
+Run verification → success? → commit → push → call end-task
+                   ↓ failure or verification impossible
+                Switch to 💬
 ```
 
-**auto-merge 실행 조건 (모두 충족해야 함)**:
-1. ✅ Plan에서 "자동 검증 가능"으로 명시한 경우
-2. ✅ 빌드 성공 (빌드 명령어가 있는 경우)
-3. ✅ 테스트 통과 (테스트가 있는 경우)
-4. ✅ 린트/타입체크 통과 (있는 경우)
+**auto-merge requirements (all must hold):**
+1. ✅ Plan marks the change as "automatically verifiable."
+2. ✅ Build succeeds (when a build command exists).
+3. ✅ Tests pass (when tests exist).
+4. ✅ Lint/typecheck passes (when available).
 
-**auto-merge 금지 (💬 상태로 전환)**:
-- ❌ Plan에서 "자동 검증 불가"로 명시한 경우
-- ❌ 테스트가 없거나 해당 변경에 대한 테스트가 없는 경우
-- ❌ UI/UX 변경, 설정 변경, 문서 변경 등 눈으로 확인 필요한 경우
-- ❌ 검증 과정에서 실패가 발생한 경우
+**Do not auto-merge (switch to 💬) if:**
+- ❌ Plan marks the change as "not automatically verifiable."
+- ❌ Tests are missing or do not cover the change.
+- ❌ UI/UX, configuration, or docs changes that need visual review.
+- ❌ Any verification step fails.
 
-**검증 성공 시 auto-merge 진행**:
-1. 모든 변경사항 커밋
+**When verification succeeds, run auto-merge:**
+1. Commit all changes.
 2. `git push -u origin $TASK_NAME`
-3. Log: "검증 완료 - end-task 호출"
-4. **end-task 호출** - 태스크 시작 시 받은 **End-Task Script** 경로의 절대경로를 사용:
-   - user prompt에 **End-Task Script** 경로가 있습니다 (예: `/path/to/.taw/agents/task-name/end-task`)
-   - 이 절대 경로를 그대로 bash에서 실행하세요
-   - 예: `/Users/xxx/projects/yyy/.taw/agents/my-task/end-task`
+3. Log: "Verification complete - invoking end-task"
+4. **Call end-task** using the absolute **End-Task Script** path provided when the task started:
+   - The user prompt includes the End-Task Script path (e.g., `/path/to/.taw/agents/task-name/end-task`).
+   - Execute that absolute path directly in bash.
+   - Example: `/Users/xxx/projects/yyy/.taw/agents/my-task/end-task`
 
-**검증 불가 또는 실패 시 💬 상태로 전환**:
-1. 모든 변경사항 커밋
+**If verification is impossible or fails → switch to 💬:**
+1. Commit all changes.
 2. `git push -u origin $TASK_NAME`
 3. `tmux rename-window "💬${TASK_NAME:0:12}"`
-4. Log: "작업 완료 - 사용자 확인 필요 (검증 불가/실패)"
-5. 사용자에게 메시지: "검증이 필요합니다. 확인 후 ⌥e를 눌러 완료하세요."
+4. Log: "Work complete - user review required (verification unavailable/failed)"
+5. Message the user: "Verification is needed. Please review and press ⌥e to finish."
 
-**CRITICAL**:
-- `auto-merge`에서는 PR 생성 안 함! end-task가 자동으로 main에 merge하고 정리합니다.
-- 반드시 절대 경로를 사용하세요. 환경변수(`$TAW_DIR` 등)는 bash에서 사용할 수 없습니다.
-- **검증 없이 auto-merge 절대 금지!** 확실하지 않으면 💬 상태로 두세요.
+**CRITICAL:**
+- In `auto-merge` mode, do **not** create a PR. end-task merges to main and cleans up.
+- Always use absolute paths. Environment variables (`$TAW_DIR`, etc.) are not available inside bash for this call.
+- **Never auto-merge without verification.** If uncertain, stay in 💬.
 
-#### `auto-pr` 모드
+#### `auto-pr` mode
 ```
-커밋 → push → PR 생성 → 상태 업데이트
+Commit → push → create PR → update status
 ```
-1. 모든 변경사항 커밋
+1. Commit all changes.
 2. `git push -u origin $TASK_NAME`
-3. PR 생성:
+3. Create PR:
    ```bash
    gh pr create --title "type: description" --body "## Summary
    - changes
@@ -231,41 +231,41 @@ echo "ON_COMPLETE=$ON_COMPLETE"  # 먼저 확인
    - [x] Tests passed"
    ```
 4. `tmux rename-window -t $WINDOW_ID "✅..."`
-5. PR 번호 저장: `gh pr view --json number -q '.number' > $TAW_DIR/agents/$TASK_NAME/.pr`
-6. Log: "작업 완료 - PR #N 생성"
+5. Save PR number: `gh pr view --json number -q '.number' > $TAW_DIR/agents/$TASK_NAME/.pr`
+6. Log: "Work complete - created PR #N"
 
-#### `auto-commit` 또는 `confirm` 모드
+#### `auto-commit` or `confirm` mode
 ```
-커밋 → push → 상태 업데이트 (PR/머지 없음)
+Commit → push → update status (no PR/merge)
 ```
-1. 모든 변경사항 커밋
+1. Commit all changes.
 2. `git push -u origin $TASK_NAME`
 3. `tmux rename-window -t $WINDOW_ID "✅..."`
-4. Log: "작업 완료 - 브랜치 push됨"
+4. Log: "Work complete - branch pushed"
 
-### 에러 발생 시 자동 실행
-- **빌드 에러**: 에러 메시지 분석 → 수정 시도
-- **테스트 실패**: 실패 원인 분석 → 수정 → 재실행
-- **3회 실패**: 상태를 💬로 변경, 사용자에게 도움 요청
+### Automatic handling on errors
+- **Build error**: Analyze the message → attempt a fix.
+- **Test failure**: Analyze the cause → fix → rerun.
+- **3 failures**: Switch to 💬 and ask the user for help.
 
 ---
 
 ## Progress Logging
 
-**매 작업 후 즉시 로그:**
+**Log immediately after each action:**
 ```bash
-echo "진행 상황" >> $TAW_DIR/agents/$TASK_NAME/log
+echo "Progress update" >> $TAW_DIR/agents/$TASK_NAME/log
 ```
 
-예시:
+Example:
 ```
-프로젝트 분석: Next.js + Jest
+Project analysis: Next.js + Jest
 ------
-UserService 이메일 검증 추가
+Added email validation to UserService
 ------
-테스트 3개 추가, 모두 통과
+Added 3 tests, all passing
 ------
-PR #42 생성 완료
+Created PR #42
 ------
 ```
 
@@ -273,59 +273,59 @@ PR #42 생성 완료
 
 ## Window Status
 
-Window ID는 이미 `$WINDOW_ID` 환경변수로 설정되어 있습니다:
+Window ID is already stored in the `$WINDOW_ID` environment variable:
 
 ```bash
-# tmux 명령어로 직접 상태 변경 (tmux 세션 내에서)
-tmux rename-window "🤖${TASK_NAME:0:12}"  # Working - 작업 중
-tmux rename-window "💬${TASK_NAME:0:12}"  # Waiting - 사용자 응답 대기 중
-tmux rename-window "✅${TASK_NAME:0:12}"  # Done - 완료
+# Update status directly via tmux (inside the tmux session)
+tmux rename-window "🤖${TASK_NAME:0:12}"  # Working - in progress
+tmux rename-window "💬${TASK_NAME:0:12}"  # Waiting - awaiting user response
+tmux rename-window "✅${TASK_NAME:0:12}"  # Done - completed
 ```
 
-**💬 상태로 변경해야 하는 경우:**
-- AskUserQuestion으로 질문할 때 (질문 전 변경!)
-- 자동 검증 불가로 사용자 확인이 필요할 때
-- 에러 3회 실패로 사용자 도움이 필요할 때
+**Switch to 💬 when:**
+- You ask a question via AskUserQuestion (switch before asking).
+- Automated verification is not possible and user confirmation is needed.
+- You hit 3 failed attempts and need user help.
 
 ---
 
 ## Decision Guidelines
 
-**스스로 결정:**
-- 구현 방식 선택
-- 파일 구조 결정
-- 테스트 작성 여부
-- 커밋 단위와 메시지
-- PR 제목과 내용
+**Decide on your own:**
+- Implementation approach
+- File structure
+- Whether to add tests
+- Commit granularity and messages
+- PR title and content
 
-**사용자에게 질문** (질문 전 `tmux rename-window "💬..."` 필수!):
-- 요구사항이 명확히 모호할 때
-- 여러 방식 중 trade-off가 클 때
-- 외부 접근/인증 필요할 때
-- 작업 범위가 이상할 때
+**Ask the user** (switch to `tmux rename-window "💬..."` first):
+- When requirements are unclear
+- When trade-offs between options are significant
+- When external access/authentication is needed
+- When the scope seems off
 
 ---
 
-## Slash Commands (수동 실행용)
+## Slash Commands (manual use)
 
-자동 실행이 기본이지만, 필요 시 수동으로 호출 가능:
+Automatic execution is the default, but you can invoke commands manually if needed:
 
 | Command | Description |
 |---------|-------------|
-| `/commit` | 수동 커밋 (메시지 자동 생성) |
-| `/test` | 수동 테스트 실행 |
-| `/pr` | 수동 PR 생성 |
-| `/merge` | main에 머지 (PROJECT_DIR에서) |
+| `/commit` | Manual commit (auto-generates the message) |
+| `/test` | Manually run tests |
+| `/pr` | Manually create a PR |
+| `/merge` | Merge into main (run from PROJECT_DIR) |
 
-**태스크 종료**:
-- `auto-merge` 모드: 위에서 설명한 대로 end-task 호출하면 자동 완료
-- 다른 모드: 사용자가 `⌥ e`를 누르면 커밋 → PR/머지 → 정리 수행
+**Completing a task**:
+- `auto-merge` mode: Call end-task as described above to finish automatically.
+- Other modes: User presses `⌥ e` to commit → PR/merge → clean up.
 
 ---
 
 ## Handling Unrelated Requests
 
-현재 태스크와 무관한 요청:
+If a request is unrelated to the current task:
 > "This seems unrelated to `$TASK_NAME`. Press `⌥ n` to create a new task."
 
-작은 관련 수정(오타 등)은 현재 태스크에서 처리 가능.
+Small related fixes (typos, etc.) can be handled within the current task.

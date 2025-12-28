@@ -1,73 +1,73 @@
 # TAW (Tmux + Agent + Worktree)
 
-Claude Code 기반의 프로젝트 관리 시스템입니다.
+A project management system built on Claude Code.
 
-## 개요
+## Overview
 
-- 아무 디렉토리에서 `taw` 명령어로 tmux 세션 기반의 작업 환경을 시작합니다.
-- 태스크를 생성하면 자동으로 Claude Code agent가 시작됩니다.
-- **Git 모드**: git 레포에서 실행 시 태스크마다 worktree 자동 생성
-- **Non-Git 모드**: git 없이도 사용 가능 (worktree 없이 프로젝트 디렉토리에서 작업)
+- Start a tmux-based workspace from any directory with the `taw` command.
+- Creating a task automatically launches the Claude Code agent.
+- **Git mode**: Each task gets its own worktree when running in a git repo.
+- **Non-Git mode**: Works without git; tasks run in the project directory.
 
-## 사용법
+## Usage
 
-### 프로젝트에서 taw 시작
+### Start taw in a project
 
 ```bash
-cd /path/to/your/project  # git 레포 또는 일반 디렉토리
-taw  # .taw 디렉토리 생성 및 tmux 세션 시작 → 자동으로 new-task 실행
+cd /path/to/your/project  # git repo or regular directory
+taw  # Creates .taw, starts tmux session, and automatically runs new-task
 ```
 
-- git 레포에서 실행: Git 모드 (worktree 자동 생성)
-- 일반 디렉토리에서 실행: Non-Git 모드 (프로젝트 디렉토리에서 직접 작업)
+- In a git repo: Git mode (worktree created per task)
+- In a regular directory: Non-Git mode (works directly in the project directory)
 
-첫 시작 시 자동으로 태스크 작성 에디터가 열립니다.
+The first launch automatically opens the task editor.
 
-### 태스크 생성
+### Create a task
 
-추가 태스크 생성이 필요하면 tmux 세션 내에서 `⌥ n`을 누릅니다:
-- 에디터가 열리고 태스크 내용을 작성합니다
-- 저장하고 종료하면 자동으로 agent가 시작됩니다
-- vi/vim/nvim 사용 시 자동으로 insert 모드로 시작합니다
+To add another task inside the tmux session, press `⌥ n`:
+- The editor opens so you can write the task content.
+- Save and exit to automatically launch the agent.
+- vi/vim/nvim start in insert mode automatically.
 
 ### Slash Commands
 
-Agent가 사용할 수 있는 slash commands:
+Slash commands available to the agent:
 
-| Command | 설명 |
-|---------|------|
-| `/commit` | 스마트 커밋 (diff 분석 후 메시지 자동 생성) |
-| `/test` | 프로젝트 테스트 자동 감지 및 실행 |
-| `/pr` | PR 자동 생성 및 브라우저 열기 |
-| `/merge` | worktree 브랜치를 프로젝트의 현재 브랜치에 머지 |
+| Command | Description |
+|---------|-------------|
+| `/commit` | Smart commit (analyzes the diff and generates a message) |
+| `/test` | Detects and runs project tests |
+| `/pr` | Creates a PR and opens the browser |
+| `/merge` | Merges the worktree branch into the current project branch |
 
-**태스크 종료**:
-- `auto-merge` 모드: 태스크 완료 시 **자동으로** 커밋 → 머지 → 정리 → window 닫기 (⌥e 불필요)
-- 다른 모드: `⌥ e`를 누르면 ON_COMPLETE 설정에 따라 커밋 → PR/머지 → 정리 수행
+**Task completion**:
+- `auto-merge` mode: Automatically commit → merge → clean up → close the window when the task ends (no ⌥e needed)
+- Other modes: Press `⌥ e` to commit → PR/merge → clean up according to ON_COMPLETE
 
 <details>
-<summary>불완전한 태스크 자동 재오픈</summary>
+<summary>Automatically reopen incomplete tasks</summary>
 
-태스크가 완료되지 않은 상태에서 window가 닫히거나 tmux 세션이 종료된 경우, 다음에 `taw`를 실행하면 자동으로 해당 태스크들의 window를 다시 열어줍니다.
+If a task is left unfinished and the window or tmux session closes, the next `taw` run automatically reopens those task windows.
 </details>
 
 <details>
-<summary>머지된 태스크 자동 정리</summary>
+<summary>Automatically clean up merged tasks</summary>
 
-외부에서 머지된 태스크(PR 머지, 브랜치 직접 머지 등)는 `taw` 실행 시 자동으로 정리됩니다.
+Tasks merged externally (PR merge, direct branch merge, etc.) are cleaned up automatically when `taw` runs.
 </details>
 
-### Window 상태
+### Window states
 
-- 🤖 작업 중
-- 💬 대기 중 (사용자 입력 필요)
-- ✅ 완료
+- 🤖 Working
+- 💬 Waiting (user input required)
+- ✅ Done
 
-## 설정
+## Configuration
 
-### 초기 설정 (Initial Setup)
+### Initial setup
 
-처음 `taw`를 실행하면 설정 마법사가 나타납니다:
+When you first run `taw`, the setup wizard appears:
 
 ```
 🚀 TAW Setup Wizard
@@ -90,16 +90,16 @@ Select [1-4, default: 1]:
    On complete: confirm
 ```
 
-설정은 `.taw/config` 파일에 저장됩니다.
+Settings are saved to `.taw/config`.
 
-### 설정 재실행
+### Rerun setup
 
 ```bash
-taw setup  # 설정 마법사 다시 실행
+taw setup  # Rerun the setup wizard
 ```
 
 <details>
-<summary>설정 파일 (.taw/config) 예시</summary>
+<summary>Example config (.taw/config)</summary>
 
 ```
 # TAW Configuration
@@ -119,93 +119,93 @@ on_complete: confirm
 ```
 </details>
 
-### 설정 옵션
+### Configuration options
 
-| 설정 | 옵션 | 설명 |
-|------|------|------|
-| `work_mode` | `worktree` | 태스크마다 git worktree 생성 (격리, 권장) |
-|             | `main` | 현재 브랜치에서 직접 작업 (단순) |
-| `on_complete` | `confirm` | 각 작업 전 확인 (안전) |
-|               | `auto-commit` | 자동 커밋 (머지/PR은 수동) |
-|               | `auto-merge` | **태스크 완료 시 자동** 커밋 + 머지 + 정리 + window 닫기 (⌥e 불필요) |
-|               | `auto-pr` | 자동 커밋 + PR 생성 (팀 협업용) |
+| Setting | Option | Description |
+|---------|--------|-------------|
+| `work_mode` | `worktree` | Create a git worktree per task (isolated, recommended) |
+|             | `main` | Work directly on the current branch (simple) |
+| `on_complete` | `confirm` | Ask before each action (safe) |
+|               | `auto-commit` | Auto commit (merge/PR are manual) |
+|               | `auto-merge` | **Auto** commit + merge + clean up + close window at task completion (no ⌥e) |
+|               | `auto-pr` | Auto commit + create PR (team-friendly) |
 
 <details>
-<summary>기타 설정</summary>
+<summary>Other configuration</summary>
 
-- `_taw/PROMPT.md`: 시스템 프롬프트 (프로젝트 `.taw/.global-prompt`로 symlink됨)
-- `.taw/PROMPT.md`: 프로젝트별 프롬프트 (각 프로젝트 내)
-- `_taw/claude/commands/`: slash commands (프로젝트 `.taw/.claude`로 symlink됨)
-- `EDITOR` 환경변수: 태스크 작성 에디터 (기본: vim)
+- `_taw/PROMPT.md`: System prompt (symlinked to `.taw/.global-prompt` in projects)
+- `.taw/PROMPT.md`: Project-specific prompt (per project)
+- `_taw/claude/commands/`: Slash commands (symlinked to `.taw/.claude` in projects)
+- `EDITOR` environment variable: Editor for writing tasks (default: vim)
 </details>
 
-## 의존성
+## Dependencies
 
 ```bash
 brew install tmux gh
 ```
 
-## tmux 단축키
+## tmux shortcuts
 
-| 동작 | 단축키 |
-|------|--------|
-| Pane 순환 | `⌥ Tab` |
-| Window 이동 | `⌥ ←/→` |
-| new window 토글 | `⌥ n` (task ↔ new window) |
-| 태스크 완료 | `⌥ e` (user pane에서 진행상황 표시, commit → PR/merge → cleanup) |
-| 완료 태스크 일괄 머지 | `⌥ m` (✅ 상태 태스크 모두 merge + end) |
-| 쉘 pane 토글 | `⌥ p` (하단 40%, 현재 worktree에서 쉘 열기/닫기) |
-| 실시간 로그 | `⌥ l` (로그 뷰어 토글, vim-like 네비게이션 지원) |
-| 빠른 태스크 큐 추가 | `⌥ u` (현재 태스크 완료 후 자동 처리) |
-| 도움말 | `⌥ /` |
-| Session 나가기 | `⌥ q` (detach) |
+| Action | Shortcut |
+|--------|----------|
+| Cycle panes | `⌥ Tab` |
+| Move window | `⌥ ←/→` |
+| Toggle new window | `⌥ n` (task ↔ new window) |
+| Complete task | `⌥ e` (log progress in user pane, commit → PR/merge → cleanup) |
+| Merge all done tasks | `⌥ m` (merge + end all ✅ tasks) |
+| Toggle shell pane | `⌥ p` (bottom 40%, open/close shell in current worktree) |
+| Live log viewer | `⌥ l` (toggle log viewer, vim-like navigation) |
+| Add quick task to queue | `⌥ u` (auto-run after current task completes) |
+| Help | `⌥ /` |
+| Leave session | `⌥ q` (detach) |
 
-## 빠른 태스크 큐
+## Quick task queue
 
-작업 중에 떠오른 아이디어나 추가 작업을 빠르게 큐에 추가할 수 있습니다.
+Quickly capture ideas or follow-up work while you are busy.
 
-1. `⌥ u`를 누르면 팝업이 열립니다
-2. 태스크 내용을 입력하고 Enter
-3. 현재 태스크가 완료(`⌥ e`)되면 큐에 있는 태스크가 자동으로 시작됩니다
+1. Press `⌥ u` to open the popup.
+2. Enter the task description and hit Enter.
+3. When the current task finishes (`⌥ e`), queued tasks start automatically.
 
-큐 관리:
+Queue layout:
 ```bash
-.taw/.queue/      # 큐 디렉토리
-└── 001.task      # 대기 중인 태스크 파일
+.taw/.queue/      # Queue directory
+└── 001.task      # Pending task file
 ```
 
-## 로그 뷰어
+## Log viewer
 
-`⌥ l`을 누르면 실시간 로그 뷰어가 열립니다.
+Press `⌥ l` to open the live log viewer.
 
 <details>
-<summary>조작법</summary>
+<summary>Controls</summary>
 
-| 키 | 설명 |
-|----|------|
-| `↑` / `↓` | 세로 스크롤 |
-| `←` / `→` | 가로 스크롤 (word wrap 꺼져있을 때) |
-| `g` | 맨 위로 이동 |
-| `G` | 맨 아래로 이동 |
-| `PgUp` / `PgDn` | 페이지 단위 스크롤 |
-| `s` | Tail 모드 토글 (새 로그 자동 추적) |
-| `w` | Word Wrap 토글 |
-| `q` / `Esc` / `⌥ l` | 로그 뷰어 닫기 |
+| Key | Description |
+|----|-------------|
+| `↑` / `↓` | Scroll vertically |
+| `←` / `→` | Scroll horizontally (when word wrap is off) |
+| `g` | Jump to top |
+| `G` | Jump to bottom |
+| `PgUp` / `PgDn` | Page scroll |
+| `s` | Toggle tail mode (follow new logs) |
+| `w` | Toggle word wrap |
+| `q` / `Esc` / `⌥ l` | Close the log viewer |
 </details>
 
-## 태스크 히스토리
+## Task history
 
-태스크가 종료될 때 agent pane의 전체 내용이 자동으로 캡처되어 저장됩니다.
+When a task ends, the full content of the agent pane is automatically captured and saved.
 
-### 저장 위치
+### Storage location
 
 ```
 .taw/history/
-└── YYMMDD_HHMMSS_task-name  # 예: 241228_134501_my-feature
+└── YYMMDD_HHMMSS_task-name  # e.g., 241228_134501_my-feature
 ```
 
-### 활용 예시
+### Usage examples
 
-- 이전 태스크에서 agent가 수행한 작업 확인
-- 문제 해결 과정 추적
-- 학습 및 개선을 위한 참고 자료
+- Review what the agent did in a past task.
+- Trace how a problem was solved.
+- Use as reference material for learning and improvement.

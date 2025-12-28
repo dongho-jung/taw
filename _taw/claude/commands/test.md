@@ -86,7 +86,7 @@ Parse and summarize test results:
 ## Step 5: Log Result
 
 ```bash
-echo "테스트 실행: {PASS_COUNT} passed, {FAIL_COUNT} failed" >> $TAW_DIR/agents/$TASK_NAME/log
+echo "Tests: {PASS_COUNT} passed, {FAIL_COUNT} failed" >> $TAW_DIR/agents/$TASK_NAME/log
 ```
 
 ## Handling Failures

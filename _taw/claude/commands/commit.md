@@ -94,7 +94,7 @@ git commit -m "generated message"
 ## Step 7: Log
 
 ```bash
-echo "커밋: {SHORT_HASH} {MESSAGE_SUBJECT}" >> $TAW_DIR/agents/$TASK_NAME/log
+echo "Commit: {SHORT_HASH} {MESSAGE_SUBJECT}" >> $TAW_DIR/agents/$TASK_NAME/log
 ```
 
 ## Step 8: Show Result
