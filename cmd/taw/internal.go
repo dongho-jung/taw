@@ -917,13 +917,16 @@ var toggleLogCmd = &cobra.Command{
 		logCmd := fmt.Sprintf("%s internal log-viewer %s; tmux -L 'taw-%s' set-option -g @taw_log_open '' 2>/dev/null || true",
 			tawBin, logPath, sessionName)
 
-		return tm.DisplayPopup(tmux.PopupOpts{
+		// Ignore error from DisplayPopup - the popup command (log-viewer) may exit
+		// with non-zero and we don't want run-shell to show "...returned 1"
+		tm.DisplayPopup(tmux.PopupOpts{
 			Width:  "90%",
 			Height: "80%",
 			Title:  " Log Viewer (↑↓:scroll  g/G:top/end  s:tail  w:wrap  q:quit) ",
 			Close:  true,
 			Style:  "fg=terminal,bg=terminal",
 		}, logCmd)
+		return nil
 	},
 }
 
@@ -984,13 +987,16 @@ var toggleHelpCmd = &cobra.Command{
 				"tmux -L 'taw-%s' set-option -g @taw_help_open '' 2>/dev/null || true",
 			tmpPath, tmpPath, sessionName)
 
-		return tm.DisplayPopup(tmux.PopupOpts{
+		// Ignore error from DisplayPopup - the popup command (less) may exit
+		// with non-zero and we don't want run-shell to show "...returned 1"
+		tm.DisplayPopup(tmux.PopupOpts{
 			Width:  "80%",
 			Height: "80%",
 			Title:  " Help (⌥/ or q to close) ",
 			Close:  true,
 			Style:  "fg=terminal,bg=terminal",
 		}, popupCmd)
+		return nil
 	},
 }
 
