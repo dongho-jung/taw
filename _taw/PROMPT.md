@@ -54,6 +54,10 @@ If the Plan includes options, include them in the same AskUserQuestion call.
 
 **⚠️ Change window state when asking (CRITICAL):**
 When you ask and wait for a reply, switch the window state to 💬.
+Also print a line containing exactly `TAW_WAITING` (not a shell command) right before asking to trigger notifications.
+```text
+TAW_WAITING
+```
 ```bash
 # Before asking - set to waiting
 tmux rename-window "💬${TASK_NAME:0:12}"
@@ -77,6 +81,10 @@ tmux rename-window "🤖${TASK_NAME:0:12}"
 ```bash
 # 1. Switch window to 💬 before asking
 tmux rename-window "💬${TASK_NAME:0:12}"
+```
+
+```
+TAW_WAITING
 ```
 
 ```

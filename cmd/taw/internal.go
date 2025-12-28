@@ -35,6 +35,7 @@ func init() {
 	internalCmd.AddCommand(toggleNewCmd)
 	internalCmd.AddCommand(newTaskCmd)
 	internalCmd.AddCommand(handleTaskCmd)
+	internalCmd.AddCommand(watchWaitCmd)
 	internalCmd.AddCommand(endTaskCmd)
 	internalCmd.AddCommand(endTaskUICmd)
 	internalCmd.AddCommand(attachCmd)
@@ -411,6 +412,15 @@ exec "%s" internal end-task "%s" "%s"
 		logging.Log("Sending task instruction: length=%d", len(taskInstruction))
 		if err := claudeClient.SendInput(tm, windowID+".0", taskInstruction); err != nil {
 			logging.Warn("Failed to send task instruction: %v", err)
+		}
+
+		// Start wait watcher to handle window status + notifications when user input is needed
+		watchCmd := exec.Command(tawBin, "internal", "watch-wait", sessionName, windowID, taskName)
+		watchCmd.Dir = app.ProjectDir
+		if err := watchCmd.Start(); err != nil {
+			logging.Warn("Failed to start wait watcher: %v", err)
+		} else {
+			logging.Log("Wait watcher started for windowID=%s", windowID)
 		}
 
 		logging.Log("Task started successfully: name=%s, windowID=%s", taskName, windowID)
