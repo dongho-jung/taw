@@ -33,6 +33,7 @@ const (
 type Config struct {
 	WorkMode   WorkMode   `yaml:"work_mode"`
 	OnComplete OnComplete `yaml:"on_complete"`
+	OnWait     string     `yaml:"on_wait"`
 }
 
 // DefaultConfig returns the default configuration.
@@ -40,6 +41,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		WorkMode:   WorkModeWorktree,
 		OnComplete: OnCompleteConfirm,
+		OnWait:     "",
 	}
 }
 
@@ -79,6 +81,8 @@ func Load(tawDir string) (*Config, error) {
 			cfg.WorkMode = WorkMode(value)
 		case "on_complete":
 			cfg.OnComplete = OnComplete(value)
+		case "on_wait":
+			cfg.OnWait = value
 		}
 	}
 
@@ -107,7 +111,11 @@ work_mode: %s
 # - auto-merge: Auto commit + merge + cleanup + close window
 # - auto-pr: Auto commit + create pull request
 on_complete: %s
-`, c.WorkMode, c.OnComplete)
+
+# On wait hook (optional): command to run when user input is needed
+# Example: on_wait: osascript -e 'display notification "TAW needs input" with title "TAW"'
+on_wait: %s
+`, c.WorkMode, c.OnComplete, c.OnWait)
 
 	return os.WriteFile(configPath, []byte(content), 0644)
 }

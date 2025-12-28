@@ -116,6 +116,10 @@ work_mode: worktree
 # - auto-merge: Auto commit + merge + cleanup + close window
 # - auto-pr: Auto commit + create pull request
 on_complete: confirm
+
+# On wait hook (optional): command to run when user input is needed
+# Example: on_wait: osascript -e 'display notification "TAW needs input" with title "TAW"'
+on_wait:
 ```
 </details>
 
@@ -129,6 +133,7 @@ on_complete: confirm
 |               | `auto-commit` | Auto commit (merge/PR are manual) |
 |               | `auto-merge` | **Auto** commit + merge + clean up + close window at task completion (no ⌥e) |
 |               | `auto-pr` | Auto commit + create PR (team-friendly) |
+| `on_wait` | (empty) | Optional shell command to run when user input is needed |
 
 <details>
 <summary>Other configuration</summary>

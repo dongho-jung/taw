@@ -410,8 +410,14 @@ exec "%s" internal end-task "%s" "%s"
 		// Send task instruction - tell Claude to read from file
 		taskInstruction := fmt.Sprintf("ultrathink Read and execute the task from '%s'", t.GetUserPromptPath())
 		logging.Log("Sending task instruction: length=%d", len(taskInstruction))
-		if err := claudeClient.SendInput(tm, windowID+".0", taskInstruction); err != nil {
-			logging.Warn("Failed to send task instruction: %v", err)
+		sendAttempts := 3
+		for attempt := 1; attempt <= sendAttempts; attempt++ {
+			if err := claudeClient.SendInput(tm, windowID+".0", taskInstruction); err != nil {
+				logging.Warn("Failed to send task instruction (attempt %d/%d): %v", attempt, sendAttempts, err)
+				time.Sleep(250 * time.Millisecond)
+				continue
+			}
+			break
 		}
 
 		// Start wait watcher to handle window status + notifications when user input is needed
