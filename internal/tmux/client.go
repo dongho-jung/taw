@@ -40,6 +40,7 @@ type Client interface {
 	SendKeysLiteral(target, text string) error
 	CapturePane(target string, lines int) (string, error)
 	ClearHistory(target string) error
+	RespawnPane(target, startDir, command string) error
 
 	// Display popup
 	DisplayPopup(opts PopupOpts, command string) error
@@ -389,6 +390,17 @@ func (c *tmuxClient) CapturePane(target string, lines int) (string, error) {
 
 func (c *tmuxClient) ClearHistory(target string) error {
 	return c.Run("clear-history", "-t", target)
+}
+
+func (c *tmuxClient) RespawnPane(target, startDir, command string) error {
+	args := []string{"respawn-pane", "-k", "-t", target}
+	if startDir != "" {
+		args = append(args, "-c", startDir)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	return c.Run(args...)
 }
 
 // Display popup

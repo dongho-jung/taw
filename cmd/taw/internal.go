@@ -373,11 +373,9 @@ exec "%s" internal end-task "%s" "%s"
 
 		claudeCmd := fmt.Sprintf("%s && claude --dangerously-skip-permissions --system-prompt \"$(cat '%s')\"",
 			envVars.String(), t.GetSystemPromptPath())
-		if err := tm.SendKeysLiteral(windowID+".0", claudeCmd); err != nil {
-			return fmt.Errorf("failed to send Claude command: %w", err)
-		}
-		if err := tm.SendKeys(windowID+".0", "Enter"); err != nil {
-			return fmt.Errorf("failed to send Enter: %w", err)
+		respawnCmd := fmt.Sprintf("sh -c %q", claudeCmd)
+		if err := tm.RespawnPane(windowID+".0", workDir, respawnCmd); err != nil {
+			return fmt.Errorf("failed to start Claude: %w", err)
 		}
 
 		// Wait for Claude to be ready
@@ -400,9 +398,12 @@ exec "%s" internal end-task "%s" "%s"
 		// Wait a bit more for Claude to be fully ready
 		time.Sleep(500 * time.Millisecond)
 
-		// Clear scrollback history before sending task instruction
+		// Clear scrollback history and screen before sending task instruction
 		if err := tm.ClearHistory(windowID + ".0"); err != nil {
 			logging.Debug("Failed to clear history: %v", err)
+		}
+		if err := tm.SendKeys(windowID+".0", "C-l"); err != nil {
+			logging.Debug("Failed to clear screen: %v", err)
 		}
 
 		// Send task instruction - tell Claude to read from file
