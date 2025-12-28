@@ -155,7 +155,7 @@ func (l *fileLogger) logWithLevel(level string, format string, args ...interface
 	}
 
 	msg := fmt.Sprintf(format, args...)
-	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+	timestamp := time.Now().Format("06-01-02 15:04:05.0")
 	context := l.getContext()
 	caller := getCaller(3) // Skip logWithLevel, the public method, and the caller
 
@@ -179,7 +179,7 @@ func (l *fileLogger) Debug(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "[DEBUG] [%s] %s\n", caller, msg)
 
 	if l.file != nil {
-		timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+		timestamp := time.Now().Format("06-01-02 15:04:05.0")
 		context := l.getContext()
 		line := fmt.Sprintf("[%s] [DEBUG] [%s] [%s] %s\n", timestamp, context, caller, msg)
 		l.file.WriteString(line)
@@ -202,7 +202,7 @@ func (l *fileLogger) Warn(format string, args ...interface{}) {
 	defer l.mu.Unlock()
 
 	if l.file != nil {
-		timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+		timestamp := time.Now().Format("06-01-02 15:04:05.0")
 		context := l.getContext()
 		caller := getCaller(2)
 		line := fmt.Sprintf("[%s] [WARN ] [%s] [%s] %s\n", timestamp, context, caller, msg)
@@ -218,7 +218,7 @@ func (l *fileLogger) Error(format string, args ...interface{}) {
 	defer l.mu.Unlock()
 
 	if l.file != nil {
-		timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+		timestamp := time.Now().Format("06-01-02 15:04:05.0")
 		context := l.getContext()
 		caller := getCaller(2)
 		line := fmt.Sprintf("[%s] [ERROR] [%s] [%s] %s\n", timestamp, context, caller, msg)

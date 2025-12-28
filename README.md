@@ -286,12 +286,12 @@ brew install tmux gh
 로그는 상세한 정보를 포함합니다:
 
 ```
-[2025-12-28 03:49:45.081] [INFO ] [handle-task:my-task] [RunE] Task started successfully
+[25-12-28 03:49:45.0] [INFO ] [handle-task:my-task] [RunE] Task started successfully
 ```
 
 형식: `[timestamp] [level] [script:task] [caller] message`
 
-- **timestamp**: 밀리초 단위 시간
+- **timestamp**: YY-MM-DD HH:MM:SS.s (십분의 일초 단위)
 - **level**: INFO, WARN, ERROR, DEBUG
 - **script:task**: 스크립트와 태스크 컨텍스트
 - **caller**: 로그를 남긴 함수명
@@ -299,8 +299,8 @@ brew install tmux gh
 
 시간이 걸리는 작업은 시작/완료 로그와 함께 소요 시간이 기록됩니다:
 ```
-[2025-12-28 03:49:45.081] [INFO ] [handle-task:my-task] [RunE] worktree setup started
-[2025-12-28 03:49:45.234] [INFO ] [handle-task:my-task] [RunE] worktree setup completed in 153ms: branch=my-task, path=/path/to/worktree
+[25-12-28 03:49:45.0] [INFO ] [handle-task:my-task] [RunE] worktree setup started
+[25-12-28 03:49:45.2] [INFO ] [handle-task:my-task] [RunE] worktree setup completed in 153ms: branch=my-task, path=/path/to/worktree
 ```
 
 ## 태스크 히스토리
