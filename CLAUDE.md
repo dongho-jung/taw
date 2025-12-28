@@ -22,7 +22,7 @@ taw/                           # 이 레포
 ├── cmd/taw/                   # Go 메인 패키지
 ├── internal/                  # Go 내부 패키지
 │   ├── app/                   # 애플리케이션 컨텍스트
-│   ├── claude/                # Claude API 클라이언트
+│   ├── opencode/              # OpenCode CLI 클라이언트
 │   ├── config/                # 설정 관리
 │   ├── constants/             # 상수 정의
 │   ├── embed/                 # 임베디드 에셋
@@ -36,7 +36,9 @@ taw/                           # 이 레포
 ├── _taw/                      # 리소스 파일 (프로젝트에 symlink로 연결됨)
 │   ├── PROMPT.md              # 시스템 프롬프트 (git mode)
 │   ├── PROMPT-nogit.md        # 시스템 프롬프트 (non-git mode)
-│   └── claude/commands/       # slash commands (/commit, /test, /pr, /merge)
+│   └── opencode/              # OpenCode 설정 및 명령어
+│       ├── opencode.json      # 권한 설정 (auto-allow 등)
+│       └── commands/          # slash commands (/commit, /test, /pr, /merge)
 ├── Makefile                   # 빌드 스크립트
 └── go.mod                     # Go 모듈 파일
 
@@ -47,14 +49,14 @@ taw/                           # 이 레포
     ├── PROMPT.md              # 프로젝트별 프롬프트
     ├── .global-prompt         # -> 전역 프롬프트 (symlink, git 모드에 따라 다름)
     ├── .is-git-repo           # git 모드 마커 (git 레포일 때만 존재)
-    ├── .claude                # -> _taw/claude (symlink)
+    ├── .opencode              # -> _taw/opencode (symlink)
     ├── .queue/                # 빠른 태스크 큐 (⌥ u로 추가)
     │   └── 001.task           # 대기 중인 태스크 (순서대로 처리)
     ├── history/               # 태스크 히스토리 저장 디렉토리
     │   └── YYMMDD_HHMMSS_task-name  # 태스크 종료 시 agent pane 캡처
     └── agents/{task-name}/    # 태스크별 작업 공간
         ├── task               # 태스크 내용
-        ├── end-task           # 태스크별 end-task 스크립트 (Claude가 auto-merge 시 호출)
+        ├── end-task           # 태스크별 end-task 스크립트 (OpenCode가 auto-merge 시 호출)
         ├── origin             # -> 프로젝트 루트 (symlink)
         ├── worktree/          # git worktree (git 모드에서만 자동 생성)
         ├── .tab-lock/         # 탭 생성 락 (atomic mkdir로 race condition 방지)

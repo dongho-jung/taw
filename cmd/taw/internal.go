@@ -11,12 +11,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/donghojung/taw/internal/app"
-	"github.com/donghojung/taw/internal/claude"
 	"github.com/donghojung/taw/internal/config"
 	"github.com/donghojung/taw/internal/constants"
 	"github.com/donghojung/taw/internal/embed"
 	"github.com/donghojung/taw/internal/git"
 	"github.com/donghojung/taw/internal/logging"
+	"github.com/donghojung/taw/internal/opencode"
 	"github.com/donghojung/taw/internal/task"
 	"github.com/donghojung/taw/internal/tmux"
 	"github.com/donghojung/taw/internal/tui"
@@ -185,7 +185,7 @@ var newTaskCmd = &cobra.Command{
 
 var handleTaskCmd = &cobra.Command{
 	Use:   "handle-task [session] [agent-dir]",
-	Short: "Handle a task (create window, start Claude)",
+	Short: "Handle a task (create window, start OpenCode)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
@@ -288,7 +288,7 @@ var handleTaskCmd = &cobra.Command{
 		// Build system prompt
 		globalPrompt, _ := os.ReadFile(app.GetGlobalPromptPath())
 		projectPrompt, _ := os.ReadFile(app.GetPromptPath())
-		systemPrompt := claude.BuildSystemPrompt(string(globalPrompt), string(projectPrompt))
+		systemPrompt := opencode.BuildSystemPrompt(string(globalPrompt), string(projectPrompt))
 
 		// Get taw binary path for end-task (needed for user prompt)
 		tawBin, _ := os.Executable()
@@ -335,19 +335,25 @@ var handleTaskCmd = &cobra.Command{
 		userPrompt.WriteString("---\n\n")
 		userPrompt.WriteString(t.Content)
 
-		// Save prompts (errors are non-fatal but should be logged)
-		if err := os.WriteFile(t.GetSystemPromptPath(), []byte(systemPrompt), 0644); err != nil {
-			logging.Warn("Failed to save system prompt: %v", err)
+		// Save system prompt as AGENTS.md in work directory
+		// OpenCode automatically reads AGENTS.md for rules/instructions
+		agentsMdPath := filepath.Join(workDir, "AGENTS.md")
+		if err := os.WriteFile(agentsMdPath, []byte(systemPrompt), 0644); err != nil {
+			logging.Warn("Failed to save AGENTS.md: %v", err)
+		} else {
+			logging.Log("AGENTS.md created: %s", agentsMdPath)
 		}
+
+		// Save user prompt for reference
 		if err := os.WriteFile(t.GetUserPromptPath(), []byte(userPrompt.String()), 0644); err != nil {
 			logging.Warn("Failed to save user prompt: %v", err)
 		}
 
 		// Create task-specific end-task script
-		// This allows Claude to call end-task without needing environment variables
+		// This allows OpenCode to call end-task without needing environment variables
 		endTaskContent := fmt.Sprintf(`#!/bin/bash
 # Auto-generated end-task script for this task
-# Claude can call this directly without environment variables
+# OpenCode can call this directly without environment variables
 exec "%s" internal end-task "%s" "%s"
 `, tawBin, sessionName, windowID)
 		if err := os.WriteFile(endTaskScriptPath, []byte(endTaskContent), 0755); err != nil {
@@ -356,7 +362,7 @@ exec "%s" internal end-task "%s" "%s"
 			logging.Log("End-task script created: %s", endTaskScriptPath)
 		}
 
-		// Build environment variables and Claude command
+		// Build environment variables for OpenCode
 		// These are used by PROMPT.md for auto-merge, auto-pr, etc.
 		var envVars strings.Builder
 		envVars.WriteString(fmt.Sprintf("export TASK_NAME='%s' ", taskName))
@@ -371,45 +377,17 @@ exec "%s" internal end-task "%s" "%s"
 		envVars.WriteString(fmt.Sprintf("TAW_BIN='%s' ", tawBin))
 		envVars.WriteString(fmt.Sprintf("SESSION_NAME='%s'", sessionName))
 
-		claudeCmd := fmt.Sprintf("%s && claude --dangerously-skip-permissions --system-prompt \"$(cat '%s')\"",
-			envVars.String(), t.GetSystemPromptPath())
-		if err := tm.SendKeysLiteral(windowID+".0", claudeCmd); err != nil {
-			return fmt.Errorf("failed to send Claude command: %w", err)
+		// Build OpenCode command with --prompt option for initial task instruction
+		// OpenCode reads AGENTS.md automatically for system rules
+		// --prompt passes the initial user message directly
+		taskInstruction := fmt.Sprintf("Read and execute the task from '%s'", t.GetUserPromptPath())
+		opencodeCmd := fmt.Sprintf("%s && opencode --prompt %q",
+			envVars.String(), taskInstruction)
+		if err := tm.SendKeysLiteral(windowID+".0", opencodeCmd); err != nil {
+			return fmt.Errorf("failed to send OpenCode command: %w", err)
 		}
 		if err := tm.SendKeys(windowID+".0", "Enter"); err != nil {
 			return fmt.Errorf("failed to send Enter: %w", err)
-		}
-
-		// Wait for Claude to be ready
-		logging.Log("Waiting for Claude to be ready...")
-		claudeClient := claude.New()
-		claudeTimer := logging.StartTimer("Claude startup")
-		if err := claudeClient.WaitForReady(tm, windowID+".0"); err != nil {
-			claudeTimer.StopWithResult(false, err.Error())
-		} else {
-			claudeTimer.StopWithResult(true, "")
-		}
-
-		// Send trust response if needed (error is non-fatal)
-		if err := claudeClient.SendTrustResponse(tm, windowID+".0"); err != nil {
-			logging.Debug("Failed to send trust response: %v", err)
-		} else {
-			logging.Log("Trust response sent")
-		}
-
-		// Wait a bit more for Claude to be fully ready
-		time.Sleep(500 * time.Millisecond)
-
-		// Clear scrollback history before sending task instruction
-		if err := tm.ClearHistory(windowID + ".0"); err != nil {
-			logging.Debug("Failed to clear history: %v", err)
-		}
-
-		// Send task instruction - tell Claude to read from file
-		taskInstruction := fmt.Sprintf("ultrathink Read and execute the task from '%s'", t.GetUserPromptPath())
-		logging.Log("Sending task instruction: length=%d", len(taskInstruction))
-		if err := claudeClient.SendInput(tm, windowID+".0", taskInstruction); err != nil {
-			logging.Warn("Failed to send task instruction: %v", err)
 		}
 
 		logging.Log("Task started successfully: name=%s, windowID=%s", taskName, windowID)

@@ -19,13 +19,13 @@ const (
 	MinTaskNameLen    = 8
 )
 
-// Claude interaction timeouts
+// OpenCode interaction timeouts
 const (
-	ClaudeReadyMaxAttempts  = 60
-	ClaudeReadyPollInterval = 500 * time.Millisecond
-	ClaudeNameGenTimeout1   = 3 * time.Second
-	ClaudeNameGenTimeout2   = 5 * time.Second
-	ClaudeNameGenTimeout3   = 10 * time.Second
+	OpenCodeReadyMaxAttempts  = 60
+	OpenCodeReadyPollInterval = 500 * time.Millisecond
+	OpenCodeNameGenTimeout1   = 10 * time.Second
+	OpenCodeNameGenTimeout2   = 20 * time.Second
+	OpenCodeNameGenTimeout3   = 30 * time.Second
 )
 
 // Git/Worktree timeouts
@@ -41,9 +41,9 @@ const (
 
 // Default configuration values
 const (
-	DefaultMainBranch  = "main"
-	DefaultWorkMode    = "worktree"
-	DefaultOnComplete  = "confirm"
+	DefaultMainBranch = "main"
+	DefaultWorkMode   = "worktree"
+	DefaultOnComplete = "confirm"
 )
 
 // Directory and file names
@@ -61,7 +61,7 @@ const (
 	PRFileName       = ".pr"
 	GitRepoMarker    = ".is-git-repo"
 	GlobalPromptLink = ".global-prompt"
-	ClaudeLink       = ".claude"
+	OpenCodeLink     = ".opencode"
 )
 
 // Tmux related constants

@@ -7,39 +7,39 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/donghojung/taw/internal/claude"
 	"github.com/donghojung/taw/internal/config"
 	"github.com/donghojung/taw/internal/constants"
 	"github.com/donghojung/taw/internal/git"
 	"github.com/donghojung/taw/internal/github"
 	"github.com/donghojung/taw/internal/logging"
+	"github.com/donghojung/taw/internal/opencode"
 	"github.com/donghojung/taw/internal/tmux"
 )
 
 // Manager handles task lifecycle operations.
 type Manager struct {
-	agentsDir   string
-	projectDir  string
-	tawDir      string
-	isGitRepo   bool
-	config      *config.Config
-	tmuxClient  tmux.Client
-	gitClient   git.Client
-	ghClient    github.Client
-	claudeClient claude.Client
+	agentsDir      string
+	projectDir     string
+	tawDir         string
+	isGitRepo      bool
+	config         *config.Config
+	tmuxClient     tmux.Client
+	gitClient      git.Client
+	ghClient       github.Client
+	opencodeClient opencode.Client
 }
 
 // NewManager creates a new task manager.
 func NewManager(agentsDir, projectDir, tawDir string, isGitRepo bool, cfg *config.Config) *Manager {
 	return &Manager{
-		agentsDir:   agentsDir,
-		projectDir:  projectDir,
-		tawDir:      tawDir,
-		isGitRepo:   isGitRepo,
-		config:      cfg,
-		gitClient:   git.New(),
-		ghClient:    github.New(),
-		claudeClient: claude.New(),
+		agentsDir:      agentsDir,
+		projectDir:     projectDir,
+		tawDir:         tawDir,
+		isGitRepo:      isGitRepo,
+		config:         cfg,
+		gitClient:      git.New(),
+		ghClient:       github.New(),
+		opencodeClient: opencode.New(),
 	}
 }
 
@@ -49,18 +49,18 @@ func (m *Manager) SetTmuxClient(client tmux.Client) {
 }
 
 // CreateTask creates a new task with the given content.
-// It generates a task name using Claude and creates the task directory atomically.
+// It generates a task name using OpenCode and creates the task directory atomically.
 func (m *Manager) CreateTask(content string) (*Task, error) {
-	// Generate task name using Claude
-	logging.Log("Generating task name with Claude: content_length=%d", len(content))
+	// Generate task name using OpenCode
+	logging.Log("Generating task name with OpenCode: content_length=%d", len(content))
 	timer := logging.StartTimer("task name generation")
 
-	name, err := m.claudeClient.GenerateTaskName(content)
+	name, err := m.opencodeClient.GenerateTaskName(content)
 	if err != nil {
-		// Use fallback name if Claude fails
+		// Use fallback name if OpenCode fails
 		fallbackName := fmt.Sprintf("task-%d", os.Getpid())
 		timer.StopWithResult(false, fmt.Sprintf("error=%v, fallback=%s", err, fallbackName))
-		logging.Warn("Claude name generation failed, using fallback: error=%v, fallback=%s", err, fallbackName)
+		logging.Warn("OpenCode name generation failed, using fallback: error=%v, fallback=%s", err, fallbackName)
 		name = fallbackName
 	} else {
 		timer.StopWithResult(true, fmt.Sprintf("name=%s", name))
@@ -457,10 +457,10 @@ func (m *Manager) SetupWorktree(task *Task) error {
 		}
 	}
 
-	// Create .claude symlink in worktree (error is non-fatal)
-	claudeLink := filepath.Join(worktreeDir, constants.ClaudeLink)
-	claudeTarget := filepath.Join(m.tawDir, constants.ClaudeLink)
-	if err := os.Symlink(claudeTarget, claudeLink); err != nil {
+	// Create .opencode symlink in worktree (error is non-fatal)
+	opencodeLink := filepath.Join(worktreeDir, constants.OpenCodeLink)
+	opencodeTarget := filepath.Join(m.tawDir, constants.OpenCodeLink)
+	if err := os.Symlink(opencodeTarget, opencodeLink); err != nil {
 		// Symlink might already exist or fail for other reasons - continue anyway
 	}
 

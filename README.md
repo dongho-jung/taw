@@ -1,11 +1,11 @@
 # TAW (Tmux + Agent + Worktree)
 
-Claude Code 기반의 프로젝트 관리 시스템입니다.
+OpenCode 기반의 프로젝트 관리 시스템입니다.
 
 ## 개요
 
 - 아무 디렉토리에서 `taw` 명령어로 tmux 세션 기반의 작업 환경을 시작합니다.
-- 태스크를 생성하면 자동으로 Claude Code agent가 시작됩니다.
+- 태스크를 생성하면 자동으로 OpenCode agent가 시작됩니다.
 - **Git 모드**: git 레포에서 실행 시 태스크마다 worktree 자동 생성
 - **Non-Git 모드**: git 없이도 사용 가능 (worktree 없이 프로젝트 디렉토리에서 작업)
 
@@ -135,7 +135,8 @@ on_complete: confirm
 
 - `_taw/PROMPT.md`: 시스템 프롬프트 (프로젝트 `.taw/.global-prompt`로 symlink됨)
 - `.taw/PROMPT.md`: 프로젝트별 프롬프트 (각 프로젝트 내)
-- `_taw/claude/commands/`: slash commands (프로젝트 `.taw/.claude`로 symlink됨)
+- `_taw/opencode/opencode.json`: OpenCode 권한 설정
+- `_taw/opencode/commands/`: slash commands (프로젝트 `.taw/.opencode`로 symlink됨)
 - `EDITOR` 환경변수: 태스크 작성 에디터 (기본: vim)
 </details>
 

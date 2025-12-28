@@ -13,11 +13,11 @@ import (
 // App represents the main application context with all dependencies.
 type App struct {
 	// Paths
-	ProjectDir  string // Root directory of the user's project
-	TawDir      string // .taw directory path
-	AgentsDir   string // agents directory path
-	QueueDir    string // .queue directory path
-	TawHome     string // TAW installation directory
+	ProjectDir string // Root directory of the user's project
+	TawDir     string // .taw directory path
+	AgentsDir  string // agents directory path
+	QueueDir   string // .queue directory path
+	TawHome    string // TAW installation directory
 
 	// Session
 	SessionName string // tmux session name
@@ -133,7 +133,7 @@ func (a *App) SetGitRepo(isGit bool) {
 	a.IsGitRepo = isGit
 }
 
-// GetEnvVars returns environment variables to be passed to Claude.
+// GetEnvVars returns environment variables to be passed to OpenCode.
 func (a *App) GetEnvVars(taskName, worktreeDir, windowID string) []string {
 	env := os.Environ()
 

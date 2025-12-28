@@ -34,7 +34,7 @@ func main() {
 var rootCmd = &cobra.Command{
 	Use:   "taw",
 	Short: "TAW - Tmux + Agent + Worktree",
-	Long: `TAW is a Claude Code-based autonomous task execution system.
+	Long: `TAW is an OpenCode-based autonomous task execution system.
 It manages tasks in tmux sessions with optional git worktree isolation.`,
 	RunE:         runMain,
 	SilenceUsage: true,
@@ -192,9 +192,9 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 		logging.Warn("Failed to setup prompt symlink: %v", err)
 	}
 
-	// Setup .claude symlink
-	if err := setupClaudeSymlink(app); err != nil {
-		logging.Warn("Failed to setup claude symlink: %v", err)
+	// Setup .opencode symlink
+	if err := setupOpenCodeSymlink(app); err != nil {
+		logging.Warn("Failed to setup opencode symlink: %v", err)
 	}
 
 	// Update .gitignore
@@ -211,7 +211,7 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 			logging.Log("Reopening incomplete task: %s", t.Name)
 			// Remove old tab-lock so handle-task can create a new one
 			t.RemoveTabLock()
-			// Re-run handle-task to create window and restart Claude
+			// Re-run handle-task to create window and restart OpenCode
 			handleCmd := exec.Command(tawBin, "internal", "handle-task", app.SessionName, t.AgentDir)
 			if err := handleCmd.Start(); err != nil {
 				logging.Warn("Failed to reopen task %s: %v", t.Name, err)
@@ -307,7 +307,7 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 			logging.Log("Reopening incomplete task: %s (reason: window not found)", t.Name)
 			// Remove old tab-lock so handle-task can create a new one
 			t.RemoveTabLock()
-			// Re-run handle-task to create window and restart Claude
+			// Re-run handle-task to create window and restart OpenCode
 			handleCmd := exec.Command(tawBin, "internal", "handle-task", app.SessionName, t.AgentDir)
 			if err := handleCmd.Start(); err != nil {
 				logging.Warn("Failed to reopen task %s: %v", t.Name, err)
@@ -412,14 +412,14 @@ func setupPromptSymlink(app *app.App) error {
 	return os.Symlink(target, linkPath)
 }
 
-// setupClaudeSymlink creates the .claude symlink
-func setupClaudeSymlink(app *app.App) error {
-	linkPath := filepath.Join(app.TawDir, constants.ClaudeLink)
+// setupOpenCodeSymlink creates the .opencode symlink for opencode.json config
+func setupOpenCodeSymlink(app *app.App) error {
+	linkPath := filepath.Join(app.TawDir, constants.OpenCodeLink)
 
 	// Remove existing symlink
 	os.Remove(linkPath)
 
-	target := filepath.Join(app.TawHome, "_taw", "claude")
+	target := filepath.Join(app.TawHome, "_taw", "opencode")
 	return os.Symlink(target, linkPath)
 }
 
