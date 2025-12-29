@@ -47,6 +47,7 @@ func init() {
 	internalCmd.AddCommand(logViewerCmd)
 	internalCmd.AddCommand(toggleHelpCmd)
 	internalCmd.AddCommand(recoverTaskCmd)
+	internalCmd.AddCommand(loadingScreenCmd)
 }
 
 var toggleNewCmd = &cobra.Command{
@@ -196,6 +197,7 @@ var spawnTaskCmd = &cobra.Command{
 		}
 
 		tm := tmux.New(sessionName)
+		tawBin, _ := os.Executable()
 
 		// Create a temporary "⏳" window for progress display
 		progressWindowName := "⏳..."
@@ -218,37 +220,18 @@ var spawnTaskCmd = &cobra.Command{
 			}
 		}()
 
-		// Run spinner for task creation inside the progress window
-		// We use respawn-pane to run our spinner command
-		tawBin, _ := os.Executable()
-
-		// Create task with spinner
-		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
-		var newTask *task.Task
-		spinner := tui.NewSpinner("Generating task name...")
-		p := tea.NewProgram(spinner)
-
-		// Run task creation in background
-		go func() {
-			t, err := mgr.CreateTask(content)
-			if err != nil {
-				p.Send(tui.SpinnerDoneMsg{Err: err})
-				return
-			}
-			newTask = t
-			p.Send(tui.SpinnerDoneMsg{Result: t.Name})
-		}()
-
-		finalModel, err := p.Run()
-		if err != nil {
-			logging.Error("Spinner error: %v", err)
-			return fmt.Errorf("spinner error: %w", err)
+		// Run loading screen inside the progress window
+		loadingCmd := fmt.Sprintf("sh -c %q", fmt.Sprintf("%s internal loading-screen 'Generating task name...'", tawBin))
+		if err := tm.RespawnPane(progressWindowID+".0", app.ProjectDir, loadingCmd); err != nil {
+			logging.Warn("Failed to run loading screen: %v", err)
 		}
 
-		spinnerResult := finalModel.(*tui.Spinner)
-		if spinnerResult.GetError() != nil {
-			logging.Error("Failed to create task: %v", spinnerResult.GetError())
-			return fmt.Errorf("failed to create task: %w", spinnerResult.GetError())
+		// Create task (loading screen shows while this runs)
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+		newTask, err := mgr.CreateTask(content)
+		if err != nil {
+			logging.Error("Failed to create task: %v", err)
+			return fmt.Errorf("failed to create task: %w", err)
 		}
 
 		logging.Log("Task created: %s", newTask.Name)
@@ -1137,6 +1120,27 @@ var recoverTaskCmd = &cobra.Command{
 
 		fmt.Printf("Task %s recovered successfully\n", taskName)
 		return nil
+	},
+}
+
+var loadingScreenCmd = &cobra.Command{
+	Use:    "loading-screen [message]",
+	Short:  "Show a loading screen with braille animation",
+	Args:   cobra.MaximumNArgs(1),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		message := "Generating task name..."
+		if len(args) > 0 {
+			message = args[0]
+		}
+
+		// Run the spinner TUI
+		spinner := tui.NewSpinner(message)
+		p := tea.NewProgram(spinner)
+
+		// Block forever until killed (spawn-task will kill the window when done)
+		_, err := p.Run()
+		return err
 	},
 }
 
