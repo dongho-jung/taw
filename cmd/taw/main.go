@@ -128,7 +128,7 @@ func runMain(cmd *cobra.Command, args []string) error {
 
 	// Check if session already exists
 	if tm.HasSession(application.SessionName) {
-		logging.Log("Attaching to existing session: %s", application.SessionName)
+		logging.Debug("Attaching to existing session: %s", application.SessionName)
 		return attachToSession(application, tm)
 	}
 

@@ -53,7 +53,7 @@ func (m *Manager) SetTmuxClient(client tmux.Client) {
 // It generates a task name using Claude and creates the task directory atomically.
 func (m *Manager) CreateTask(content string) (*Task, error) {
 	// Generate task name using Claude
-	logging.Log("Generating task name with Claude: content_length=%d", len(content))
+	logging.Trace("Generating task name with Claude: content_length=%d", len(content))
 	timer := logging.StartTimer("task name generation")
 
 	name, err := m.claudeClient.GenerateTaskName(content)
