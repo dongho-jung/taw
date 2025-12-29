@@ -26,8 +26,14 @@ type Client interface {
 	// SendInput sends input to Claude in a tmux pane.
 	SendInput(tm tmux.Client, target, input string) error
 
+	// SendInputWithRetry sends input with retry logic for reliability.
+	SendInputWithRetry(tm tmux.Client, target, input string, maxRetries int) error
+
 	// SendTrustResponse sends 'y' if trust prompt is detected.
 	SendTrustResponse(tm tmux.Client, target string) error
+
+	// VerifyPaneAlive checks that the pane has content (Claude is running).
+	VerifyPaneAlive(tm tmux.Client, target string, timeout time.Duration) error
 }
 
 // claudeClient implements the Client interface.
@@ -48,7 +54,13 @@ func New() Client {
 var TaskNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{6,30}[a-z0-9]$`)
 
 // ReadyPatterns matches Claude ready prompts.
-var ReadyPatterns = regexp.MustCompile(`(?i)(Trust|trust|bypass permissions|╭─|^> $)`)
+// Added more patterns to improve detection reliability:
+// - Trust/bypass: initial trust prompt
+// - ╭─: Claude's box drawing UI
+// - >: input prompt
+// - claude: Claude branding in output
+// - Cost: token/cost display
+var ReadyPatterns = regexp.MustCompile(`(?i)(Trust|bypass permissions|╭─|^>\s*$|claude|Cost:?\s*\$)`)
 
 // TrustPattern matches trust confirmation prompt.
 var TrustPattern = regexp.MustCompile(`(?i)trust`)
@@ -163,18 +175,62 @@ func sanitizeTaskName(name string) string {
 }
 
 // WaitForReady waits for Claude to be ready in the specified tmux pane.
+// Uses exponential backoff starting from pollInterval, capped at 2 seconds.
 func (c *claudeClient) WaitForReady(tm tmux.Client, target string) error {
+	currentInterval := c.pollInterval
+	maxInterval := 2 * time.Second
+	emptyCount := 0
+	maxEmptyBeforeWarn := 10
+
 	for i := 0; i < c.maxAttempts; i++ {
-		content, err := tm.CapturePane(target, 50)
-		if err != nil {
-			return fmt.Errorf("failed to capture pane: %w", err)
+		// First verify the pane exists
+		if !tm.HasPane(target) {
+			logging.Debug("WaitForReady: pane %s does not exist (attempt %d/%d)", target, i+1, c.maxAttempts)
+			time.Sleep(currentInterval)
+			continue
 		}
 
+		content, err := tm.CapturePane(target, 50)
+		if err != nil {
+			logging.Debug("WaitForReady: failed to capture pane (attempt %d/%d): %v", i+1, c.maxAttempts, err)
+			time.Sleep(currentInterval)
+			continue
+		}
+
+		trimmedContent := strings.TrimSpace(content)
+		if len(trimmedContent) == 0 {
+			emptyCount++
+			if emptyCount == maxEmptyBeforeWarn {
+				logging.Debug("WaitForReady: pane still empty after %d attempts, continuing to wait...", emptyCount)
+			}
+			time.Sleep(currentInterval)
+			// Exponential backoff for empty panes
+			if currentInterval < maxInterval {
+				currentInterval = time.Duration(float64(currentInterval) * 1.5)
+				if currentInterval > maxInterval {
+					currentInterval = maxInterval
+				}
+			}
+			continue
+		}
+
+		// Reset interval and empty count when we get content
+		emptyCount = 0
+		currentInterval = c.pollInterval
+
 		if ReadyPatterns.MatchString(content) {
+			logging.Debug("WaitForReady: Claude ready detected (attempt %d/%d)", i+1, c.maxAttempts)
 			return nil
 		}
 
-		time.Sleep(c.pollInterval)
+		// Log what we're seeing for debugging (only first 100 chars)
+		preview := trimmedContent
+		if len(preview) > 100 {
+			preview = preview[:100] + "..."
+		}
+		logging.Trace("WaitForReady: content preview (attempt %d/%d): %q", i+1, c.maxAttempts, preview)
+
+		time.Sleep(currentInterval)
 	}
 
 	return fmt.Errorf("timeout waiting for Claude to be ready after %d attempts", c.maxAttempts)
@@ -219,6 +275,99 @@ func (c *claudeClient) SendTrustResponse(tm tmux.Client, target string) error {
 	}
 
 	return nil
+}
+
+// SendInputWithRetry sends input with retry logic for reliability.
+// It verifies the pane is responsive before each attempt and waits for content change.
+func (c *claudeClient) SendInputWithRetry(tm tmux.Client, target, input string, maxRetries int) error {
+	var lastErr error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Verify pane exists and is responsive
+		if !tm.HasPane(target) {
+			lastErr = fmt.Errorf("pane %s does not exist", target)
+			logging.Debug("SendInputWithRetry: pane not found (attempt %d/%d)", attempt, maxRetries)
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		// Get content before sending
+		contentBefore, err := tm.CapturePane(target, 10)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to capture pane before send: %w", err)
+			logging.Debug("SendInputWithRetry: capture failed (attempt %d/%d): %v", attempt, maxRetries, err)
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		// Send input
+		if err := c.SendInput(tm, target, input); err != nil {
+			lastErr = err
+			logging.Debug("SendInputWithRetry: send failed (attempt %d/%d): %v", attempt, maxRetries, err)
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		// Wait a bit and verify content changed (input was accepted)
+		time.Sleep(300 * time.Millisecond)
+		contentAfter, err := tm.CapturePane(target, 10)
+		if err != nil {
+			// Can't verify, but send succeeded - consider it successful
+			logging.Debug("SendInputWithRetry: can't verify after send, assuming success")
+			return nil
+		}
+
+		// If content changed, input was likely accepted
+		if contentBefore != contentAfter {
+			logging.Debug("SendInputWithRetry: input accepted (attempt %d/%d)", attempt, maxRetries)
+			return nil
+		}
+
+		// Content didn't change - might need retry
+		logging.Debug("SendInputWithRetry: content unchanged after send (attempt %d/%d)", attempt, maxRetries)
+		lastErr = fmt.Errorf("input may not have been accepted")
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("failed to send input after %d attempts: %w", maxRetries, lastErr)
+	}
+	return fmt.Errorf("failed to send input after %d attempts", maxRetries)
+}
+
+// VerifyPaneAlive checks that the pane exists and has content (Claude is running).
+// This should be called after RespawnPane to ensure Claude actually started.
+func (c *claudeClient) VerifyPaneAlive(tm tmux.Client, target string, timeout time.Duration) error {
+	pollInterval := 200 * time.Millisecond
+	maxAttempts := int(timeout / pollInterval)
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+
+	for i := 0; i < maxAttempts; i++ {
+		if !tm.HasPane(target) {
+			logging.Trace("VerifyPaneAlive: pane %s not found (attempt %d/%d)", target, i+1, maxAttempts)
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		content, err := tm.CapturePane(target, 5)
+		if err != nil {
+			logging.Trace("VerifyPaneAlive: capture failed (attempt %d/%d): %v", target, i+1, maxAttempts, err)
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		// Any non-empty content suggests the pane is alive
+		if len(strings.TrimSpace(content)) > 0 {
+			logging.Debug("VerifyPaneAlive: pane %s is alive (attempt %d/%d)", target, i+1, maxAttempts)
+			return nil
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	return fmt.Errorf("pane %s did not become alive within %v", target, timeout)
 }
 
 // BuildSystemPrompt builds the system prompt from global and project prompts.

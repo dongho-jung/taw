@@ -453,49 +453,85 @@ exec "%s" internal end-task "%s" "%s"
 		claudeCmd := fmt.Sprintf("%s && claude --dangerously-skip-permissions --system-prompt \"$(cat '%s')\"",
 			envVars.String(), t.GetSystemPromptPath())
 		respawnCmd := fmt.Sprintf("sh -c %q", claudeCmd)
-		if err := tm.RespawnPane(windowID+".0", workDir, respawnCmd); err != nil {
-			return fmt.Errorf("failed to start Claude: %w", err)
+		agentPane := windowID + ".0"
+
+		// Start Claude with retry logic
+		maxRespawnRetries := 3
+		var respawnErr error
+		for respawnAttempt := 1; respawnAttempt <= maxRespawnRetries; respawnAttempt++ {
+			if err := tm.RespawnPane(agentPane, workDir, respawnCmd); err != nil {
+				respawnErr = err
+				logging.Warn("Failed to start Claude (attempt %d/%d): %v", respawnAttempt, maxRespawnRetries, err)
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+
+			// Wait for pane to become responsive
+			time.Sleep(500 * time.Millisecond)
+			if err := tm.WaitForPane(agentPane, 5*time.Second, 0); err != nil {
+				respawnErr = err
+				logging.Warn("Pane not responsive after respawn (attempt %d/%d): %v", respawnAttempt, maxRespawnRetries, err)
+				continue
+			}
+
+			respawnErr = nil
+			break
+		}
+		if respawnErr != nil {
+			return fmt.Errorf("failed to start Claude after %d attempts: %w", maxRespawnRetries, respawnErr)
 		}
 
 		// Wait for Claude to be ready
 		logging.Debug("Waiting for Claude to be ready...")
 		claudeClient := claude.New()
 		claudeTimer := logging.StartTimer("Claude startup")
-		if err := claudeClient.WaitForReady(tm, windowID+".0"); err != nil {
+		if err := claudeClient.WaitForReady(tm, agentPane); err != nil {
 			claudeTimer.StopWithResult(false, err.Error())
+			// Don't fail here - Claude might still work, continue and try to send input
+			logging.Warn("WaitForReady timed out, continuing anyway...")
 		} else {
 			claudeTimer.StopWithResult(true, "")
 		}
 
+		// Verify Claude is actually running (has content)
+		verifyTimer := logging.StartTimer("Verify Claude alive")
+		if err := claudeClient.VerifyPaneAlive(tm, agentPane, 10*time.Second); err != nil {
+			verifyTimer.StopWithResult(false, err.Error())
+			logging.Warn("Claude pane may not be alive: %v", err)
+		} else {
+			verifyTimer.StopWithResult(true, "")
+		}
+
 		// Send trust response if needed (error is non-fatal)
-		if err := claudeClient.SendTrustResponse(tm, windowID+".0"); err != nil {
+		if err := claudeClient.SendTrustResponse(tm, agentPane); err != nil {
 			logging.Trace("Failed to send trust response: %v", err)
 		} else {
 			logging.Debug("Trust response sent")
 		}
 
 		// Wait a bit more for Claude to be fully ready
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 
 		// Clear scrollback history and screen before sending task instruction
-		if err := tm.ClearHistory(windowID + ".0"); err != nil {
+		if err := tm.ClearHistory(agentPane); err != nil {
 			logging.Trace("Failed to clear history: %v", err)
 		}
-		if err := tm.SendKeys(windowID+".0", "C-l"); err != nil {
+		if err := tm.SendKeys(agentPane, "C-l"); err != nil {
 			logging.Trace("Failed to clear screen: %v", err)
 		}
+
+		// Small delay after clearing screen
+		time.Sleep(200 * time.Millisecond)
 
 		// Send task instruction - tell Claude to read from file
 		taskInstruction := fmt.Sprintf("ultrathink Read and execute the task from '%s'", t.GetUserPromptPath())
 		logging.Trace("Sending task instruction: length=%d", len(taskInstruction))
-		sendAttempts := 3
-		for attempt := 1; attempt <= sendAttempts; attempt++ {
-			if err := claudeClient.SendInput(tm, windowID+".0", taskInstruction); err != nil {
-				logging.Warn("Failed to send task instruction (attempt %d/%d): %v", attempt, sendAttempts, err)
-				time.Sleep(250 * time.Millisecond)
-				continue
+		if err := claudeClient.SendInputWithRetry(tm, agentPane, taskInstruction, 5); err != nil {
+			logging.Warn("Failed to send task instruction: %v", err)
+			// As a last resort, try the basic send
+			if err := claudeClient.SendInput(tm, agentPane, taskInstruction); err != nil {
+				logging.Error("Final attempt to send task instruction failed: %v", err)
 			}
-			break
 		}
 
 		// Start wait watcher to handle window status + notifications when user input is needed

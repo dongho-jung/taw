@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/donghojung/taw/internal/constants"
 )
@@ -40,6 +41,7 @@ type Client interface {
 	CapturePane(target string, lines int) (string, error)
 	ClearHistory(target string) error
 	RespawnPane(target, startDir, command string) error
+	WaitForPane(target string, maxWait time.Duration, minContentLen int) error
 
 	// Display popup
 	DisplayPopup(opts PopupOpts, command string) error
@@ -394,6 +396,45 @@ func (c *tmuxClient) RespawnPane(target, startDir, command string) error {
 		args = append(args, command)
 	}
 	return c.Run(args...)
+}
+
+// WaitForPane waits for a pane to become responsive and optionally have content.
+// It polls the pane until it exists, is responsive, and has at least minContentLen characters.
+// Set minContentLen to 0 to only verify the pane exists.
+func (c *tmuxClient) WaitForPane(target string, maxWait time.Duration, minContentLen int) error {
+	pollInterval := 100 * time.Millisecond
+	maxAttempts := int(maxWait / pollInterval)
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+
+	for i := 0; i < maxAttempts; i++ {
+		// Check if pane exists
+		if !c.HasPane(target) {
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		// If we don't need content, we're done
+		if minContentLen == 0 {
+			return nil
+		}
+
+		// Check if pane has enough content
+		content, err := c.CapturePane(target, 10)
+		if err != nil {
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		if len(strings.TrimSpace(content)) >= minContentLen {
+			return nil
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	return fmt.Errorf("timeout waiting for pane %s after %v", target, maxWait)
 }
 
 // Display popup
