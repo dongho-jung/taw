@@ -115,7 +115,7 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Y=3: ╭── border top
 			// Y=4+: textarea content lines
 			textareaStartY := 4 // First content line
-			textareaStartX := 1 // Border only
+			textareaStartX := 2 // Border (1) + Padding (1)
 
 			targetRow := msg.Y - textareaStartY
 			targetCol := msg.X - textareaStartX
@@ -172,7 +172,7 @@ func (m *TaskInput) View() tea.View {
 		// Y=3: ╭── border top
 		// Y=4+: textarea content (cursor Y=0 maps to screen Y=4)
 		cursor.Position.Y += 4
-		cursor.Position.X += 1 // Border only
+		cursor.Position.X += 2 // Border (1) + Padding (1)
 		v.Cursor = cursor
 	}
 
