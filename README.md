@@ -119,6 +119,13 @@ work_mode: worktree
 # - auto-pr: Auto commit + create pull request
 on_complete: confirm
 
+# Hook to run after worktree creation (optional)
+# Single line example: worktree_hook: npm install
+# Multi-line example:
+#   worktree_hook: |
+#     npm install
+#     npm run build
+
 ```
 </details>
 
@@ -132,6 +139,7 @@ on_complete: confirm
 |               | `auto-commit` | Auto commit (merge/PR are manual) |
 |               | `auto-merge` | **Auto** commit + merge + clean up + close window at task completion (no ⌥e) |
 |               | `auto-pr` | Auto commit + create PR (team-friendly) |
+| `worktree_hook` | (command) | Shell command(s) to run after worktree creation (e.g., `npm install`) |
 
 <details>
 <summary>Other configuration</summary>
