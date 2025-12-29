@@ -108,13 +108,14 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textarea.Focus()
 
 			// Calculate textarea position from screen coordinates
-			// Screen layout (based on user testing Y offset = +4):
+			// Screen layout:
 			// Y=0: "New Task" title
 			// Y=1: empty (MarginBottom)
-			// Y=2: empty (\n)
-			// Y=3: ╭── border top
-			// Y=4+: textarea content lines
-			textareaStartY := 4 // First content line
+			// Y=2: empty (first \n)
+			// Y=3: empty (second \n)
+			// Y=4: ╭── border top
+			// Y=5+: textarea content lines
+			textareaStartY := 5 // First content line
 			textareaStartX := 2 // Border (1) + Padding (1)
 
 			targetRow := msg.Y - textareaStartY
@@ -172,7 +173,7 @@ func (m *TaskInput) View() tea.View {
 		// Y=3: ╭── border top
 		// Y=4+: textarea content (cursor Y=0 maps to screen Y=4)
 		cursor.Position.Y += 4
-		cursor.Position.X += 2 // Border (1) + Padding (1)
+		cursor.Position.X += 1 // Border only (textarea handles padding internally)
 		v.Cursor = cursor
 	}
 
