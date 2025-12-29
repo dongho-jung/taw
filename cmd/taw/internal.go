@@ -356,7 +356,9 @@ var handleTaskCmd = &cobra.Command{
 
 		// Split window for user pane (error is non-fatal)
 		// Pass workDir so user pane starts in the worktree (if git mode) or project dir
-		if err := tm.SplitWindow(windowID, true, workDir, ""); err != nil {
+		// Show task content first, then start shell
+		userPaneCmd := fmt.Sprintf("sh -c 'cat ../task; echo; exec %s'", getShell())
+		if err := tm.SplitWindow(windowID, true, workDir, userPaneCmd); err != nil {
 			logging.Warn("Failed to split window: %v", err)
 		} else {
 			logging.Trace("Window split for user pane: startDir=%s", workDir)
@@ -1399,4 +1401,13 @@ func openEditor(workDir string) (string, error) {
 	}
 
 	return strings.TrimSpace(strings.Join(contentLines, "\n")), nil
+}
+
+// getShell returns the user's preferred shell
+func getShell() string {
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/bash"
+	}
+	return shell
 }
