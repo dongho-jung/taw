@@ -94,7 +94,15 @@ func runMain(cmd *cobra.Command, args []string) error {
 
 	// Detect git repo
 	gitClient := git.New()
-	application.SetGitRepo(gitClient.IsGitRepo(cwd))
+	isGitRepo := gitClient.IsGitRepo(cwd)
+	application.SetGitRepo(isGitRepo)
+
+	// Update session name to show repo name when in a git repo
+	if isGitRepo {
+		if repoRoot, err := gitClient.GetRepoRoot(cwd); err == nil {
+			application.UpdateSessionNameForGitRepo(repoRoot)
+		}
+	}
 
 	// Initialize .taw directory
 	if err := application.Initialize(); err != nil {
