@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -438,50 +439,48 @@ exec "%s" internal end-task "%s" "%s"
 			logging.Debug("End-task script created: %s", endTaskScriptPath)
 		}
 
-		// Build environment variables and Claude command
-		// These are used by PROMPT.md for auto-merge, auto-pr, etc.
-		var envVars strings.Builder
-		envVars.WriteString(fmt.Sprintf("export TASK_NAME='%s' ", taskName))
-		envVars.WriteString(fmt.Sprintf("TAW_DIR='%s' ", app.TawDir))
-		envVars.WriteString(fmt.Sprintf("PROJECT_DIR='%s' ", app.ProjectDir))
+		// Create start-agent script to avoid shell escaping issues with tmux
+		// This script sets environment variables and starts Claude with the system prompt
+		// The system prompt is base64 encoded to avoid issues with $, backticks, quotes, etc.
+		startAgentScriptPath := filepath.Join(t.AgentDir, "start-agent")
+		worktreeDirExport := ""
 		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
-			envVars.WriteString(fmt.Sprintf("WORKTREE_DIR='%s' ", workDir))
+			worktreeDirExport = fmt.Sprintf("export WORKTREE_DIR='%s'\n", workDir)
 		}
-		envVars.WriteString(fmt.Sprintf("WINDOW_ID='%s' ", windowID))
-		envVars.WriteString(fmt.Sprintf("ON_COMPLETE='%s' ", app.Config.OnComplete))
-		envVars.WriteString(fmt.Sprintf("TAW_HOME='%s' ", filepath.Dir(filepath.Dir(tawBin))))
-		envVars.WriteString(fmt.Sprintf("TAW_BIN='%s' ", tawBin))
-		envVars.WriteString(fmt.Sprintf("SESSION_NAME='%s'", sessionName))
 
-		claudeCmd := fmt.Sprintf("%s && claude --dangerously-skip-permissions --system-prompt \"$(cat '%s')\"",
-			envVars.String(), t.GetSystemPromptPath())
-		respawnCmd := fmt.Sprintf("sh -c %q", claudeCmd)
+		encodedPrompt := base64.StdEncoding.EncodeToString([]byte(systemPrompt))
+		startAgentContent := fmt.Sprintf(`#!/bin/bash
+# Auto-generated start-agent script for this task
+export TASK_NAME='%s'
+export TAW_DIR='%s'
+export PROJECT_DIR='%s'
+%sexport WINDOW_ID='%s'
+export ON_COMPLETE='%s'
+export TAW_HOME='%s'
+export TAW_BIN='%s'
+export SESSION_NAME='%s'
+
+# System prompt is base64 encoded to avoid shell escaping issues
+# Using heredoc with single-quoted delimiter prevents any shell interpretation
+exec claude --dangerously-skip-permissions --system-prompt "$(base64 -d <<'__PROMPT_END__'
+%s
+__PROMPT_END__
+)"
+`, taskName, app.TawDir, app.ProjectDir, worktreeDirExport, windowID,
+			app.Config.OnComplete, filepath.Dir(filepath.Dir(tawBin)), tawBin, sessionName,
+			encodedPrompt)
+
+		if err := os.WriteFile(startAgentScriptPath, []byte(startAgentContent), 0755); err != nil {
+			logging.Warn("Failed to create start-agent script: %v", err)
+		} else {
+			logging.Debug("Start-agent script created: %s", startAgentScriptPath)
+		}
+
 		agentPane := windowID + ".0"
 
-		// Start Claude with retry logic
-		maxRespawnRetries := 3
-		var respawnErr error
-		for respawnAttempt := 1; respawnAttempt <= maxRespawnRetries; respawnAttempt++ {
-			if err := tm.RespawnPane(agentPane, workDir, respawnCmd); err != nil {
-				respawnErr = err
-				logging.Warn("Failed to start Claude (attempt %d/%d): %v", respawnAttempt, maxRespawnRetries, err)
-				time.Sleep(500 * time.Millisecond)
-				continue
-			}
-
-			// Wait for pane to become responsive
-			time.Sleep(500 * time.Millisecond)
-			if err := tm.WaitForPane(agentPane, 5*time.Second, 0); err != nil {
-				respawnErr = err
-				logging.Warn("Pane not responsive after respawn (attempt %d/%d): %v", respawnAttempt, maxRespawnRetries, err)
-				continue
-			}
-
-			respawnErr = nil
-			break
-		}
-		if respawnErr != nil {
-			return fmt.Errorf("failed to start Claude after %d attempts: %w", maxRespawnRetries, respawnErr)
+		// Start Claude using the start-agent script
+		if err := tm.RespawnPane(agentPane, workDir, startAgentScriptPath); err != nil {
+			return fmt.Errorf("failed to start Claude: %w", err)
 		}
 
 		// Wait for Claude to be ready
