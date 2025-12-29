@@ -52,7 +52,7 @@ taw/                           # This repository
     ├── .queue/                # Quick task queue (add with ⌥ u)
     │   └── 001.task           # Pending tasks (processed in order)
     ├── history/               # Task history directory
-    │   └── YYMMDD_HHMMSS_task-name  # Agent pane capture at task end
+    │   └── YYMMDD_HHMMSS_task-name  # Task + summary + pane capture at task end
     └── agents/{task-name}/    # Per-task workspace
         ├── task               # Task contents
         ├── end-task           # Per-task end-task script (called for auto-merge)

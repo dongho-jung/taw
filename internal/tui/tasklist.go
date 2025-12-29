@@ -192,13 +192,28 @@ func (m *TaskListUI) loadTasks() tea.Cmd {
 					item.UpdatedAt = info.ModTime()
 				}
 
-				// Load history content (contains task + separator + summary)
+				// Load history content
+				// New format: task + "\n---summary---\n" + summary + "\n---capture---\n" + pane capture
+				// Old format: task + "\n---------\n" + pane capture (for backward compatibility)
 				if content, err := os.ReadFile(historyFile); err == nil {
 					contentStr := string(content)
-					// Split by separator
-					if idx := strings.Index(contentStr, "\n---------\n"); idx != -1 {
+
+					// Try new format first
+					if summaryIdx := strings.Index(contentStr, "\n---summary---\n"); summaryIdx != -1 {
+						item.Content = contentStr[:summaryIdx]
+						rest := contentStr[summaryIdx+15:] // Skip "\n---summary---\n"
+
+						if captureIdx := strings.Index(rest, "\n---capture---\n"); captureIdx != -1 {
+							item.Summary = rest[:captureIdx]
+							// Pane capture is after the separator but we don't need to store it separately
+							// as it's already part of the history file
+						} else {
+							item.Summary = rest
+						}
+					} else if idx := strings.Index(contentStr, "\n---------\n"); idx != -1 {
+						// Old format: task + separator + pane capture
 						item.Content = contentStr[:idx]
-						item.Summary = contentStr[idx+11:] // Skip separator
+						item.Summary = contentStr[idx+11:] // Skip separator (use pane capture as summary)
 					} else {
 						item.Content = contentStr
 					}

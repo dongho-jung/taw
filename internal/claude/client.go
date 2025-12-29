@@ -20,6 +20,9 @@ type Client interface {
 	// GenerateTaskName generates a task name from the given content.
 	GenerateTaskName(content string) (string, error)
 
+	// GenerateSummary generates a brief summary of the task work from pane content.
+	GenerateSummary(paneContent string) (string, error)
+
 	// WaitForReady waits for Claude to be ready in a tmux pane.
 	WaitForReady(tm tmux.Client, target string) error
 
@@ -52,6 +55,40 @@ var ReadyPatterns = regexp.MustCompile(`(?i)(Trust|trust|bypass permissions|╭�
 
 // TrustPattern matches trust confirmation prompt.
 var TrustPattern = regexp.MustCompile(`(?i)trust`)
+
+// SummaryTimeout is the timeout for summary generation.
+const SummaryTimeout = 15 * time.Second
+
+// GenerateSummary generates a brief summary of task work from the pane content.
+func (c *claudeClient) GenerateSummary(paneContent string) (string, error) {
+	// Truncate pane content if too long (keep last 8000 chars for summary)
+	maxLen := 8000
+	if len(paneContent) > maxLen {
+		paneContent = paneContent[len(paneContent)-maxLen:]
+	}
+
+	prompt := fmt.Sprintf(`다음은 개발 작업의 터미널 출력입니다. 이 작업에서 수행된 내용을 한국어로 간단하게 요약해주세요 (3-5줄).
+
+- 어떤 변경/수정이 이루어졌는지
+- 주요 파일이나 기능
+- 결과 (성공/실패 여부)
+
+터미널 출력:
+%s
+
+간결한 요약만 작성하세요.`, paneContent)
+
+	logging.Trace("GenerateSummary: starting with content length=%d", len(paneContent))
+
+	summary, err := c.runClaude(prompt, SummaryTimeout)
+	if err != nil {
+		logging.Debug("GenerateSummary: failed: %v", err)
+		return "", err
+	}
+
+	logging.Debug("GenerateSummary: success, length=%d", len(summary))
+	return summary, nil
+}
 
 // GenerateTaskName generates a task name using Claude CLI (Haiku model).
 func (c *claudeClient) GenerateTaskName(content string) (string, error) {
