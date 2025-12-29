@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/donghojung/taw/internal/task"
 )
@@ -71,7 +71,7 @@ func (m *RecoverUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the recovery UI.
-func (m *RecoverUI) View() string {
+func (m *RecoverUI) View() tea.View {
 	var sb strings.Builder
 
 	titleStyle := lipgloss.NewStyle().
@@ -130,7 +130,7 @@ func (m *RecoverUI) View() string {
 	sb.WriteString("\n")
 	sb.WriteString(descStyle.Render("↑/↓: Navigate  Enter: Select  q: Cancel"))
 
-	return sb.String()
+	return tea.NewView(sb.String())
 }
 
 // Result returns the chosen action.

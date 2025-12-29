@@ -4,9 +4,9 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // TaskInput provides an inline text input for task content.
@@ -34,16 +34,18 @@ func NewTaskInput() *TaskInput {
 	ta.SetWidth(80)
 	ta.SetHeight(10)
 
-	// Custom styling
-	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
-	ta.FocusedStyle.Base = lipgloss.NewStyle().
+	// Custom styling using v2 API
+	styles := textarea.DefaultStyles(true) // dark mode
+	styles.Focused.Base = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("39")).
 		Padding(0, 1)
-	ta.BlurredStyle.Base = lipgloss.NewStyle().
+	styles.Blurred.Base = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Padding(0, 1)
+	styles.Focused.CursorLine = lipgloss.NewStyle()
+	ta.SetStyles(styles)
 
 	return &TaskInput{
 		textarea: ta,
@@ -93,6 +95,49 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// If empty, don't submit - just continue
 			return m, nil
 		}
+
+	case tea.MouseClickMsg:
+		// Handle mouse click to position cursor in textarea
+		// The textarea starts at approximately y=3 (after title + newlines)
+		// and x=2 (border + padding)
+		mouseY := msg.Y
+		mouseX := msg.X
+
+		// Adjust for textarea offset (title "New Task" + 2 newlines + border)
+		textareaStartY := 3
+		textareaStartX := 2 // border + padding
+
+		if mouseY >= textareaStartY && mouseX >= textareaStartX {
+			// Calculate relative position within textarea
+			relativeY := mouseY - textareaStartY
+			relativeX := mouseX - textareaStartX
+
+			// Move cursor to the clicked line
+			lines := strings.Split(m.textarea.Value(), "\n")
+			currentLine := m.textarea.Line()
+
+			// Move to target line
+			lineDiff := relativeY - currentLine
+			if lineDiff > 0 {
+				for i := 0; i < lineDiff; i++ {
+					m.textarea.CursorDown()
+				}
+			} else if lineDiff < 0 {
+				for i := 0; i < -lineDiff; i++ {
+					m.textarea.CursorUp()
+				}
+			}
+
+			// Set column position
+			targetLine := relativeY
+			if targetLine < len(lines) {
+				lineLen := len(lines[targetLine])
+				if relativeX > lineLen {
+					relativeX = lineLen
+				}
+			}
+			m.textarea.SetCursorColumn(relativeX)
+		}
 	}
 
 	m.textarea, cmd = m.textarea.Update(msg)
@@ -102,7 +147,7 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the task input.
-func (m *TaskInput) View() string {
+func (m *TaskInput) View() tea.View {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("39")).
@@ -120,7 +165,10 @@ func (m *TaskInput) View() string {
 	sb.WriteString("\n")
 	sb.WriteString(helpStyle.Render("Alt+Enter: Submit  |  Esc: Cancel"))
 
-	return sb.String()
+	v := tea.NewView(sb.String())
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
 }
 
 // Result returns the task input result.
@@ -134,7 +182,7 @@ func (m *TaskInput) Result() TaskInputResult {
 // RunTaskInput runs the task input and returns the result.
 func RunTaskInput() (*TaskInputResult, error) {
 	m := NewTaskInput()
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(m)
 
 	finalModel, err := p.Run()
 	if err != nil {

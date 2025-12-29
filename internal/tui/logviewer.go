@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // LogViewer provides an interactive log viewer with vim-like navigation.
@@ -238,13 +238,13 @@ func (m *LogViewer) getDisplayLines() []string {
 }
 
 // View renders the log viewer.
-func (m *LogViewer) View() string {
+func (m *LogViewer) View() tea.View {
 	if m.err != nil {
-		return fmt.Sprintf("Error: %v\n\nPress q or Esc to close.", m.err)
+		return tea.NewView(fmt.Sprintf("Error: %v\n\nPress q or Esc to close.", m.err))
 	}
 
 	if m.width == 0 || m.height == 0 {
-		return "Loading..."
+		return tea.NewView("Loading...")
 	}
 
 	var sb strings.Builder
@@ -333,7 +333,9 @@ func (m *LogViewer) View() string {
 
 	sb.WriteString(statusLine)
 
-	return sb.String()
+	v := tea.NewView(sb.String())
+	v.AltScreen = true
+	return v
 }
 
 // contentHeight returns the height available for content.
@@ -421,7 +423,7 @@ func (m *LogViewer) tick() tea.Cmd {
 // RunLogViewer runs the log viewer for the given log file.
 func RunLogViewer(logFile string) error {
 	m := NewLogViewer(logFile)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	_, err := p.Run()
 	return err
 }
