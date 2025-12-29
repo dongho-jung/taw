@@ -127,17 +127,24 @@ var newTaskCmd = &cobra.Command{
 
 		// Loop continuously for task creation
 		for {
-			// Open editor for task content
-			content, err := openEditor(app.ProjectDir)
+			// Use inline task input TUI
+			result, err := tui.RunTaskInput()
 			if err != nil {
-				fmt.Printf("Failed to open editor: %v\n", err)
+				fmt.Printf("Failed to get task input: %v\n", err)
 				continue
 			}
 
-			if strings.TrimSpace(content) == "" {
+			if result.Cancelled {
+				fmt.Println("Task creation cancelled.")
+				continue
+			}
+
+			if result.Content == "" {
 				fmt.Println("Task content is empty, try again.")
 				continue
 			}
+
+			content := result.Content
 
 			// Save content to temp file for spawn-task to read
 			tmpFile, err := os.CreateTemp("", "taw-task-content-*.txt")
@@ -1484,71 +1491,6 @@ func loadAppConfig(application *app.App) (*app.App, error) {
 	}
 
 	return application, nil
-}
-
-// openEditor opens an editor for task input
-func openEditor(workDir string) (string, error) {
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "vim"
-	}
-
-	// Create temp file
-	tmpFile, err := os.CreateTemp("", "taw-task-*.md")
-	if err != nil {
-		return "", err
-	}
-	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
-
-	// Write template
-	template := `# Task Description
-# Lines starting with # will be ignored
-# Describe your task below:
-
-`
-	if _, err := tmpFile.WriteString(template); err != nil {
-		tmpFile.Close()
-		return "", fmt.Errorf("failed to write template: %w", err)
-	}
-	tmpFile.Close()
-
-	// Build editor command with options
-	var cmd *exec.Cmd
-	editorBase := filepath.Base(editor)
-
-	// For vim/nvim, start in insert mode at the end of file
-	if editorBase == "vim" || editorBase == "nvim" || editorBase == "vi" {
-		cmd = exec.Command(editor, "-c", "normal G", "-c", "startinsert", tmpPath)
-	} else {
-		cmd = exec.Command(editor, tmpPath)
-	}
-
-	cmd.Dir = workDir
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return "", err
-	}
-
-	// Read content
-	data, err := os.ReadFile(tmpPath)
-	if err != nil {
-		return "", err
-	}
-
-	// Remove comment lines
-	lines := strings.Split(string(data), "\n")
-	var contentLines []string
-	for _, line := range lines {
-		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
-			contentLines = append(contentLines, line)
-		}
-	}
-
-	return strings.TrimSpace(strings.Join(contentLines, "\n")), nil
 }
 
 // getShell returns the user's preferred shell

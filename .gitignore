@@ -1,3 +1,5 @@
 .claude/
 .taw/
 /taw
+!.taw/config
+!.taw/memory
