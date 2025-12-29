@@ -103,24 +103,22 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseClickMsg:
 		// Handle mouse click to position cursor in textarea
-		mouse := msg.Mouse()
-		if mouse.Button == tea.MouseLeft {
+		// MouseClickMsg embeds Mouse directly, access fields directly
+		if msg.Button == tea.MouseLeft {
 			m.textarea.Focus()
 
 			// Calculate textarea position from screen coordinates
-			// Screen layout:
+			// Screen layout (based on user testing Y offset = +4):
 			// Y=0: "New Task" title
 			// Y=1: empty (MarginBottom)
 			// Y=2: empty (\n)
-			// Y=3: empty (\n)
-			// Y=4: ╭── border top
-			// Y=5+: textarea content lines
-			// X=0: border, X=1+: content (padding included in textarea)
-			textareaStartY := 5 // First content line
-			textareaStartX := 1 // Border only (padding included in textarea cursor)
+			// Y=3: ╭── border top
+			// Y=4+: textarea content lines
+			textareaStartY := 4 // First content line
+			textareaStartX := 1 // Border only
 
-			targetRow := mouse.Y - textareaStartY
-			targetCol := mouse.X - textareaStartX
+			targetRow := msg.Y - textareaStartY
+			targetCol := msg.X - textareaStartX
 
 			// Only reposition if click is within textarea content area
 			if targetRow >= 0 && targetCol >= 0 {
@@ -167,15 +165,14 @@ func (m *TaskInput) View() tea.View {
 
 	// Set real cursor from textarea for proper IME support
 	if cursor := m.textarea.Cursor(); cursor != nil {
-		// Offset cursor position:
+		// Offset cursor position (based on user testing):
 		// Y=0: "New Task" title
 		// Y=1: empty (MarginBottom)
 		// Y=2: empty (\n)
-		// Y=3: empty (\n)
-		// Y=4: ╭── border top
-		// Y=5+: textarea content (cursor Y=0 maps to screen Y=5)
-		cursor.Position.Y += 5 // Title + margin + 2 newlines + border
-		cursor.Position.X += 1 // Border only (padding seems included in textarea cursor)
+		// Y=3: ╭── border top
+		// Y=4+: textarea content (cursor Y=0 maps to screen Y=4)
+		cursor.Position.Y += 4
+		cursor.Position.X += 1 // Border only
 		v.Cursor = cursor
 	}
 
