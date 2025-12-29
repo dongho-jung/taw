@@ -409,6 +409,47 @@ Automatic execution is the default, but you can invoke commands manually if need
 
 ---
 
+## User-Initiated Task Completion
+
+When the user says phrases like:
+- "정리해라", "종료해라", "끝내라", "마무리해라"
+- "task 정리해", "task 끝내", "task 종료해"
+- "finish", "wrap up", "clean up the task", "close this task"
+
+This means: **complete the task autonomously** including all steps below.
+
+### Task Completion Steps
+
+1. **Commit all changes**
+   ```bash
+   git add -A && git commit -m "feat: $TASK_NAME - final changes"
+   ```
+
+2. **Push to remote**
+   ```bash
+   git push -u origin $TASK_NAME
+   ```
+
+3. **Merge to main** (from PROJECT_DIR)
+   ```bash
+   git -C "$PROJECT_DIR" fetch origin
+   git -C "$PROJECT_DIR" merge --squash "$TASK_NAME"
+   git -C "$PROJECT_DIR" commit -m "feat: $TASK_NAME"
+   ```
+
+4. **Resolve conflicts if any**
+   - If merge conflicts occur, resolve them automatically when possible
+   - For complex conflicts, show the user what needs manual attention
+   - After resolving, complete the merge commit
+
+5. **Clean up and close**
+   - Delete the worktree branch: `git -C "$PROJECT_DIR" branch -D $TASK_NAME`
+   - Close the task window: `tmux kill-window -t $WINDOW_ID`
+
+**Note:** This flow is equivalent to running the end-task script manually. Use this when the user wants to finish up without going through the formal verification process.
+
+---
+
 ## Handling Unrelated Requests
 
 If a request is unrelated to the current task:
