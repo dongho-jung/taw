@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "github.com/charmbracelet/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss/v2"
 )
 
 // StepStatus represents the status of a step.
@@ -115,7 +115,7 @@ func (m *EndTaskUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the end task UI.
-func (m *EndTaskUI) View() string {
+func (m *EndTaskUI) View() tea.View {
 	var sb strings.Builder
 
 	titleStyle := lipgloss.NewStyle().
@@ -194,7 +194,7 @@ func (m *EndTaskUI) View() string {
 		sb.WriteString("\n")
 	}
 
-	return sb.String()
+	return tea.NewView(sb.String())
 }
 
 // runNextStep runs the next step.

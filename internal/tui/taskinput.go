@@ -4,13 +4,10 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	zone "github.com/lrstanley/bubblezone"
+	"github.com/charmbracelet/bubbles/v2/textarea"
+	tea "github.com/charmbracelet/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss/v2"
 )
-
-const textareaZoneID = "task-textarea"
 
 // TaskInput provides an inline text input for task content.
 type TaskInput struct {
@@ -38,18 +35,22 @@ func NewTaskInput() *TaskInput {
 	ta.SetWidth(80)
 	ta.SetHeight(10)
 
-	// Custom styling using v1 API
-	ta.FocusedStyle.Base = lipgloss.NewStyle().
+	// Enable real cursor for proper IME support (Korean input)
+	ta.VirtualCursor = false
+
+	// Custom styling using v2 API - assign directly to Styles field
+	ta.Styles = textarea.DefaultStyles(true) // dark mode
+	ta.Styles.Focused.Base = lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("39")).
 		Padding(0, 1)
-	ta.BlurredStyle.Base = lipgloss.NewStyle().
+	ta.Styles.Blurred.Base = lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Padding(0, 1)
-	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
-	ta.FocusedStyle.Prompt = lipgloss.NewStyle()
-	ta.BlurredStyle.Prompt = lipgloss.NewStyle()
+	ta.Styles.Focused.CursorLine = lipgloss.NewStyle()
+	ta.Styles.Focused.Prompt = lipgloss.NewStyle()
+	ta.Styles.Blurred.Prompt = lipgloss.NewStyle()
 
 	return &TaskInput{
 		textarea: ta,
@@ -100,37 +101,9 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-	case tea.MouseMsg:
-		// Handle mouse click in textarea zone using bubblezone
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			if zone.Get(textareaZoneID).InBounds(msg) {
-				// Click is within textarea - focus it and move cursor to clicked line
-				m.textarea.Focus()
-
-				// Calculate relative position within textarea
-				// The textarea starts at approximately y=3 (after title + newlines)
-				textareaStartY := 3
-
-				if msg.Y >= textareaStartY {
-					relativeY := msg.Y - textareaStartY
-
-					// Move cursor to the clicked line
-					currentLine := m.textarea.Line()
-
-					// Move to target line
-					lineDiff := relativeY - currentLine
-					if lineDiff > 0 {
-						for i := 0; i < lineDiff; i++ {
-							m.textarea.CursorDown()
-						}
-					} else if lineDiff < 0 {
-						for i := 0; i < -lineDiff; i++ {
-							m.textarea.CursorUp()
-						}
-					}
-				}
-			}
-		}
+	case tea.MouseClickMsg:
+		// Handle mouse click to focus textarea
+		m.textarea.Focus()
 	}
 
 	m.textarea, cmd = m.textarea.Update(msg)
@@ -140,7 +113,7 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the task input.
-func (m *TaskInput) View() string {
+func (m *TaskInput) View() tea.View {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("39")).
@@ -154,12 +127,23 @@ func (m *TaskInput) View() string {
 
 	sb.WriteString(titleStyle.Render("New Task"))
 	sb.WriteString("\n\n")
-	// Wrap textarea with bubblezone for mouse click handling
-	sb.WriteString(zone.Mark(textareaZoneID, m.textarea.View()))
+	sb.WriteString(m.textarea.View())
 	sb.WriteString("\n")
-	sb.WriteString(helpStyle.Render("Alt+Enter: Submit  |  Esc: Cancel  |  Click to position cursor"))
+	sb.WriteString(helpStyle.Render("Alt+Enter: Submit  |  Esc: Cancel"))
 
-	return zone.Scan(sb.String())
+	v := tea.NewView(sb.String())
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+
+	// Set real cursor from textarea for proper IME support
+	if cursor := m.textarea.Cursor(); cursor != nil {
+		// Offset cursor position for title + newlines + border
+		cursor.Position.Y += 3 // Title + 2 newlines
+		cursor.Position.X += 2 // Border + padding
+		v.Cursor = cursor
+	}
+
+	return v
 }
 
 // Result returns the task input result.
@@ -172,14 +156,8 @@ func (m *TaskInput) Result() TaskInputResult {
 
 // RunTaskInput runs the task input and returns the result.
 func RunTaskInput() (*TaskInputResult, error) {
-	// Initialize bubblezone manager
-	zone.NewGlobal()
-
 	m := NewTaskInput()
-	p := tea.NewProgram(m,
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-	)
+	p := tea.NewProgram(m)
 
 	finalModel, err := p.Run()
 	if err != nil {

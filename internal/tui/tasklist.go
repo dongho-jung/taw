@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "github.com/charmbracelet/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss/v2"
 
 	"github.com/donghojung/taw/internal/constants"
 	"github.com/donghojung/taw/internal/task"
@@ -344,9 +344,9 @@ func (m *TaskListUI) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the task list UI.
-func (m *TaskListUI) View() string {
+func (m *TaskListUI) View() tea.View {
 	if m.width == 0 || m.height == 0 {
-		return "Loading..."
+		return tea.NewView("Loading...")
 	}
 
 	// Styles
@@ -590,7 +590,9 @@ func (m *TaskListUI) View() string {
 
 	combined.WriteString(statusStyle.Render(statusText + strings.Repeat(" ", padding)))
 
-	return combined.String()
+	v := tea.NewView(combined.String())
+	v.AltScreen = true
+	return v
 }
 
 // Result returns the action and selected item.
@@ -601,7 +603,7 @@ func (m *TaskListUI) Result() (TaskListAction, *TaskItem) {
 // RunTaskListUI runs the task list UI and returns the action and selected item.
 func RunTaskListUI(agentsDir, historyDir, projectDir, sessionName, tawDir string, isGitRepo bool) (TaskListAction, *TaskItem, error) {
 	m := NewTaskListUI(agentsDir, historyDir, projectDir, sessionName, tawDir, isGitRepo)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 
 	finalModel, err := p.Run()
 	if err != nil {
