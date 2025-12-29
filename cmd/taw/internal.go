@@ -50,6 +50,9 @@ func init() {
 	internalCmd.AddCommand(loadingScreenCmd)
 	internalCmd.AddCommand(toggleTaskListCmd)
 	internalCmd.AddCommand(taskListViewerCmd)
+
+	// Add flags to end-task command
+	endTaskCmd.Flags().StringVar(&paneCaptureFile, "pane-capture-file", "", "Path to pre-captured pane content file")
 }
 
 var toggleNewCmd = &cobra.Command{
@@ -548,6 +551,8 @@ exec "%s" internal end-task "%s" "%s"
 	},
 }
 
+var paneCaptureFile string
+
 var endTaskCmd = &cobra.Command{
 	Use:   "end-task [session] [window-id]",
 	Short: "End a task (commit, merge, cleanup)",
@@ -756,18 +761,51 @@ var endTaskCmd = &cobra.Command{
 		if err := os.MkdirAll(historyDir, 0755); err != nil {
 			logging.Warn("Failed to create history directory: %v", err)
 		} else {
-			// Capture pane content (use a large number to get full history)
-			paneContent, err := tm.CapturePane(windowID+".0", 10000)
-			if err != nil {
-				logging.Warn("Failed to capture pane content: %v", err)
+			// Get pane content: either from pre-captured file or capture now
+			var paneContent string
+			var captureErr error
+			if paneCaptureFile != "" {
+				// Use pre-captured content (from end-task-ui)
+				content, err := os.ReadFile(paneCaptureFile)
+				if err != nil {
+					logging.Warn("Failed to read pane capture file: %v", err)
+					// Try to capture directly as fallback
+					paneContent, captureErr = tm.CapturePane(windowID+".0", 10000)
+				} else {
+					paneContent = string(content)
+					logging.Debug("Using pre-captured pane content from: %s", paneCaptureFile)
+				}
+				// Clean up temp file
+				os.Remove(paneCaptureFile)
 			} else {
-				// Build history content: task content + separator + pane capture
+				// Capture pane content directly (use a large number to get full history)
+				paneContent, captureErr = tm.CapturePane(windowID+".0", 10000)
+			}
+
+			if captureErr != nil {
+				logging.Warn("Failed to capture pane content: %v", captureErr)
+			} else if paneContent != "" {
+				// Generate summary using Claude
+				claudeClient := claude.New()
+				summary, err := claudeClient.GenerateSummary(paneContent)
+				if err != nil {
+					logging.Warn("Failed to generate summary: %v", err)
+					summary = "" // Continue without summary
+				} else {
+					logging.Debug("Generated summary: %d chars", len(summary))
+				}
+
+				// Build history content: task + summary + pane capture
 				var historyContent strings.Builder
 				taskContent, _ := targetTask.LoadContent()
 				if taskContent != "" {
 					historyContent.WriteString(taskContent)
-					historyContent.WriteString("\n---------\n")
+					historyContent.WriteString("\n---summary---\n")
 				}
+				if summary != "" {
+					historyContent.WriteString(summary)
+				}
+				historyContent.WriteString("\n---capture---\n")
 				historyContent.WriteString(paneContent)
 
 				// Generate filename: YYMMDD_HHMMSS_taskname
@@ -814,6 +852,34 @@ var endTaskUICmd = &cobra.Command{
 
 		tm := tmux.New(sessionName)
 
+		// IMPORTANT: Capture the agent pane content BEFORE creating the split pane
+		// This is necessary because splitting shifts pane indices, causing windowID+".0"
+		// to no longer be the agent pane
+		paneContent, err := tm.CapturePane(windowID+".0", 10000)
+		if err != nil {
+			logging.Warn("Failed to pre-capture agent pane: %v", err)
+			paneContent = "" // Continue anyway, end-task will try to capture directly
+		}
+
+		// Save captured content to temp file if we got it
+		var capturePath string
+		if paneContent != "" {
+			tmpFile, err := os.CreateTemp("", "taw-pane-capture-*.txt")
+			if err != nil {
+				logging.Warn("Failed to create temp file for pane capture: %v", err)
+			} else {
+				if _, err := tmpFile.WriteString(paneContent); err != nil {
+					logging.Warn("Failed to write pane capture to temp file: %v", err)
+					tmpFile.Close()
+					os.Remove(tmpFile.Name())
+				} else {
+					capturePath = tmpFile.Name()
+					tmpFile.Close()
+					logging.Debug("Pre-captured agent pane to: %s", capturePath)
+				}
+			}
+		}
+
 		// Get the taw binary path
 		tawBin, err := os.Executable()
 		if err != nil {
@@ -831,19 +897,30 @@ var endTaskUICmd = &cobra.Command{
 		}
 
 		// Build end-task command that runs in the pane
-		// After completion, wait for key press before closing
-		endTaskCmd := fmt.Sprintf("%s internal end-task %s %s; echo; echo 'Press Enter to close...'; read", tawBin, sessionName, windowID)
+		// Include pane-capture-file flag if we have pre-captured content
+		var endTaskCmdStr string
+		if capturePath != "" {
+			endTaskCmdStr = fmt.Sprintf("%s internal end-task --pane-capture-file=%q %s %s; echo; echo 'Press Enter to close...'; read",
+				tawBin, capturePath, sessionName, windowID)
+		} else {
+			endTaskCmdStr = fmt.Sprintf("%s internal end-task %s %s; echo; echo 'Press Enter to close...'; read",
+				tawBin, sessionName, windowID)
+		}
 
 		// Create a top pane (40% height) spanning full window width
 		_, err = tm.SplitWindowPane(tmux.SplitOpts{
 			Horizontal: false, // vertical split (top/bottom)
 			Size:       "40%",
 			StartDir:   panePath,
-			Command:    endTaskCmd,
+			Command:    endTaskCmdStr,
 			Before:     true, // create pane above (top)
 			Full:       true, // span entire window width
 		})
 		if err != nil {
+			// Clean up temp file if we created one
+			if capturePath != "" {
+				os.Remove(capturePath)
+			}
 			return fmt.Errorf("failed to create end-task pane: %w", err)
 		}
 
