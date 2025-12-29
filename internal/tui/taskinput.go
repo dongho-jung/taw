@@ -134,7 +134,7 @@ func (m *TaskInput) Result() TaskInputResult {
 // RunTaskInput runs the task input and returns the result.
 func RunTaskInput() (*TaskInputResult, error) {
 	m := NewTaskInput()
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	finalModel, err := p.Run()
 	if err != nil {
