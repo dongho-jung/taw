@@ -430,7 +430,8 @@ func setupClaudeSymlink(app *app.App) error {
 	return os.Symlink(target, linkPath)
 }
 
-// updateGitignore adds .taw to .gitignore if not already present
+// updateGitignore adds .taw gitignore rules if not already present
+// Rules: .taw/ (ignore all), !.taw/config (keep config), !.taw/memory (keep memory)
 func updateGitignore(projectDir string) {
 	gitignorePath := filepath.Join(projectDir, ".gitignore")
 
@@ -438,17 +439,43 @@ func updateGitignore(projectDir string) {
 	content, _ := os.ReadFile(gitignorePath)
 	contentStr := string(content)
 
-	// Check if .taw is already in .gitignore
-	// Look for ".taw" or ".taw/" on its own line
+	// Check if proper .taw rules already exist
+	// Need: .taw/ + !.taw/config + !.taw/memory
 	lines := strings.Split(contentStr, "\n")
+	hasTawIgnore := false
+	hasConfigException := false
+	hasMemoryException := false
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == ".taw" || line == ".taw/" {
-			return
+			hasTawIgnore = true
+		}
+		if line == "!.taw/config" {
+			hasConfigException = true
+		}
+		if line == "!.taw/memory" {
+			hasMemoryException = true
 		}
 	}
 
-	// Append .taw
+	// If all rules exist, nothing to do
+	if hasTawIgnore && hasConfigException && hasMemoryException {
+		return
+	}
+
+	// Prompt user to add rules (default Y)
+	fmt.Print("Add .taw/ gitignore rules (keeps config and memory tracked)? [Y/n]: ")
+	var answer string
+	fmt.Scanln(&answer)
+	answer = strings.TrimSpace(strings.ToLower(answer))
+
+	// Default is Y
+	if answer != "" && answer != "y" && answer != "yes" {
+		return
+	}
+
+	// Append missing rules
 	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
@@ -458,7 +485,18 @@ func updateGitignore(projectDir string) {
 	if len(content) > 0 && content[len(content)-1] != '\n' {
 		f.WriteString("\n")
 	}
-	f.WriteString(".taw/\n")
+
+	// Add header comment if adding .taw/ for the first time
+	if !hasTawIgnore {
+		f.WriteString("\n# TAW\n")
+		f.WriteString(".taw/\n")
+	}
+	if !hasConfigException {
+		f.WriteString("!.taw/config\n")
+	}
+	if !hasMemoryException {
+		f.WriteString("!.taw/memory\n")
+	}
 }
 
 // getTawHome returns the TAW installation directory
