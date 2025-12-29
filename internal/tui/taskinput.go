@@ -102,10 +102,37 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseClickMsg:
-		// Handle mouse click to focus textarea
+		// Handle mouse click to position cursor in textarea
 		mouse := msg.Mouse()
 		if mouse.Button == tea.MouseLeft {
 			m.textarea.Focus()
+
+			// Calculate textarea position from screen coordinates
+			// Screen layout:
+			// Y=0: "New Task" title
+			// Y=1: empty (MarginBottom)
+			// Y=2: empty (\n)
+			// Y=3: empty (\n)
+			// Y=4: ╭── border top
+			// Y=5+: textarea content lines
+			// X=0: border, X=1+: content (padding included in textarea)
+			textareaStartY := 5 // First content line
+			textareaStartX := 1 // Border only (padding included in textarea cursor)
+
+			targetRow := mouse.Y - textareaStartY
+			targetCol := mouse.X - textareaStartX
+
+			// Only reposition if click is within textarea content area
+			if targetRow >= 0 && targetCol >= 0 {
+				// Move to start, then navigate to target position
+				m.textarea.CursorStart()
+				for i := 0; i < targetRow; i++ {
+					m.textarea.CursorDown()
+				}
+				if targetCol > 0 {
+					m.textarea.SetCursorColumn(targetCol)
+				}
+			}
 		}
 	}
 
@@ -141,14 +168,14 @@ func (m *TaskInput) View() tea.View {
 	// Set real cursor from textarea for proper IME support
 	if cursor := m.textarea.Cursor(); cursor != nil {
 		// Offset cursor position:
-		// - Title "New Task" (line 0)
-		// - MarginBottom(1) adds 1 empty line (line 1)
-		// - "\n\n" adds 2 newlines (moves to lines 2, 3)
-		// - Textarea top border (line 3)
-		// - First content line (line 4)
-		// So cursor Y=0 in textarea maps to screen Y=4
-		cursor.Position.Y += 4 // Title + margin + 2 newlines + border
-		cursor.Position.X += 2 // Border (1) + padding (1)
+		// Y=0: "New Task" title
+		// Y=1: empty (MarginBottom)
+		// Y=2: empty (\n)
+		// Y=3: empty (\n)
+		// Y=4: ╭── border top
+		// Y=5+: textarea content (cursor Y=0 maps to screen Y=5)
+		cursor.Position.Y += 5 // Title + margin + 2 newlines + border
+		cursor.Position.X += 1 // Border only (padding seems included in textarea cursor)
 		v.Cursor = cursor
 	}
 
