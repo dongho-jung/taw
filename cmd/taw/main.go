@@ -149,6 +149,10 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 
 	// Clean up merged tasks before starting new session
 	mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+
+	// Prune stale worktree entries first to prevent git errors
+	mgr.PruneWorktrees()
+
 	merged, err := mgr.FindMergedTasks()
 	if err == nil && len(merged) > 0 {
 		logging.Log("Found %d merged tasks to clean up", len(merged))
@@ -238,6 +242,9 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 	// Run cleanup and recovery before attaching
 	mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
 	mgr.SetTmuxClient(tm)
+
+	// Prune stale worktree entries first to prevent git errors
+	mgr.PruneWorktrees()
 
 	// Auto cleanup merged tasks
 	merged, err := mgr.FindMergedTasks()
@@ -502,6 +509,10 @@ func runClean(cmd *cobra.Command, args []string) error {
 	// Clean up tasks
 	if application.IsGitRepo {
 		mgr := task.NewManager(application.AgentsDir, application.ProjectDir, application.TawDir, application.IsGitRepo, application.Config)
+
+		// Prune stale worktree entries first to prevent git errors
+		mgr.PruneWorktrees()
+
 		tasks, _ := mgr.ListTasks()
 		for _, t := range tasks {
 			fmt.Printf("Cleaning up task: %s\n", t.Name)

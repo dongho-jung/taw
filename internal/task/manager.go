@@ -414,6 +414,19 @@ func (m *Manager) CleanupTask(task *Task) error {
 	return task.Remove()
 }
 
+// PruneWorktrees removes stale worktree entries from git's database.
+// This should be called before any git operations to prevent errors
+// when worktree directories have been deleted but git still references them.
+func (m *Manager) PruneWorktrees() {
+	if !m.isGitRepo || m.config == nil || m.config.WorkMode != config.WorkModeWorktree {
+		return
+	}
+
+	if err := m.gitClient.WorktreePrune(m.projectDir); err != nil {
+		logging.Trace("WorktreePrune failed: %v", err)
+	}
+}
+
 // SetupWorktree creates a git worktree for the task.
 func (m *Manager) SetupWorktree(task *Task) error {
 	if !m.isGitRepo || m.config == nil || m.config.WorkMode != config.WorkModeWorktree {
