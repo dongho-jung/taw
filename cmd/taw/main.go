@@ -325,7 +325,7 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	tm.SetOption("status-position", "bottom", true)
 	tm.SetOption("status-left", " "+app.SessionName+" ", true)
 	tm.SetOption("status-left-length", "30", true)
-	tm.SetOption("status-right", " ⌥/:help ⌥q:quit ", true)
+	tm.SetOption("status-right", " ⌥t:tasks ⌥/:help ⌥q:quit ", true)
 	tm.SetOption("status-right-length", "100", true)
 
 	// Window status format - removes index numbers (0:, 1:, 2:) and asterisk (*)
@@ -367,6 +367,7 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 		{Key: "M-Left", Command: "previous-window", NoPrefix: true},
 		{Key: "M-Right", Command: "next-window", NoPrefix: true},
 		{Key: "M-n", Command: fmt.Sprintf("run-shell '%s internal toggle-new %s'", tawBin, app.SessionName), NoPrefix: true},
+		{Key: "M-t", Command: fmt.Sprintf("run-shell '%s internal toggle-task-list %s'", tawBin, app.SessionName), NoPrefix: true},
 		{Key: "M-e", Command: fmt.Sprintf("run-shell '%s internal end-task-ui %s #{window_id}'", tawBin, app.SessionName), NoPrefix: true},
 		{Key: "M-m", Command: fmt.Sprintf("run-shell '%s internal merge-completed %s'", tawBin, app.SessionName), NoPrefix: true},
 		{Key: "M-p", Command: fmt.Sprintf("run-shell '%s internal popup-shell %s'", tawBin, app.SessionName), NoPrefix: true},
