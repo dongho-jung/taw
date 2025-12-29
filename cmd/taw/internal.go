@@ -308,7 +308,7 @@ var handleTaskCmd = &cobra.Command{
 			logging.Error("Failed to get task: %v", err)
 			return err
 		}
-		logging.Log("Task loaded: content_length=%d", len(t.Content))
+		logging.Trace("Task loaded: content_length=%d", len(t.Content))
 
 		// Create tab-lock atomically
 		created, err := t.CreateTabLock()
@@ -317,7 +317,7 @@ var handleTaskCmd = &cobra.Command{
 			return err
 		}
 		if !created {
-			logging.Log("Task already being handled by another process")
+			logging.Debug("Task already being handled by another process")
 			return nil
 		}
 		logging.Log("Tab-lock created successfully")
@@ -336,7 +336,7 @@ var handleTaskCmd = &cobra.Command{
 				timer.StopWithResult(true, fmt.Sprintf("branch=%s, path=%s", taskName, t.WorktreeDir))
 			} else {
 				// Worktree already exists (reopen case)
-				logging.Log("Worktree already exists, reusing: %s", worktreeDir)
+				logging.Debug("Worktree already exists, reusing: %s", worktreeDir)
 				t.WorktreeDir = worktreeDir
 			}
 		}
@@ -379,7 +379,7 @@ var handleTaskCmd = &cobra.Command{
 		if err := tm.SplitWindow(windowID, true, workDir, ""); err != nil {
 			logging.Warn("Failed to split window: %v", err)
 		} else {
-			logging.Log("Window split for user pane: startDir=%s", workDir)
+			logging.Trace("Window split for user pane: startDir=%s", workDir)
 		}
 
 		// Build system prompt
@@ -505,7 +505,7 @@ exec "%s" internal end-task "%s" "%s"
 
 		// Send task instruction - tell Claude to read from file
 		taskInstruction := fmt.Sprintf("ultrathink Read and execute the task from '%s'", t.GetUserPromptPath())
-		logging.Log("Sending task instruction: length=%d", len(taskInstruction))
+		logging.Trace("Sending task instruction: length=%d", len(taskInstruction))
 		sendAttempts := 3
 		for attempt := 1; attempt <= sendAttempts; attempt++ {
 			if err := claudeClient.SendInput(tm, windowID+".0", taskInstruction); err != nil {
@@ -577,12 +577,12 @@ var endTaskCmd = &cobra.Command{
 		tm := tmux.New(sessionName)
 		gitClient := git.New()
 		workDir := mgr.GetWorkingDirectory(targetTask)
-		logging.Log("Working directory: %s", workDir)
+		logging.Trace("Working directory: %s", workDir)
 
 		// Commit changes if git mode
 		if app.IsGitRepo {
 			hasChanges := gitClient.HasChanges(workDir)
-			logging.Log("Git status: hasChanges=%v", hasChanges)
+			logging.Trace("Git status: hasChanges=%v", hasChanges)
 
 			if hasChanges {
 				commitTimer := logging.StartTimer("git commit")
@@ -590,7 +590,7 @@ var endTaskCmd = &cobra.Command{
 					logging.Warn("Failed to add changes: %v", err)
 				}
 				diffStat, _ := gitClient.GetDiffStat(workDir)
-				logging.Log("Changes: %s", strings.ReplaceAll(diffStat, "\n", ", "))
+				logging.Trace("Changes: %s", strings.ReplaceAll(diffStat, "\n", ", "))
 				message := fmt.Sprintf("chore: auto-commit on task end\n\n%s", diffStat)
 				if err := gitClient.Commit(workDir, message); err != nil {
 					commitTimer.StopWithResult(false, err.Error())
@@ -637,7 +637,7 @@ var endTaskCmd = &cobra.Command{
 						lockAcquired = true
 						break
 					}
-					logging.Log("Waiting for merge lock (attempt %d/30)...", retries+1)
+					logging.Trace("Waiting for merge lock (attempt %d/30)...", retries+1)
 					time.Sleep(1 * time.Second)
 				}
 
@@ -652,7 +652,7 @@ var endTaskCmd = &cobra.Command{
 					// Stash any uncommitted changes in project dir
 					hasLocalChanges := gitClient.HasChanges(app.ProjectDir)
 					if hasLocalChanges {
-						logging.Log("Stashing local changes...")
+						logging.Debug("Stashing local changes...")
 						if err := gitClient.StashPush(app.ProjectDir, "taw-merge-temp"); err != nil {
 							logging.Warn("Failed to stash changes: %v", err)
 						}
@@ -662,26 +662,26 @@ var endTaskCmd = &cobra.Command{
 					currentBranch, _ := gitClient.GetCurrentBranch(app.ProjectDir)
 
 					// Fetch latest from origin
-					logging.Log("Fetching from origin...")
+					logging.Debug("Fetching from origin...")
 					if err := gitClient.Fetch(app.ProjectDir, "origin"); err != nil {
 						logging.Warn("Failed to fetch: %v", err)
 					}
 
 					// Checkout main
-					logging.Log("Checking out %s...", mainBranch)
+					logging.Debug("Checking out %s...", mainBranch)
 					if err := gitClient.Checkout(app.ProjectDir, mainBranch); err != nil {
 						logging.Warn("Failed to checkout %s: %v", mainBranch, err)
 						mergeTimer.StopWithResult(false, "checkout failed")
 						mergeSuccess = false
 					} else {
 						// Pull latest
-						logging.Log("Pulling latest changes...")
+						logging.Debug("Pulling latest changes...")
 						if err := gitClient.Pull(app.ProjectDir); err != nil {
 							logging.Warn("Failed to pull: %v", err)
 						}
 
 						// Merge task branch (squash)
-						logging.Log("Squash merging branch %s into %s...", targetTask.Name, mainBranch)
+						logging.Debug("Squash merging branch %s into %s...", targetTask.Name, mainBranch)
 						mergeMsg := fmt.Sprintf("feat: %s", targetTask.Name)
 						if err := gitClient.MergeSquash(app.ProjectDir, targetTask.Name, mergeMsg); err != nil {
 							logging.Warn("Merge failed: %v - may need manual resolution", err)
@@ -693,7 +693,7 @@ var endTaskCmd = &cobra.Command{
 							mergeSuccess = false
 						} else {
 							// Push merged main
-							logging.Log("Pushing merged main to origin...")
+							logging.Debug("Pushing merged main to origin...")
 							if err := gitClient.Push(app.ProjectDir, "origin", mainBranch, false); err != nil {
 								logging.Warn("Failed to push merged main: %v", err)
 								mergeTimer.StopWithResult(false, "push failed")
@@ -705,7 +705,7 @@ var endTaskCmd = &cobra.Command{
 
 						// Restore original branch if different from main
 						if currentBranch != "" && currentBranch != mainBranch {
-							logging.Log("Restoring branch %s...", currentBranch)
+							logging.Debug("Restoring branch %s...", currentBranch)
 							if err := gitClient.Checkout(app.ProjectDir, currentBranch); err != nil {
 								logging.Warn("Failed to restore branch: %v", err)
 							}
@@ -714,7 +714,7 @@ var endTaskCmd = &cobra.Command{
 
 					// Restore stashed changes
 					if hasLocalChanges {
-						logging.Log("Restoring stashed changes...")
+						logging.Debug("Restoring stashed changes...")
 						if err := gitClient.StashPop(app.ProjectDir); err != nil {
 							logging.Warn("Failed to restore stashed changes: %v", err)
 						}
