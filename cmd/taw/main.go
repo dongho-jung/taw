@@ -323,7 +323,8 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	// Setup status bar
 	tm.SetOption("status", "on", true)
 	tm.SetOption("status-position", "bottom", true)
-	tm.SetOption("status-left", "", true)
+	tm.SetOption("status-left", " "+app.SessionName+" ", true)
+	tm.SetOption("status-left-length", "30", true)
 	tm.SetOption("status-right", " ⌥/:help ⌥q:quit ", true)
 	tm.SetOption("status-right-length", "100", true)
 
