@@ -22,7 +22,7 @@ import (
 	"github.com/donghojung/taw/internal/tmux"
 	"github.com/donghojung/taw/internal/tui"
 
-	tea "charm.land/bubbletea/v2"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // internalCmd groups all internal commands

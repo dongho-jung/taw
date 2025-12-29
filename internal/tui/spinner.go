@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Spinner provides a loading spinner with message.
@@ -66,26 +66,22 @@ func (m *Spinner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the spinner.
-func (m *Spinner) View() tea.View {
-	var content string
+func (m *Spinner) View() string {
 	if m.done {
 		if m.err != nil {
 			style := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-			content = style.Render(fmt.Sprintf("✗ %s: %v\n", m.message, m.err))
-		} else {
-			style := lipgloss.NewStyle().Foreground(lipgloss.Color("40"))
-			if m.result != "" {
-				content = style.Render(fmt.Sprintf("✓ %s: %s\n", m.message, m.result))
-			} else {
-				content = style.Render(fmt.Sprintf("✓ %s\n", m.message))
-			}
+			return style.Render(fmt.Sprintf("✗ %s: %v\n", m.message, m.err))
 		}
-	} else {
-		spinnerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-		frame := spinnerFrames[m.frame]
-		content = spinnerStyle.Render(fmt.Sprintf("%s %s", frame, m.message))
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color("40"))
+		if m.result != "" {
+			return style.Render(fmt.Sprintf("✓ %s: %s\n", m.message, m.result))
+		}
+		return style.Render(fmt.Sprintf("✓ %s\n", m.message))
 	}
-	return tea.NewView(content)
+
+	spinnerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+	frame := spinnerFrames[m.frame]
+	return spinnerStyle.Render(fmt.Sprintf("%s %s", frame, m.message))
 }
 
 // tick returns a command that sends a tick message.

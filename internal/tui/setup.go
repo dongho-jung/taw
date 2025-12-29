@@ -4,8 +4,8 @@ package tui
 import (
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/donghojung/taw/internal/config"
 )
@@ -74,7 +74,7 @@ func (m *SetupWizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the setup wizard.
-func (m *SetupWizard) View() tea.View {
+func (m *SetupWizard) View() string {
 	var sb strings.Builder
 
 	titleStyle := lipgloss.NewStyle().
@@ -154,7 +154,7 @@ func (m *SetupWizard) View() tea.View {
 	sb.WriteString("\n")
 	sb.WriteString(descStyle.Render("↑/↓: Navigate  Enter: Select  q: Cancel"))
 
-	return tea.NewView(sb.String())
+	return sb.String()
 }
 
 // maxCursor returns the maximum cursor position for the current step.
