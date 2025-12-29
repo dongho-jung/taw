@@ -78,16 +78,34 @@ var watchWaitCmd = &cobra.Command{
 
 			isFinal := false
 			windowName, err := getWindowName(tm, windowID)
-			if err == nil {
-				isFinal = isFinalWindow(windowName)
-				if isWaitingWindow(windowName) {
-					if !notified {
-						notifyWaiting(taskName, "window")
-						notified = true
-					}
-				} else {
-					notified = false
+			if err != nil {
+				// Window doesn't exist anymore, stop watcher
+				logging.Log("Window %s no longer exists, stopping wait watcher", windowID)
+				return nil
+			}
+
+			// Verify this window still belongs to this task (prevents stale watcher issues)
+			if extractedName, isTask := constants.ExtractTaskName(windowName); isTask {
+				expectedName := taskName
+				if len(expectedName) > 12 {
+					expectedName = expectedName[:12]
 				}
+				if extractedName != expectedName {
+					// Window was reassigned to a different task, stop this watcher
+					logging.Log("Window %s now belongs to different task (%s vs %s), stopping wait watcher",
+						windowID, extractedName, expectedName)
+					return nil
+				}
+			}
+
+			isFinal = isFinalWindow(windowName)
+			if isWaitingWindow(windowName) {
+				if !notified {
+					notifyWaiting(taskName, "window")
+					notified = true
+				}
+			} else {
+				notified = false
 			}
 
 			content, err := tm.CapturePane(paneID, waitCaptureLines)
@@ -212,11 +230,33 @@ func isFinalWindow(name string) bool {
 
 func ensureWaitingWindow(tm tmux.Client, windowID, taskName string) error {
 	windowName, err := getWindowName(tm, windowID)
-	if err == nil {
-		if isWaitingWindow(windowName) || isFinalWindow(windowName) {
-			return nil
-		}
+	if err != nil {
+		// Window doesn't exist, nothing to do
+		return nil
 	}
+
+	// Check if this window belongs to this task (prevents cross-task renaming)
+	extractedName, isTask := constants.ExtractTaskName(windowName)
+	if !isTask {
+		// Not a task window, don't rename
+		return nil
+	}
+
+	// Verify task name matches (accounting for truncation to 12 chars)
+	expectedName := taskName
+	if len(expectedName) > 12 {
+		expectedName = expectedName[:12]
+	}
+	if extractedName != expectedName {
+		// Wrong task window, don't rename (prevents race condition)
+		return nil
+	}
+
+	// Already in final state, don't change
+	if isWaitingWindow(windowName) || isFinalWindow(windowName) {
+		return nil
+	}
+
 	return tm.RenameWindow(windowID, waitingWindowName(taskName))
 }
 
