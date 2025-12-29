@@ -108,7 +108,7 @@ type Timer struct {
 func (t *Timer) Stop() time.Duration {
 	elapsed := time.Since(t.start)
 	if t.logger != nil {
-		t.logger.logWithLevel(LevelInfo, "%s completed in %v", t.operation, elapsed)
+		t.logger.logWithLevel(LevelDebug, "%s completed in %v", t.operation, elapsed)
 	}
 	return elapsed
 }
@@ -118,7 +118,7 @@ func (t *Timer) StopWithResult(success bool, detail string) time.Duration {
 	elapsed := time.Since(t.start)
 	if t.logger != nil {
 		status := "completed"
-		level := LevelInfo
+		level := LevelDebug
 		if !success {
 			status = "failed"
 			level = LevelWarn
@@ -204,6 +204,11 @@ func getCaller(skip int) string {
 
 // logWithLevel writes a log entry with the specified level
 func (l *fileLogger) logWithLevel(level Level, format string, args ...interface{}) {
+	// Debug level only logged when debug mode is enabled
+	if level == LevelDebug && !l.debug {
+		return
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -319,9 +324,9 @@ func (l *fileLogger) Fatal(format string, args ...interface{}) {
 }
 
 func (l *fileLogger) StartTimer(operation string) *Timer {
-	// Log start only if file is available
+	// Log start only if file is available (at Debug level)
 	if l.file != nil {
-		l.logWithLevel(LevelInfo, "%s started", operation)
+		l.logWithLevel(LevelDebug, "%s started", operation)
 	}
 	return &Timer{
 		operation: operation,

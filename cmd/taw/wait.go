@@ -72,7 +72,7 @@ var watchWaitCmd = &cobra.Command{
 
 		for {
 			if !tm.HasPane(paneID) {
-				logging.Log("Pane %s no longer exists, stopping wait watcher", paneID)
+				logging.Debug("Pane %s no longer exists, stopping wait watcher", paneID)
 				return nil
 			}
 
@@ -80,7 +80,7 @@ var watchWaitCmd = &cobra.Command{
 			windowName, err := getWindowName(tm, windowID)
 			if err != nil {
 				// Window doesn't exist anymore, stop watcher
-				logging.Log("Window %s no longer exists, stopping wait watcher", windowID)
+				logging.Debug("Window %s no longer exists, stopping wait watcher", windowID)
 				return nil
 			}
 
@@ -92,7 +92,7 @@ var watchWaitCmd = &cobra.Command{
 				}
 				if extractedName != expectedName {
 					// Window was reassigned to a different task, stop this watcher
-					logging.Log("Window %s now belongs to different task (%s vs %s), stopping wait watcher",
+					logging.Debug("Window %s now belongs to different task (%s vs %s), stopping wait watcher",
 						windowID, extractedName, expectedName)
 					return nil
 				}
@@ -135,7 +135,7 @@ var watchWaitCmd = &cobra.Command{
 						logging.Trace("Failed to rename window: %v", err)
 					}
 					if !notified {
-						logging.Log("Wait detected: %s", reason)
+						logging.Debug("Wait detected: %s", reason)
 						notifyWaiting(taskName, reason)
 						notified = true
 					}
@@ -153,7 +153,7 @@ var watchWaitCmd = &cobra.Command{
 									if err := sendAgentResponse(tm, paneID, choice); err != nil {
 										logging.Trace("Failed to send prompt response: %v", err)
 									} else {
-										logging.Log("Sent prompt response: %s", choice)
+										logging.Debug("Sent prompt response: %s", choice)
 									}
 								}
 							}

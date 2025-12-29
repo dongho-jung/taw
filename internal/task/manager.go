@@ -65,7 +65,7 @@ func (m *Manager) CreateTask(content string) (*Task, error) {
 		name = fallbackName
 	} else {
 		timer.StopWithResult(true, fmt.Sprintf("name=%s", name))
-		logging.Log("Task name generated: %s", name)
+		logging.Debug("Task name generated: %s", name)
 	}
 
 	// Create task directory atomically
@@ -74,7 +74,7 @@ func (m *Manager) CreateTask(content string) (*Task, error) {
 		logging.Error("Failed to create task directory: %v", err)
 		return nil, fmt.Errorf("failed to create task directory: %w", err)
 	}
-	logging.Log("Task directory created: %s", agentDir)
+	logging.Debug("Task directory created: %s", agentDir)
 
 	task := New(name, agentDir)
 
@@ -479,7 +479,7 @@ func (m *Manager) SetupWorktree(task *Task) error {
 // executeWorktreeHook runs the configured worktree hook in the given directory.
 func (m *Manager) executeWorktreeHook(worktreeDir string) {
 	hook := m.config.WorktreeHook
-	logging.Log("Executing worktree hook: %s", hook)
+	logging.Debug("Executing worktree hook: %s", hook)
 
 	cmd := exec.Command("sh", "-c", hook)
 	cmd.Dir = worktreeDir
@@ -491,7 +491,7 @@ func (m *Manager) executeWorktreeHook(worktreeDir string) {
 		return
 	}
 
-	logging.Log("Worktree hook completed successfully")
+	logging.Debug("Worktree hook completed successfully")
 	if len(output) > 0 {
 		logging.Trace("Worktree hook output: %s", string(output))
 	}

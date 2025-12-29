@@ -159,7 +159,7 @@ var newTaskCmd = &cobra.Command{
 				continue
 			}
 
-			logging.Log("Task spawned in background, content file: %s", tmpFile.Name())
+			logging.Debug("Task spawned in background, content file: %s", tmpFile.Name())
 
 			// Immediately loop back to create another task
 			// The spawn-task process will handle everything in a separate window
@@ -212,7 +212,7 @@ var spawnTaskCmd = &cobra.Command{
 			return fmt.Errorf("failed to create progress window: %w", err)
 		}
 
-		logging.Log("Created progress window: %s", progressWindowID)
+		logging.Debug("Created progress window: %s", progressWindowID)
 
 		// Clean up progress window on exit (success or failure)
 		defer func() {
@@ -254,7 +254,7 @@ var spawnTaskCmd = &cobra.Command{
 			time.Sleep(500 * time.Millisecond)
 		}
 
-		logging.Log("Task window created for: %s", newTask.Name)
+		logging.Debug("Task window created for: %s", newTask.Name)
 
 		return nil
 	},
@@ -284,7 +284,7 @@ var handleTaskCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Log("New task detected: name=%s, agentDir=%s", taskName, agentDir)
+		logging.Debug("New task detected: name=%s, agentDir=%s", taskName, agentDir)
 
 		// Get task
 		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
@@ -305,7 +305,7 @@ var handleTaskCmd = &cobra.Command{
 			logging.Debug("Task already being handled by another process")
 			return nil
 		}
-		logging.Log("Tab-lock created successfully")
+		logging.Debug("Tab-lock created successfully")
 
 		// Setup worktree if git mode (skip if worktree already exists - reopen case)
 		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
@@ -335,7 +335,7 @@ var handleTaskCmd = &cobra.Command{
 		// Create tmux window
 		tm := tmux.New(sessionName)
 		workDir := mgr.GetWorkingDirectory(t)
-		logging.Log("Creating tmux window: session=%s, workDir=%s", sessionName, workDir)
+		logging.Debug("Creating tmux window: session=%s, workDir=%s", sessionName, workDir)
 
 		windowID, err := tm.NewWindow(tmux.WindowOpts{
 			Name:     t.GetWindowName(),
@@ -347,7 +347,7 @@ var handleTaskCmd = &cobra.Command{
 			t.RemoveTabLock()
 			return fmt.Errorf("failed to create window: %w", err)
 		}
-		logging.Log("Tmux window created: windowID=%s, name=%s", windowID, t.GetWindowName())
+		logging.Debug("Tmux window created: windowID=%s, name=%s", windowID, t.GetWindowName())
 
 		// Save window ID
 		if err := t.SaveWindowID(windowID); err != nil {
@@ -432,7 +432,7 @@ exec "%s" internal end-task "%s" "%s"
 		if err := os.WriteFile(endTaskScriptPath, []byte(endTaskContent), 0755); err != nil {
 			logging.Warn("Failed to create end-task script: %v", err)
 		} else {
-			logging.Log("End-task script created: %s", endTaskScriptPath)
+			logging.Debug("End-task script created: %s", endTaskScriptPath)
 		}
 
 		// Build environment variables and Claude command
@@ -458,7 +458,7 @@ exec "%s" internal end-task "%s" "%s"
 		}
 
 		// Wait for Claude to be ready
-		logging.Log("Waiting for Claude to be ready...")
+		logging.Debug("Waiting for Claude to be ready...")
 		claudeClient := claude.New()
 		claudeTimer := logging.StartTimer("Claude startup")
 		if err := claudeClient.WaitForReady(tm, windowID+".0"); err != nil {
@@ -471,7 +471,7 @@ exec "%s" internal end-task "%s" "%s"
 		if err := claudeClient.SendTrustResponse(tm, windowID+".0"); err != nil {
 			logging.Trace("Failed to send trust response: %v", err)
 		} else {
-			logging.Log("Trust response sent")
+			logging.Debug("Trust response sent")
 		}
 
 		// Wait a bit more for Claude to be fully ready
@@ -504,7 +504,7 @@ exec "%s" internal end-task "%s" "%s"
 		if err := watchCmd.Start(); err != nil {
 			logging.Warn("Failed to start wait watcher: %v", err)
 		} else {
-			logging.Log("Wait watcher started for windowID=%s", windowID)
+			logging.Debug("Wait watcher started for windowID=%s", windowID)
 		}
 
 		logging.Log("Task started successfully: name=%s, windowID=%s", taskName, windowID)
@@ -554,7 +554,7 @@ var endTaskCmd = &cobra.Command{
 		}
 
 		logging.Log("=== End task: %s ===", targetTask.Name)
-		logging.Log("Configuration: ON_COMPLETE=%s, WorkMode=%s", app.Config.OnComplete, app.Config.WorkMode)
+		logging.Debug("Configuration: ON_COMPLETE=%s, WorkMode=%s", app.Config.OnComplete, app.Config.WorkMode)
 
 		tm := tmux.New(sessionName)
 		gitClient := git.New()
@@ -596,7 +596,7 @@ var endTaskCmd = &cobra.Command{
 
 				// Get main branch name
 				mainBranch := gitClient.GetMainBranch(app.ProjectDir)
-				logging.Log("Main branch: %s", mainBranch)
+				logging.Debug("Main branch: %s", mainBranch)
 
 				mergeTimer := logging.StartTimer("auto-merge")
 
@@ -740,7 +740,7 @@ var endTaskCmd = &cobra.Command{
 				if err := os.WriteFile(historyFile, []byte(historyContent.String()), 0644); err != nil {
 					logging.Warn("Failed to write history file: %v", err)
 				} else {
-					logging.Log("Agent history saved: %s", historyFile)
+					logging.Debug("Agent history saved: %s", historyFile)
 				}
 			}
 		}
