@@ -4,6 +4,7 @@ package task
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -454,7 +455,33 @@ func (m *Manager) SetupWorktree(task *Task) error {
 		// Symlink might already exist or fail for other reasons - continue anyway
 	}
 
+	// Execute worktree hook if configured (error is non-fatal)
+	if m.config.WorktreeHook != "" {
+		m.executeWorktreeHook(worktreeDir)
+	}
+
 	return nil
+}
+
+// executeWorktreeHook runs the configured worktree hook in the given directory.
+func (m *Manager) executeWorktreeHook(worktreeDir string) {
+	hook := m.config.WorktreeHook
+	logging.Log("Executing worktree hook: %s", hook)
+
+	cmd := exec.Command("sh", "-c", hook)
+	cmd.Dir = worktreeDir
+	cmd.Env = os.Environ()
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		logging.Warn("Worktree hook failed: %v\n%s", err, string(output))
+		return
+	}
+
+	logging.Log("Worktree hook completed successfully")
+	if len(output) > 0 {
+		logging.Trace("Worktree hook output: %s", string(output))
+	}
 }
 
 // GetWorkingDirectory returns the working directory for a task.

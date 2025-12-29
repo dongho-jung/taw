@@ -2,7 +2,6 @@
 package config
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,8 +30,9 @@ const (
 
 // Config represents the TAW project configuration.
 type Config struct {
-	WorkMode   WorkMode   `yaml:"work_mode"`
-	OnComplete OnComplete `yaml:"on_complete"`
+	WorkMode     WorkMode   `yaml:"work_mode"`
+	OnComplete   OnComplete `yaml:"on_complete"`
+	WorktreeHook string     `yaml:"worktree_hook"`
 }
 
 // DefaultConfig returns the default configuration.
@@ -51,39 +51,84 @@ func Load(tawDir string) (*Config, error) {
 		return DefaultConfig(), nil
 	}
 
-	file, err := os.Open(configPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open config: %w", err)
+		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
-	defer file.Close()
 
+	return parseConfig(string(data))
+}
+
+// parseConfig parses the configuration from a string.
+// Supports multi-line values using YAML-like '|' syntax.
+func parseConfig(content string) (*Config, error) {
 	cfg := DefaultConfig()
-	scanner := bufio.NewScanner(file)
+	lines := strings.Split(content, "\n")
 
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
+	i := 0
+	for i < len(lines) {
+		line := lines[i]
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			i++
 			continue
 		}
 
-		parts := strings.SplitN(line, ":", 2)
+		parts := strings.SplitN(trimmed, ":", 2)
 		if len(parts) != 2 {
+			i++
 			continue
 		}
 
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
+		// Check for multi-line value (starts with '|')
+		if value == "|" {
+			// Read subsequent indented lines
+			var multiLines []string
+			i++
+			for i < len(lines) {
+				nextLine := lines[i]
+				// Empty line within multi-line block
+				if strings.TrimSpace(nextLine) == "" {
+					multiLines = append(multiLines, "")
+					i++
+					continue
+				}
+				// Check if line is indented (part of multi-line block)
+				if len(nextLine) > 0 && (nextLine[0] == ' ' || nextLine[0] == '\t') {
+					// Remove the leading indentation (first 2 spaces or 1 tab)
+					trimmedLine := nextLine
+					if strings.HasPrefix(trimmedLine, "  ") {
+						trimmedLine = trimmedLine[2:]
+					} else if strings.HasPrefix(trimmedLine, "\t") {
+						trimmedLine = trimmedLine[1:]
+					}
+					multiLines = append(multiLines, trimmedLine)
+					i++
+				} else {
+					// Non-indented line, end of multi-line block
+					break
+				}
+			}
+			value = strings.Join(multiLines, "\n")
+			// Trim trailing newlines from multi-line value
+			value = strings.TrimRight(value, "\n")
+		} else {
+			i++
+		}
+
 		switch key {
 		case "work_mode":
 			cfg.WorkMode = WorkMode(value)
 		case "on_complete":
 			cfg.OnComplete = OnComplete(value)
+		case "worktree_hook":
+			cfg.WorktreeHook = value
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
 	return cfg, nil
@@ -108,9 +153,39 @@ work_mode: %s
 # - auto-pr: Auto commit + create pull request
 on_complete: %s
 
+# Hook to run after worktree creation (optional)
+# Single line example: worktree_hook: npm install
+# Multi-line example:
+#   worktree_hook: |
+#     npm install
+#     npm run build
 `, c.WorkMode, c.OnComplete)
 
+	// Add worktree_hook if set
+	if c.WorktreeHook != "" {
+		content += formatWorktreeHook(c.WorktreeHook)
+	}
+
 	return os.WriteFile(configPath, []byte(content), 0644)
+}
+
+// formatWorktreeHook formats the worktree hook for saving.
+// Multi-line values use YAML-like '|' syntax.
+func formatWorktreeHook(hook string) string {
+	if strings.Contains(hook, "\n") {
+		// Multi-line: use | syntax with indentation
+		lines := strings.Split(hook, "\n")
+		var sb strings.Builder
+		sb.WriteString("worktree_hook: |\n")
+		for _, line := range lines {
+			sb.WriteString("  ")
+			sb.WriteString(line)
+			sb.WriteString("\n")
+		}
+		return sb.String()
+	}
+	// Single line
+	return fmt.Sprintf("worktree_hook: %s\n", hook)
 }
 
 // Exists checks if a configuration file exists in the given taw directory.
