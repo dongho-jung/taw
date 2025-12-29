@@ -137,6 +137,23 @@ func (a *App) SetGitRepo(isGit bool) {
 	a.IsGitRepo = isGit
 }
 
+// UpdateSessionNameForGitRepo updates the session name to include repo name
+// when the project is in a subdirectory of a git repository.
+// Format: {repo-name}:{dir-name} when project is in a subdirectory
+// Format: {repo-name} when project is at repo root
+func (a *App) UpdateSessionNameForGitRepo(repoRoot string) {
+	repoName := filepath.Base(repoRoot)
+	dirName := filepath.Base(a.ProjectDir)
+
+	// If project is in a subdirectory of the repo, show both
+	if repoRoot != a.ProjectDir {
+		a.SessionName = repoName + ":" + dirName
+	} else {
+		// At repo root, just use the repo name
+		a.SessionName = repoName
+	}
+}
+
 // GetEnvVars returns environment variables to be passed to Claude.
 func (a *App) GetEnvVars(taskName, worktreeDir, windowID string) []string {
 	env := os.Environ()
