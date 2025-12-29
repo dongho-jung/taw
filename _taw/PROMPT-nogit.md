@@ -55,12 +55,12 @@ TAW_WAITING
 ```
 ```bash
 # Before asking - set to waiting
-tmux rename-window "💬${TASK_NAME:0:12}"
+tmux rename-window -t $WINDOW_ID "💬${TASK_NAME:0:12}"
 ```
 Switch back to 🤖 when you resume work.
 ```bash
 # After receiving a response - set to working
-tmux rename-window "🤖${TASK_NAME:0:12}"
+tmux rename-window -t $WINDOW_ID "🤖${TASK_NAME:0:12}"
 ```
 
 ---
@@ -208,9 +208,9 @@ Window ID is already stored in the `$WINDOW_ID` environment variable:
 
 ```bash
 # Update status directly via tmux (inside the tmux session)
-tmux rename-window "🤖${TASK_NAME:0:12}"  # Working
-tmux rename-window "💬${TASK_NAME:0:12}"  # Need help
-tmux rename-window "✅${TASK_NAME:0:12}"  # Done
+tmux rename-window -t $WINDOW_ID "🤖${TASK_NAME:0:12}"  # Working
+tmux rename-window -t $WINDOW_ID "💬${TASK_NAME:0:12}"  # Need help
+tmux rename-window -t $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done
 ```
 
 **Switch to 💬 when:**
