@@ -34,6 +34,7 @@ var internalCmd = &cobra.Command{
 func init() {
 	internalCmd.AddCommand(toggleNewCmd)
 	internalCmd.AddCommand(newTaskCmd)
+	internalCmd.AddCommand(spawnTaskCmd)
 	internalCmd.AddCommand(handleTaskCmd)
 	internalCmd.AddCommand(watchWaitCmd)
 	internalCmd.AddCommand(endTaskCmd)
@@ -117,8 +118,6 @@ var newTaskCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
-
 		// Loop continuously for task creation
 		for {
 			// Open editor for task content
@@ -133,56 +132,146 @@ var newTaskCmd = &cobra.Command{
 				continue
 			}
 
-			// Create task with spinner
-			var newTask *task.Task
-			spinner := tui.NewSpinner("Generating task name...")
-			p := tea.NewProgram(spinner)
-
-			// Run task creation in background
-			go func() {
-				t, err := mgr.CreateTask(content)
-				if err != nil {
-					p.Send(tui.SpinnerDoneMsg{Err: err})
-					return
-				}
-				newTask = t
-				p.Send(tui.SpinnerDoneMsg{Result: t.Name})
-			}()
-
-			finalModel, err := p.Run()
+			// Save content to temp file for spawn-task to read
+			tmpFile, err := os.CreateTemp("", "taw-task-content-*.txt")
 			if err != nil {
-				fmt.Printf("Spinner error: %v\n", err)
+				fmt.Printf("Failed to create temp file: %v\n", err)
 				continue
 			}
-
-			spinnerResult := finalModel.(*tui.Spinner)
-			if spinnerResult.GetError() != nil {
-				fmt.Printf("Failed to create task: %v\n", spinnerResult.GetError())
+			if _, err := tmpFile.WriteString(content); err != nil {
+				tmpFile.Close()
+				os.Remove(tmpFile.Name())
+				fmt.Printf("Failed to write task content: %v\n", err)
 				continue
 			}
+			tmpFile.Close()
 
-			logging.Log("Task created: %s", newTask.Name)
-
-			// Handle task in background
+			// Spawn task creation in a separate window (non-blocking)
 			tawBin, _ := os.Executable()
-			handleCmd := exec.Command(tawBin, "internal", "handle-task", sessionName, newTask.AgentDir)
-			if err := handleCmd.Start(); err != nil {
-				logging.Warn("Failed to start handle-task: %v", err)
-				fmt.Printf("Failed to start task handler: %v\n", err)
+			spawnCmd := exec.Command(tawBin, "internal", "spawn-task", sessionName, tmpFile.Name())
+			if err := spawnCmd.Start(); err != nil {
+				os.Remove(tmpFile.Name())
+				logging.Warn("Failed to start spawn-task: %v", err)
+				fmt.Printf("Failed to start task: %v\n", err)
 				continue
 			}
 
-			// Wait for window to be created
-			windowIDFile := filepath.Join(newTask.AgentDir, ".tab-lock", "window_id")
-			for i := 0; i < 60; i++ { // 30 seconds max (60 * 500ms)
-				if _, err := os.Stat(windowIDFile); err == nil {
-					break
-				}
-				time.Sleep(500 * time.Millisecond)
-			}
+			logging.Log("Task spawned in background, content file: %s", tmpFile.Name())
 
-			// Loop back to create another task
+			// Immediately loop back to create another task
+			// The spawn-task process will handle everything in a separate window
 		}
+	},
+}
+
+var spawnTaskCmd = &cobra.Command{
+	Use:   "spawn-task [session] [content-file]",
+	Short: "Spawn a task in a separate window (shows progress)",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		contentFile := args[1]
+
+		// Read content from temp file
+		contentBytes, err := os.ReadFile(contentFile)
+		if err != nil {
+			return fmt.Errorf("failed to read content file: %w", err)
+		}
+		content := string(contentBytes)
+
+		// Clean up temp file
+		os.Remove(contentFile)
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer logger.Close()
+			logger.SetScript("spawn-task")
+			logging.SetGlobal(logger)
+		}
+
+		tm := tmux.New(sessionName)
+
+		// Create a temporary "⏳" window for progress display
+		progressWindowName := "⏳..."
+		progressWindowID, err := tm.NewWindow(tmux.WindowOpts{
+			Name:     progressWindowName,
+			StartDir: app.ProjectDir,
+			Detached: true,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create progress window: %w", err)
+		}
+
+		logging.Log("Created progress window: %s", progressWindowID)
+
+		// Clean up progress window on exit (success or failure)
+		defer func() {
+			// Kill the progress window (it will be replaced by the actual task window)
+			if err := tm.KillWindow(progressWindowID); err != nil {
+				logging.Trace("Failed to kill progress window (may already be closed): %v", err)
+			}
+		}()
+
+		// Run spinner for task creation inside the progress window
+		// We use respawn-pane to run our spinner command
+		tawBin, _ := os.Executable()
+
+		// Create task with spinner
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+		var newTask *task.Task
+		spinner := tui.NewSpinner("Generating task name...")
+		p := tea.NewProgram(spinner)
+
+		// Run task creation in background
+		go func() {
+			t, err := mgr.CreateTask(content)
+			if err != nil {
+				p.Send(tui.SpinnerDoneMsg{Err: err})
+				return
+			}
+			newTask = t
+			p.Send(tui.SpinnerDoneMsg{Result: t.Name})
+		}()
+
+		finalModel, err := p.Run()
+		if err != nil {
+			logging.Error("Spinner error: %v", err)
+			return fmt.Errorf("spinner error: %w", err)
+		}
+
+		spinnerResult := finalModel.(*tui.Spinner)
+		if spinnerResult.GetError() != nil {
+			logging.Error("Failed to create task: %v", spinnerResult.GetError())
+			return fmt.Errorf("failed to create task: %w", spinnerResult.GetError())
+		}
+
+		logging.Log("Task created: %s", newTask.Name)
+
+		// Handle task (creates actual window, starts Claude)
+		handleCmd := exec.Command(tawBin, "internal", "handle-task", sessionName, newTask.AgentDir)
+		if err := handleCmd.Start(); err != nil {
+			logging.Warn("Failed to start handle-task: %v", err)
+			return fmt.Errorf("failed to start task handler: %w", err)
+		}
+
+		// Wait for handle-task to create the window
+		windowIDFile := filepath.Join(newTask.AgentDir, ".tab-lock", "window_id")
+		for i := 0; i < 60; i++ { // 30 seconds max (60 * 500ms)
+			if _, err := os.Stat(windowIDFile); err == nil {
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+
+		logging.Log("Task window created for: %s", newTask.Name)
+
+		return nil
 	},
 }
 
