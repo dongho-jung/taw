@@ -167,6 +167,7 @@ If the task is simple, skip Phase 1 and start Phase 2 after reading the task.
 1. Make changes incrementally
 2. **After each logical change:**
    - Run tests if available → fix failures
+   - **Update documentation if the change affects it** (see Documentation Sync)
    - Commit with a clear message
    - Log progress
 
@@ -273,6 +274,43 @@ Commit → push → update status (no PR/merge)
 - **Build error**: Analyze the message → attempt a fix.
 - **Test failure**: Analyze the cause → fix → rerun.
 - **3 failures**: Switch to 💬 and ask the user for help.
+
+---
+
+## Documentation Sync (CRITICAL)
+
+**Keep documentation in sync with code changes.**
+
+After making code changes, check if any documentation needs updating:
+
+### What to check
+- **README.md**: Feature descriptions, usage examples, installation steps
+- **CLAUDE.md**: Build commands, project structure, working rules
+- **Inline comments**: Function/method documentation, API descriptions
+- **Config examples**: Sample configurations, environment variables
+
+### When to update
+- ✅ New feature → add to README, update usage examples
+- ✅ API change → update CLAUDE.md structure, inline docs
+- ✅ New command/option → update README usage section
+- ✅ Directory structure change → update CLAUDE.md structure
+- ✅ Build/test command change → update CLAUDE.md commands
+- ❌ Internal refactor with no external change → no doc update needed
+- ❌ Bug fix with no behavior change → no doc update needed
+
+### How to sync
+1. After completing a feature/change, review affected docs
+2. Update relevant sections (don't just append—edit in place)
+3. Keep docs concise and accurate
+4. Include doc updates in the same commit as the code change
+
+**Example workflow:**
+```
+Code change: Add --verbose flag to CLI
+→ Check README.md: Add flag to usage section
+→ Check CLAUDE.md: Update if it lists CLI options
+→ Commit: "feat: add --verbose flag" (includes both code and doc changes)
+```
 
 ---
 
