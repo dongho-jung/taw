@@ -347,11 +347,6 @@ var handleTaskCmd = &cobra.Command{
 		}
 		logging.Log("Tmux window created: windowID=%s, name=%s", windowID, t.GetWindowName())
 
-		// Focus on the newly created task window
-		if err := tm.SelectWindow(windowID); err != nil {
-			logging.Warn("Failed to focus window: %v", err)
-		}
-
 		// Save window ID
 		if err := t.SaveWindowID(windowID); err != nil {
 			logging.Warn("Failed to save window ID: %v", err)
