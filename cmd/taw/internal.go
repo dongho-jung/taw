@@ -48,6 +48,8 @@ func init() {
 	internalCmd.AddCommand(toggleHelpCmd)
 	internalCmd.AddCommand(recoverTaskCmd)
 	internalCmd.AddCommand(loadingScreenCmd)
+	internalCmd.AddCommand(toggleTaskListCmd)
+	internalCmd.AddCommand(taskListViewerCmd)
 }
 
 var toggleNewCmd = &cobra.Command{
@@ -1136,6 +1138,144 @@ var loadingScreenCmd = &cobra.Command{
 		// Block forever until killed (spawn-task will kill the window when done)
 		_, err := p.Run()
 		return err
+	},
+}
+
+var toggleTaskListCmd = &cobra.Command{
+	Use:   "toggle-task-list [session]",
+	Short: "Toggle task list popup",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		tm := tmux.New(sessionName)
+
+		// Check if task list popup is open
+		isOpen, _ := tm.GetOption("@taw_tasklist_open")
+		if isOpen == "1" {
+			// Close popup using display-popup -C
+			tm.SetOption("@taw_tasklist_open", "", true)
+			tm.Run("display-popup", "-C")
+			return nil
+		}
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		tm.SetOption("@taw_tasklist_open", "1", true)
+
+		// Get the taw binary path
+		tawBin, err := os.Executable()
+		if err != nil {
+			tawBin = "taw"
+		}
+
+		// Build command that clears state on exit
+		listCmd := fmt.Sprintf("%s internal task-list-viewer %s; tmux -L 'taw-%s' set-option -g @taw_tasklist_open '' 2>/dev/null || true",
+			tawBin, sessionName, sessionName)
+
+		// Ignore error from DisplayPopup
+		tm.DisplayPopup(tmux.PopupOpts{
+			Width:     "90%",
+			Height:    "80%",
+			Title:     " Tasks (↑↓:nav  c:cancel  m:merge  p:push  r:resume  ⏎:focus  q:quit) ",
+			Close:     true,
+			Style:     "fg=terminal,bg=terminal",
+			Directory: app.ProjectDir,
+		}, listCmd)
+		return nil
+	},
+}
+
+var taskListViewerCmd = &cobra.Command{
+	Use:    "task-list-viewer [session]",
+	Short:  "Run the task list viewer",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		action, item, err := tui.RunTaskListUI(
+			app.AgentsDir,
+			app.GetHistoryDir(),
+			app.ProjectDir,
+			sessionName,
+			app.TawDir,
+			app.IsGitRepo,
+		)
+		if err != nil {
+			return err
+		}
+
+		if item == nil {
+			return nil
+		}
+
+		tm := tmux.New(sessionName)
+		gitClient := git.New()
+		tawBin, _ := os.Executable()
+
+		switch action {
+		case tui.TaskListActionSelect:
+			// Focus the task window
+			if item.WindowID != "" {
+				return tm.SelectWindow(item.WindowID)
+			}
+
+		case tui.TaskListActionCancel:
+			// Kill the window and cleanup
+			if item.WindowID != "" {
+				tm.KillWindow(item.WindowID)
+			}
+			mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+			if t, err := mgr.GetTask(item.Name); err == nil {
+				mgr.CleanupTask(t)
+			}
+
+		case tui.TaskListActionMerge:
+			// Trigger end-task for merge
+			if item.WindowID != "" {
+				endCmd := exec.Command(tawBin, "internal", "end-task", sessionName, item.WindowID)
+				return endCmd.Start()
+			}
+
+		case tui.TaskListActionPush:
+			// Push the branch
+			if item.AgentDir != "" {
+				worktreeDir := filepath.Join(item.AgentDir, "worktree")
+				if _, err := os.Stat(worktreeDir); err == nil {
+					// Commit any changes first
+					if gitClient.HasChanges(worktreeDir) {
+						gitClient.AddAll(worktreeDir)
+						gitClient.Commit(worktreeDir, "chore: auto-commit before push")
+					}
+					return gitClient.Push(worktreeDir, "origin", item.Name, true)
+				}
+			}
+
+		case tui.TaskListActionResume:
+			// Resume a completed task from history
+			if item.HistoryFile != "" && item.Content != "" {
+				// Create a new task with the same content
+				mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+				newTask, err := mgr.CreateTask(item.Content)
+				if err != nil {
+					return fmt.Errorf("failed to create task: %w", err)
+				}
+
+				// Handle the task
+				handleCmd := exec.Command(tawBin, "internal", "handle-task", sessionName, newTask.AgentDir)
+				return handleCmd.Start()
+			}
+		}
+
+		return nil
 	},
 }
 
