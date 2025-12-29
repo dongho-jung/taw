@@ -40,7 +40,7 @@ func NewLogViewer(logFile string) *LogViewer {
 	return &LogViewer{
 		logFile:  logFile,
 		tailMode: true,
-		minLevel: 0, // Show all levels by default (L0+)
+		minLevel: 2, // Show L2+ (Info and above) by default
 	}
 }
 
