@@ -770,12 +770,48 @@ var endTaskCmd = &cobra.Command{
 
 var endTaskUICmd = &cobra.Command{
 	Use:   "end-task-ui [session] [window-id]",
-	Short: "End task with UI feedback",
+	Short: "End task with UI feedback (creates visible pane)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// For now, just call end-task
-		// TODO: Implement proper TUI with progress display
-		return endTaskCmd.RunE(cmd, args)
+		sessionName := args[0]
+		windowID := args[1]
+
+		tm := tmux.New(sessionName)
+
+		// Get the taw binary path
+		tawBin, err := os.Executable()
+		if err != nil {
+			tawBin = "taw"
+		}
+
+		// Get working directory from pane
+		panePath, err := tm.Display("#{pane_current_path}")
+		if err != nil || panePath == "" {
+			app, err := getAppFromSession(sessionName)
+			if err != nil {
+				return err
+			}
+			panePath = app.ProjectDir
+		}
+
+		// Build end-task command that runs in the pane
+		// After completion, wait for key press before closing
+		endTaskCmd := fmt.Sprintf("%s internal end-task %s %s; echo; echo 'Press Enter to close...'; read", tawBin, sessionName, windowID)
+
+		// Create a top pane (40% height) spanning full window width
+		_, err = tm.SplitWindowPane(tmux.SplitOpts{
+			Horizontal: false, // vertical split (top/bottom)
+			Size:       "40%",
+			StartDir:   panePath,
+			Command:    endTaskCmd,
+			Before:     true, // create pane above (top)
+			Full:       true, // span entire window width
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create end-task pane: %w", err)
+		}
+
+		return nil
 	},
 }
 
