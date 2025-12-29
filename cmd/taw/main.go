@@ -431,7 +431,7 @@ func setupClaudeSymlink(app *app.App) error {
 }
 
 // updateGitignore adds .taw gitignore rules if not already present
-// Pattern: ignore .taw/ but keep .taw/config and .taw/memory tracked
+// Rules: .taw/ (ignore all), !.taw/config (keep config), !.taw/memory (keep memory)
 func updateGitignore(projectDir string) {
 	gitignorePath := filepath.Join(projectDir, ".gitignore")
 
@@ -439,7 +439,8 @@ func updateGitignore(projectDir string) {
 	content, _ := os.ReadFile(gitignorePath)
 	contentStr := string(content)
 
-	// Check if the proper .taw rules already exist
+	// Check if proper .taw rules already exist
+	// Need: .taw/ + !.taw/config + !.taw/memory
 	lines := strings.Split(contentStr, "\n")
 	hasTawIgnore := false
 	hasConfigException := false
@@ -463,18 +464,18 @@ func updateGitignore(projectDir string) {
 		return
 	}
 
-	// Prompt user to add .taw gitignore rules
-	fmt.Print("Add .taw/ to .gitignore (keeps config and memory tracked)? [Y/n]: ")
-	var choice string
-	fmt.Scanln(&choice)
-	choice = strings.TrimSpace(strings.ToLower(choice))
+	// Prompt user to add rules (default Y)
+	fmt.Print("Add .taw/ gitignore rules (keeps config and memory tracked)? [Y/n]: ")
+	var answer string
+	fmt.Scanln(&answer)
+	answer = strings.TrimSpace(strings.ToLower(answer))
 
-	// Default to 'y'
-	if choice != "" && choice != "y" && choice != "yes" {
+	// Default is Y
+	if answer != "" && answer != "y" && answer != "yes" {
 		return
 	}
 
-	// Add missing rules
+	// Append missing rules
 	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
@@ -486,11 +487,11 @@ func updateGitignore(projectDir string) {
 		f.WriteString("\n")
 	}
 
-	// Add .taw/ if not present
+	// Add header comment if adding .taw/ for the first time
 	if !hasTawIgnore {
+		f.WriteString("\n# TAW\n")
 		f.WriteString(".taw/\n")
 	}
-	// Add exceptions
 	if !hasConfigException {
 		f.WriteString("!.taw/config\n")
 	}
