@@ -103,7 +103,10 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseClickMsg:
 		// Handle mouse click to focus textarea
-		m.textarea.Focus()
+		mouse := msg.Mouse()
+		if mouse.Button == tea.MouseLeft {
+			m.textarea.Focus()
+		}
 	}
 
 	m.textarea, cmd = m.textarea.Update(msg)
@@ -137,9 +140,15 @@ func (m *TaskInput) View() tea.View {
 
 	// Set real cursor from textarea for proper IME support
 	if cursor := m.textarea.Cursor(); cursor != nil {
-		// Offset cursor position for title + newlines + border
-		cursor.Position.Y += 3 // Title + 2 newlines
-		cursor.Position.X += 2 // Border + padding
+		// Offset cursor position:
+		// - Title "New Task" (line 0)
+		// - MarginBottom(1) adds 1 empty line (line 1)
+		// - "\n\n" adds 2 newlines (moves to lines 2, 3)
+		// - Textarea top border (line 3)
+		// - First content line (line 4)
+		// So cursor Y=0 in textarea maps to screen Y=4
+		cursor.Position.Y += 4 // Title + margin + 2 newlines + border
+		cursor.Position.X += 2 // Border (1) + padding (1)
 		v.Cursor = cursor
 	}
 
