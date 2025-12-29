@@ -430,7 +430,8 @@ func setupClaudeSymlink(app *app.App) error {
 	return os.Symlink(target, linkPath)
 }
 
-// updateGitignore adds .taw to .gitignore if not already present
+// updateGitignore adds .taw gitignore rules if not already present
+// Pattern: ignore .taw/ but keep .taw/config and .taw/memory tracked
 func updateGitignore(projectDir string) {
 	gitignorePath := filepath.Join(projectDir, ".gitignore")
 
@@ -438,27 +439,64 @@ func updateGitignore(projectDir string) {
 	content, _ := os.ReadFile(gitignorePath)
 	contentStr := string(content)
 
-	// Check if .taw is already in .gitignore
-	// Look for ".taw" or ".taw/" on its own line
+	// Check if the proper .taw rules already exist
 	lines := strings.Split(contentStr, "\n")
+	hasTawIgnore := false
+	hasConfigException := false
+	hasMemoryException := false
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == ".taw" || line == ".taw/" {
-			return
+			hasTawIgnore = true
+		}
+		if line == "!.taw/config" {
+			hasConfigException = true
+		}
+		if line == "!.taw/memory" {
+			hasMemoryException = true
 		}
 	}
 
-	// Append .taw
+	// If all rules exist, nothing to do
+	if hasTawIgnore && hasConfigException && hasMemoryException {
+		return
+	}
+
+	// Prompt user to add .taw gitignore rules
+	fmt.Print("Add .taw/ to .gitignore (keeps config and memory tracked)? [Y/n]: ")
+	var choice string
+	fmt.Scanln(&choice)
+	choice = strings.TrimSpace(strings.ToLower(choice))
+
+	// Default to 'y'
+	if choice != "" && choice != "y" && choice != "yes" {
+		return
+	}
+
+	// Add missing rules
 	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}
 	defer f.Close()
 
+	// Ensure there's a newline before our rules
 	if len(content) > 0 && content[len(content)-1] != '\n' {
 		f.WriteString("\n")
 	}
-	f.WriteString(".taw/\n")
+
+	// Add .taw/ if not present
+	if !hasTawIgnore {
+		f.WriteString(".taw/\n")
+	}
+	// Add exceptions
+	if !hasConfigException {
+		f.WriteString("!.taw/config\n")
+	}
+	if !hasMemoryException {
+		f.WriteString("!.taw/memory\n")
+	}
 }
 
 // getTawHome returns the TAW installation directory
