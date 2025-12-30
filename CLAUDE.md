@@ -50,7 +50,7 @@ taw/                           # This repository
     ├── .claude/               # Claude settings and slash commands (copied from embed)
     │   ├── settings.local.json
     │   └── commands/          # Slash commands (/commit, /test, /pr, /merge)
-    ├── .queue/                # Quick task queue (add with ⌥ u)
+    ├── .queue/                # Quick task queue (add with ⌃⇧U)
     │   └── 001.task           # Pending tasks (processed in order)
     ├── history/               # Task history directory
     │   └── YYMMDD_HHMMSS_task-name  # Task + summary + pane capture at task end
@@ -79,7 +79,7 @@ TAW uses a 6-level logging system (L0-L5):
 
 - Enable debug mode: `TAW_DEBUG=1 taw`
 - Log file location: `.taw/log`
-- View logs: Press `⌥ l` to open the log viewer
+- View logs: Press `⌃⇧L` to open the log viewer
 - Filter levels in log viewer: Press `l` to cycle through L0+ → L1+ → ... → L5 only
 
 ## Notifications

@@ -11,21 +11,21 @@ Claude Code-based autonomous agent work environment
   Border drag     Resize pane
 
 ### Navigation
-  ⌥ Tab       Move to next pane (cycle)
-  ⌥ ←/→       Move to previous/next window
+  ⌃⇧Tab       Move to next pane (cycle)
+  ⌃⇧←/→       Move to previous/next window
 
 ### Task Management
-  ⌥ n         Toggle new window (task ↔ new window)
-  ⌥ t         Toggle task list (view all active + completed tasks)
-  ⌥ e         Complete task (commit → PR/merge → cleanup, follows ON_COMPLETE setting)
-  ⌥ m         Batch merge completed tasks (merge + end all ✅ status tasks)
-  ⌥ p         Toggle shell pane (bottom 40%, current worktree path)
-  ⌥ l         Toggle log viewer (see Log Viewer section below)
-  ⌥ u         Add quick task to queue (auto-processed after completion)
+  ⌃⇧N         Toggle new window (task ↔ new window)
+  ⌃⇧T         Toggle task list (view all active + completed tasks)
+  ⌃⇧E         Complete task (commit → PR/merge → cleanup, follows ON_COMPLETE setting)
+  ⌃⇧M         Batch merge completed tasks (merge + end all ✅ status tasks)
+  ⌃⇧P         Toggle shell pane (bottom 40%, current worktree path)
+  ⌃⇧L         Toggle log viewer (see Log Viewer section below)
+  ⌃⇧U         Add quick task to queue (auto-processed after completion)
 
 ### Session
-  ⌥ q         Exit session (detach)
-  ⌥ /         Open/close this help (toggle)
+  ⌃⇧Q         Exit session (detach)
+  ⌃⇧/         Open/close this help (toggle)
 
 ## Slash Commands (for agents)
 
@@ -41,7 +41,7 @@ Claude Code-based autonomous agent work environment
   ├── PROMPT.md              Project-specific agent instructions
   ├── memory                 Shared project memory (YAML)
   ├── log                    Unified log file
-  ├── .queue/                Quick task queue (add with ⌥u)
+  ├── .queue/                Quick task queue (add with ⌃⇧U)
   ├── history/               Completed task history
   │   └── YYMMDD_HHMMSS_name Task content + work capture
   └── agents/{task-name}/
@@ -57,7 +57,7 @@ Claude Code-based autonomous agent work environment
   ✅  Task completed
   ⚠️  Warning (merge failed, needs manual resolution)
 
-## Task List Viewer (⌥t)
+## Task List Viewer (⌃⇧T)
 
 View all active and completed tasks with preview panel.
 
@@ -65,7 +65,7 @@ View all active and completed tasks with preview panel.
   ↑/↓         Navigate tasks
   PgUp/PgDn   Scroll preview panel
   ⏎/Space     Focus selected task window
-  q/Esc/⌥t    Close the task list
+  q/Esc/⌃⇧T    Close the task list
 
 ### Actions
   c           Cancel task (active tasks only)
@@ -79,7 +79,7 @@ View all active and completed tasks with preview panel.
   ✅  Done (ready to merge)
   📁  History (completed, from history)
 
-## Log Viewer (⌥l)
+## Log Viewer (⌃⇧L)
 
   ↑/↓         Scroll vertically
   ←/→         Scroll horizontally (when word wrap is off)
@@ -89,7 +89,7 @@ View all active and completed tasks with preview panel.
   s           Toggle tail mode (follow new logs)
   w           Toggle word wrap
   l           Cycle log level filter (L0+ → L1+ → ... → L5 only)
-  q/Esc/⌥l    Close the log viewer
+  q/Esc/⌃⇧L    Close the log viewer
 
 ## Environment Variables (for agents)
 
@@ -100,4 +100,4 @@ View all active and completed tasks with preview panel.
   WINDOW_ID     tmux window ID (for status updates)
 
 ---
-Press ⌥/ or q to exit
+Press ⌃⇧/ or q to exit

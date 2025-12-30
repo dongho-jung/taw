@@ -241,13 +241,13 @@ tmux rename-window -t $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done
 |---------|-------------|
 | `/test` | Manually run tests |
 
-Note: Git-related commands (/commit, /pr, /merge) are unavailable in non-git mode. Use `⌥ e` to finish tasks.
+Note: Git-related commands (/commit, /pr, /merge) are unavailable in non-git mode. Use `⌃⇧E` to finish tasks.
 
 ---
 
 ## Handling Unrelated Requests
 
 If a request is unrelated to the current task:
-> "This seems unrelated to `$TASK_NAME`. Press `⌥ n` to create a new task."
+> "This seems unrelated to `$TASK_NAME`. Press `⌃⇧N` to create a new task."
 
 Small related fixes (typos, etc.) can be handled within the current task.

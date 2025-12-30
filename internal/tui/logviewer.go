@@ -88,7 +88,7 @@ func (m *LogViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey handles keyboard input.
 func (m *LogViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "esc", "alt+l":
+	case "q", "esc", "ctrl+shift+l":
 		return m, tea.Quit
 
 	case "down":

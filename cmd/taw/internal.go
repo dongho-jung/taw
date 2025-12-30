@@ -1320,7 +1320,7 @@ var toggleHelpCmd = &cobra.Command{
 		tm.DisplayPopup(tmux.PopupOpts{
 			Width:  "80%",
 			Height: "80%",
-			Title:  " Help (⌥/ or q to close) ",
+			Title:  " Help (⌃⇧/ or q to close) ",
 			Close:  true,
 			Style:  "fg=terminal,bg=terminal",
 		}, popupCmd)

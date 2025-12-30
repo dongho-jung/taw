@@ -6,31 +6,17 @@ import (
 	"github.com/donghojung/taw/internal/tmux"
 )
 
-// keyMapping defines a hotkey with its English and Korean equivalents
-type keyMapping struct {
-	english string // English key (e.g., "n")
-	korean  string // Korean 2-벌식 key (e.g., "ㅜ")
-}
-
-// Korean 2-벌식 keyboard layout mapping
-var koreanKeyMap = map[string]string{
-	"n": "ㅜ",
-	"t": "ㅅ",
-	"e": "ㄷ",
-	"m": "ㅡ",
-	"p": "ㅔ",
-	"u": "ㅕ",
-	"l": "ㅣ",
-	"q": "ㅂ",
-}
+// ModifierPrefix is the tmux key modifier for all TAW hotkeys.
+// Change this to customize the modifier (e.g., "M-" for Alt, "C-S-" for Ctrl+Shift).
+const ModifierPrefix = "C-S-"
 
 // hotkeyDef defines a hotkey action
 type hotkeyDef struct {
-	key     string // English key
+	key     string // Key (e.g., "n", "t", "/")
 	command string
 }
 
-// buildKeybindings creates tmux keybindings for both English and Korean layouts
+// buildKeybindings creates tmux keybindings with the configured modifier
 func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
 	// Command templates
 	cmdToggleNew := fmt.Sprintf("run-shell '%s internal toggle-new %s'", tawBin, sessionName)
@@ -42,7 +28,7 @@ func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
 	cmdToggleLog := fmt.Sprintf("run-shell '%s internal toggle-log %s'", tawBin, sessionName)
 	cmdToggleHelp := fmt.Sprintf("run-shell '%s internal toggle-help %s'", tawBin, sessionName)
 
-	// Hotkey definitions (English key -> command)
+	// Hotkey definitions (key -> command)
 	hotkeys := []hotkeyDef{
 		{"n", cmdToggleNew},
 		{"t", cmdToggleTaskList},
@@ -58,30 +44,20 @@ func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
 	// Build bindings
 	var bindings []tmux.BindOpts
 
-	// Navigation keys (language-independent)
+	// Navigation keys
 	bindings = append(bindings,
-		tmux.BindOpts{Key: "M-Tab", Command: "select-pane -t :.+", NoPrefix: true},
-		tmux.BindOpts{Key: "M-Left", Command: "previous-window", NoPrefix: true},
-		tmux.BindOpts{Key: "M-Right", Command: "next-window", NoPrefix: true},
+		tmux.BindOpts{Key: ModifierPrefix + "Tab", Command: "select-pane -t :.+", NoPrefix: true},
+		tmux.BindOpts{Key: ModifierPrefix + "Left", Command: "previous-window", NoPrefix: true},
+		tmux.BindOpts{Key: ModifierPrefix + "Right", Command: "next-window", NoPrefix: true},
 	)
 
-	// Add English and Korean bindings for each hotkey
+	// Add bindings for each hotkey
 	for _, hk := range hotkeys {
-		// English binding
 		bindings = append(bindings, tmux.BindOpts{
-			Key:      "M-" + hk.key,
+			Key:      ModifierPrefix + hk.key,
 			Command:  hk.command,
 			NoPrefix: true,
 		})
-
-		// Korean binding (if mapping exists)
-		if korean, ok := koreanKeyMap[hk.key]; ok {
-			bindings = append(bindings, tmux.BindOpts{
-				Key:      "M-" + korean,
-				Command:  hk.command,
-				NoPrefix: true,
-			})
-		}
 	}
 
 	return bindings

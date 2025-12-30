@@ -25,7 +25,7 @@ The first launch automatically opens the task editor.
 
 ### Create a task
 
-To add another task inside the tmux session, press `⌥ n`:
+To add another task inside the tmux session, press `⌃⇧N`:
 - The editor opens so you can write the task content.
 - Save and exit to automatically launch the agent.
 - vi/vim/nvim start in insert mode automatically.
@@ -42,8 +42,8 @@ Slash commands available to the agent:
 | `/merge` | Merges the worktree branch into the current project branch |
 
 **Task completion**:
-- `auto-merge` mode: Automatically commit → merge → clean up → close the window when the task ends (no ⌥e needed)
-- Other modes: Press `⌥ e` to commit → PR/merge → clean up according to ON_COMPLETE
+- `auto-merge` mode: Automatically commit → merge → clean up → close the window when the task ends (no ⌃⇧E needed)
+- Other modes: Press `⌃⇧E` to commit → PR/merge → clean up according to ON_COMPLETE
 
 <details>
 <summary>Automatically reopen incomplete tasks</summary>
@@ -161,24 +161,24 @@ brew install tmux gh
 
 | Action | Shortcut |
 |--------|----------|
-| Cycle panes | `⌥ Tab` |
-| Move window | `⌥ ←/→` |
-| Toggle new window | `⌥ n` (task ↔ new window) |
-| Complete task | `⌥ e` (log progress in user pane, commit → PR/merge → cleanup) |
-| Merge all done tasks | `⌥ m` (merge + end all ✅ tasks) |
-| Toggle shell pane | `⌥ p` (bottom 40%, open/close shell in current worktree) |
-| Live log viewer | `⌥ l` (toggle log viewer, vim-like navigation) |
-| Add quick task to queue | `⌥ u` (auto-run after current task completes) |
-| Help | `⌥ /` |
-| Leave session | `⌥ q` (detach) |
+| Cycle panes | `⌃⇧Tab` |
+| Move window | `⌃⇧←/→` |
+| Toggle new window | `⌃⇧N` (task ↔ new window) |
+| Complete task | `⌃⇧E` (log progress in user pane, commit → PR/merge → cleanup) |
+| Merge all done tasks | `⌃⇧M` (merge + end all ✅ tasks) |
+| Toggle shell pane | `⌃⇧P` (bottom 40%, open/close shell in current worktree) |
+| Live log viewer | `⌃⇧L` (toggle log viewer, vim-like navigation) |
+| Add quick task to queue | `⌃⇧U` (auto-run after current task completes) |
+| Help | `⌃⇧/` |
+| Leave session | `⌃⇧Q` (detach) |
 
 ## Quick task queue
 
 Quickly capture ideas or follow-up work while you are busy.
 
-1. Press `⌥ u` to open the popup.
+1. Press `⌃⇧U` to open the popup.
 2. Enter the task description and hit Enter.
-3. When the current task finishes (`⌥ e`), queued tasks start automatically.
+3. When the current task finishes (`⌃⇧E`), queued tasks start automatically.
 
 Queue layout:
 ```bash
@@ -188,7 +188,7 @@ Queue layout:
 
 ## Log viewer
 
-Press `⌥ l` to open the live log viewer.
+Press `⌃⇧L` to open the live log viewer.
 
 <details>
 <summary>Controls</summary>
@@ -203,7 +203,7 @@ Press `⌥ l` to open the live log viewer.
 | `s` | Toggle tail mode (follow new logs) |
 | `w` | Toggle word wrap |
 | `l` | Cycle log level filter (L0+ → L1+ → ... → L5 only) |
-| `q` / `Esc` / `⌥ l` | Close the log viewer |
+| `q` / `Esc` / `⌃⇧L` | Close the log viewer |
 </details>
 
 ## Task history

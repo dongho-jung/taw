@@ -254,7 +254,7 @@ func (m *TaskListUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey handles keyboard input.
 func (m *TaskListUI) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "esc", "alt+t":
+	case "q", "esc", "ctrl+shift+t":
 		m.done = true
 		return m, tea.Quit
 
