@@ -18,6 +18,7 @@ import (
 	"github.com/donghojung/taw/internal/embed"
 	"github.com/donghojung/taw/internal/git"
 	"github.com/donghojung/taw/internal/logging"
+	"github.com/donghojung/taw/internal/notify"
 	"github.com/donghojung/taw/internal/task"
 	"github.com/donghojung/taw/internal/tmux"
 	"github.com/donghojung/taw/internal/tui"
@@ -553,6 +554,13 @@ __PROMPT_END__
 		}
 
 		logging.Log("Task started successfully: name=%s, windowID=%s", taskName, windowID)
+
+		// Notify user that task has started
+		notify.PlaySound(notify.SoundTaskCreated)
+		if err := tm.DisplayMessage(fmt.Sprintf("🤖 Task started: %s", taskName), 2000); err != nil {
+			logging.Trace("Failed to display message: %v", err)
+		}
+
 		return nil
 	},
 }
@@ -757,6 +765,11 @@ var endTaskCmd = &cobra.Command{
 					if err := tm.RenameWindow(windowID, warningWindowName); err != nil {
 						logging.Warn("Failed to rename window: %v", err)
 					}
+					// Notify user of merge failure
+					notify.PlaySound(notify.SoundError)
+					if err := tm.DisplayMessage(fmt.Sprintf("⚠️ Merge failed: %s - manual resolution needed", targetTask.Name), 3000); err != nil {
+						logging.Trace("Failed to display message: %v", err)
+					}
 					return nil // Exit without cleanup - keep worktree and branch
 				}
 			}
@@ -823,6 +836,12 @@ var endTaskCmd = &cobra.Command{
 					logging.Debug("Agent history saved: %s", historyFile)
 				}
 			}
+		}
+
+		// Notify user that task completed successfully
+		notify.PlaySound(notify.SoundTaskCompleted)
+		if err := tm.DisplayMessage(fmt.Sprintf("✅ Task completed: %s", targetTask.Name), 2000); err != nil {
+			logging.Trace("Failed to display message: %v", err)
 		}
 
 		// Cleanup task (only reached if merge succeeded or not in auto-merge mode)

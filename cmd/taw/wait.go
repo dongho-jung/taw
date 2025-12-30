@@ -101,7 +101,7 @@ var watchWaitCmd = &cobra.Command{
 			isFinal = isFinalWindow(windowName)
 			if isWaitingWindow(windowName) {
 				if !notified {
-					notifyWaiting(taskName, "window")
+					notifyWaitingWithDisplay(tm, taskName, "window")
 					notified = true
 				}
 			} else {
@@ -136,7 +136,7 @@ var watchWaitCmd = &cobra.Command{
 					}
 					if !notified {
 						logging.Debug("Wait detected: %s", reason)
-						notifyWaiting(taskName, reason)
+						notifyWaitingWithDisplay(tm, taskName, reason)
 						notified = true
 					}
 					if !promptActive {
@@ -354,6 +354,20 @@ func notifyWaiting(taskName, reason string) {
 	message := fmt.Sprintf("Task %s needs your response.", taskName)
 	if err := notify.Send(title, message); err != nil {
 		logging.Trace("Failed to send notification: %v", err)
+	}
+	// Play sound to alert user
+	notify.PlaySound(notify.SoundNeedInput)
+}
+
+func notifyWaitingWithDisplay(tm tmux.Client, taskName, reason string) {
+	notifyWaiting(taskName, reason)
+	// Show message in tmux status bar
+	displayMsg := fmt.Sprintf("💬 %s needs input", taskName)
+	if reason != "" && reason != "window" && reason != "marker" {
+		displayMsg = fmt.Sprintf("💬 %s: %s", taskName, reason)
+	}
+	if err := tm.DisplayMessage(displayMsg, 3000); err != nil {
+		logging.Trace("Failed to display message: %v", err)
 	}
 }
 

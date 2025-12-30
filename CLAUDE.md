@@ -30,7 +30,7 @@ taw/                           # This repository
 │   ├── git/                   # Git/worktree management
 │   ├── github/                # GitHub API client
 │   ├── logging/               # Logging (L0-L5 levels)
-│   ├── notify/                # Desktop notifications
+│   ├── notify/                # Desktop/audio/statusline notifications
 │   ├── task/                  # Task management
 │   ├── tmux/                  # Tmux client
 │   └── tui/                   # Terminal UI (log viewer)
@@ -80,6 +80,20 @@ TAW uses a 6-level logging system (L0-L5):
 - Log file location: `.taw/log`
 - View logs: Press `⌥ l` to open the log viewer
 - Filter levels in log viewer: Press `l` to cycle through L0+ → L1+ → ... → L5 only
+
+## Notifications
+
+TAW uses multiple notification channels to alert users (macOS only):
+
+| Event                    | Sound       | Desktop Notification | Statusline Message |
+|--------------------------|-------------|----------------------|-------------------|
+| Task created             | Glass       | -                    | `🤖 Task started: {name}` |
+| Task completed           | Hero        | -                    | `✅ Task completed: {name}` |
+| User input needed        | Funk        | Yes                  | `💬 {name} needs input` |
+| Error (merge failed etc) | Basso       | -                    | `⚠️ Merge failed: {name}` |
+
+- Sounds use macOS system sounds (`/System/Library/Sounds/`)
+- Statusline messages display via `tmux display-message -d 2000`
 
 ## Working rules
 

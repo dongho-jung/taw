@@ -59,6 +59,9 @@ type Client interface {
 	Run(args ...string) error
 	RunWithOutput(args ...string) (string, error)
 	Display(format string) (string, error)
+
+	// Notifications
+	DisplayMessage(message string, durationMs int) error
 }
 
 // SessionOpts contains options for creating a new session.
@@ -516,5 +519,10 @@ func (c *tmuxClient) Unbind(key string) error {
 
 func (c *tmuxClient) Display(format string) (string, error) {
 	return c.RunWithOutput("display-message", "-p", format)
+}
+
+// DisplayMessage shows a message in the status bar for the specified duration.
+func (c *tmuxClient) DisplayMessage(message string, durationMs int) error {
+	return c.Run("display-message", "-d", fmt.Sprintf("%d", durationMs), message)
 }
 
