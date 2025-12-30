@@ -144,10 +144,10 @@ on_complete: confirm
 <details>
 <summary>Other configuration</summary>
 
-- `_taw/PROMPT.md`: System prompt (symlinked to `.taw/.global-prompt` in projects)
+- System prompt: Embedded in binary (copied to `.taw/.claude/` on setup)
 - `.taw/PROMPT.md`: Project-specific prompt (per project)
 - `.taw/memory`: Project memory (YAML, update in place for reusable info)
-- `_taw/claude/commands/`: Slash commands (symlinked to `.taw/.claude` in projects)
+- Slash commands: Embedded in binary (copied to `.taw/.claude/commands/` on setup)
 - `EDITOR` environment variable: Editor for writing tasks (default: vim)
 </details>
 

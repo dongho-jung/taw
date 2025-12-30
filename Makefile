@@ -24,9 +24,6 @@ install: build
 	@cp $(BINARY_NAME) ~/.local/bin/
 	@xattr -cr ~/.local/bin/$(BINARY_NAME)
 	@codesign -fs - ~/.local/bin/$(BINARY_NAME)
-	@echo "Installing _taw resources..."
-	@rm -rf ~/.local/bin/_taw
-	@cp -R _taw ~/.local/bin/
 	@echo "Done! Make sure ~/.local/bin is in your PATH"
 
 ## Install globally to /usr/local/bin (requires sudo)
@@ -35,9 +32,6 @@ install-global: build
 	sudo cp $(BINARY_NAME) /usr/local/bin/
 	sudo xattr -cr /usr/local/bin/$(BINARY_NAME)
 	sudo codesign -fs - /usr/local/bin/$(BINARY_NAME)
-	@echo "Installing _taw resources..."
-	sudo rm -rf /usr/local/bin/_taw
-	sudo cp -R _taw /usr/local/bin/
 	@echo "Done!"
 
 ## Clean build artifacts
