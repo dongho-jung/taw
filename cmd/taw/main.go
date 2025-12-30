@@ -374,19 +374,44 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	})
 
 	// Setup keybindings
+	// Commands for each hotkey
+	cmdToggleNew := fmt.Sprintf("run-shell '%s internal toggle-new %s'", tawBin, app.SessionName)
+	cmdToggleTaskList := fmt.Sprintf("run-shell '%s internal toggle-task-list %s'", tawBin, app.SessionName)
+	cmdEndTaskUI := fmt.Sprintf("run-shell '%s internal end-task-ui %s #{window_id}'", tawBin, app.SessionName)
+	cmdMergeCompleted := fmt.Sprintf("run-shell '%s internal merge-completed %s'", tawBin, app.SessionName)
+	cmdPopupShell := fmt.Sprintf("run-shell '%s internal popup-shell %s'", tawBin, app.SessionName)
+	cmdQuickTask := fmt.Sprintf("run-shell '%s internal quick-task %s'", tawBin, app.SessionName)
+	cmdToggleLog := fmt.Sprintf("run-shell '%s internal toggle-log %s'", tawBin, app.SessionName)
+	cmdToggleHelp := fmt.Sprintf("run-shell '%s internal toggle-help %s'", tawBin, app.SessionName)
+
 	bindings := []tmux.BindOpts{
+		// Navigation (language-independent)
 		{Key: "M-Tab", Command: "select-pane -t :.+", NoPrefix: true},
 		{Key: "M-Left", Command: "previous-window", NoPrefix: true},
 		{Key: "M-Right", Command: "next-window", NoPrefix: true},
-		{Key: "M-n", Command: fmt.Sprintf("run-shell '%s internal toggle-new %s'", tawBin, app.SessionName), NoPrefix: true},
-		{Key: "M-t", Command: fmt.Sprintf("run-shell '%s internal toggle-task-list %s'", tawBin, app.SessionName), NoPrefix: true},
-		{Key: "M-e", Command: fmt.Sprintf("run-shell '%s internal end-task-ui %s #{window_id}'", tawBin, app.SessionName), NoPrefix: true},
-		{Key: "M-m", Command: fmt.Sprintf("run-shell '%s internal merge-completed %s'", tawBin, app.SessionName), NoPrefix: true},
-		{Key: "M-p", Command: fmt.Sprintf("run-shell '%s internal popup-shell %s'", tawBin, app.SessionName), NoPrefix: true},
-		{Key: "M-u", Command: fmt.Sprintf("run-shell '%s internal quick-task %s'", tawBin, app.SessionName), NoPrefix: true},
-		{Key: "M-l", Command: fmt.Sprintf("run-shell '%s internal toggle-log %s'", tawBin, app.SessionName), NoPrefix: true},
-		{Key: "M-/", Command: fmt.Sprintf("run-shell '%s internal toggle-help %s'", tawBin, app.SessionName), NoPrefix: true},
+
+		// English keybindings
+		{Key: "M-n", Command: cmdToggleNew, NoPrefix: true},
+		{Key: "M-t", Command: cmdToggleTaskList, NoPrefix: true},
+		{Key: "M-e", Command: cmdEndTaskUI, NoPrefix: true},
+		{Key: "M-m", Command: cmdMergeCompleted, NoPrefix: true},
+		{Key: "M-p", Command: cmdPopupShell, NoPrefix: true},
+		{Key: "M-u", Command: cmdQuickTask, NoPrefix: true},
+		{Key: "M-l", Command: cmdToggleLog, NoPrefix: true},
+		{Key: "M-/", Command: cmdToggleHelp, NoPrefix: true},
 		{Key: "M-q", Command: "detach", NoPrefix: true},
+
+		// Korean keybindings (2-벌식 layout)
+		// When Korean input is active, the same physical keys produce Jamo characters:
+		// n→ㅜ, t→ㅅ, e→ㄷ, m→ㅡ, p→ㅔ, u→ㅕ, l→ㅣ, q→ㅂ
+		{Key: "M-ㅜ", Command: cmdToggleNew, NoPrefix: true},      // n
+		{Key: "M-ㅅ", Command: cmdToggleTaskList, NoPrefix: true}, // t
+		{Key: "M-ㄷ", Command: cmdEndTaskUI, NoPrefix: true},      // e
+		{Key: "M-ㅡ", Command: cmdMergeCompleted, NoPrefix: true}, // m
+		{Key: "M-ㅔ", Command: cmdPopupShell, NoPrefix: true},     // p
+		{Key: "M-ㅕ", Command: cmdQuickTask, NoPrefix: true},      // u
+		{Key: "M-ㅣ", Command: cmdToggleLog, NoPrefix: true},      // l
+		{Key: "M-ㅂ", Command: "detach", NoPrefix: true},          // q
 	}
 
 	for _, b := range bindings {
