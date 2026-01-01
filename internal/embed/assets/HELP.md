@@ -16,7 +16,7 @@ Claude Code-based autonomous agent work environment
 
 ### Task Commands
   ⌃N          New task
-  ⌃C          Send Ctrl+C (double-press within 2s to cancel task)
+  ⌃C          Cancel task (double-press within 2s)
   ⌃D          Done task (complete and cleanup)
   ⌃Q          Quit taw
 

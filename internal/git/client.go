@@ -61,6 +61,8 @@ type Client interface {
 	HasConflicts(dir string) (bool, []string, error)
 	CheckoutOurs(dir, path string) error
 	CheckoutTheirs(dir, path string) error
+	FindMergeCommit(dir, branch, into string) (string, error)
+	RevertCommit(dir, commitHash, message string) error
 
 	// Status
 	Status(dir string) (string, error)
@@ -395,6 +397,36 @@ func (c *gitClient) CheckoutOurs(dir, path string) error {
 
 func (c *gitClient) CheckoutTheirs(dir, path string) error {
 	return c.run(dir, "checkout", "--theirs", path)
+}
+
+// FindMergeCommit finds the merge commit where branch was merged into another branch.
+// Returns empty string if not found.
+func (c *gitClient) FindMergeCommit(dir, branch, into string) (string, error) {
+	// Find merge commits that mention the branch name in the commit message
+	// or find the actual merge commit by ancestry
+	output, err := c.runOutput(dir, "log", into, "--merges", "--oneline", "--grep="+branch, "-1", "--format=%H")
+	if err != nil {
+		return "", err
+	}
+	if output != "" {
+		return strings.TrimSpace(output), nil
+	}
+
+	// Alternative: find by ancestry-path
+	output, err = c.runOutput(dir, "log", into, "--merges", "--oneline", "--ancestry-path", branch+".."+into, "-1", "--format=%H")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(output), nil
+}
+
+// RevertCommit creates a revert commit for the given commit hash.
+func (c *gitClient) RevertCommit(dir, commitHash, message string) error {
+	args := []string{"revert", "--no-edit", "-m", "1", commitHash}
+	if message != "" {
+		args = []string{"revert", "-m", "1", "--no-edit", commitHash}
+	}
+	return c.run(dir, args...)
 }
 
 // Status

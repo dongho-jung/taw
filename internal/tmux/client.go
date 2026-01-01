@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/donghojung/taw/internal/constants"
+	"github.com/donghojung/taw/internal/logging"
 )
 
 // Client defines the interface for tmux operations.
@@ -225,6 +226,7 @@ func (c *tmuxClient) KillServer() error {
 // Window management
 
 func (c *tmuxClient) NewWindow(opts WindowOpts) (string, error) {
+	logging.Trace("tmux.NewWindow: name=%s target=%s detached=%v", opts.Name, opts.Target, opts.Detached)
 	args := []string{"new-window", "-P", "-F", "#{window_id}"}
 
 	if opts.Target != "" {
@@ -246,15 +248,27 @@ func (c *tmuxClient) NewWindow(opts WindowOpts) (string, error) {
 		args = append(args, opts.Command)
 	}
 
-	return c.RunWithOutput(args...)
+	windowID, err := c.RunWithOutput(args...)
+	if err != nil {
+		logging.Trace("tmux.NewWindow: failed err=%v", err)
+	} else {
+		logging.Trace("tmux.NewWindow: created windowID=%s", windowID)
+	}
+	return windowID, err
 }
 
 func (c *tmuxClient) KillWindow(target string) error {
+	logging.Trace("tmux.KillWindow: target=%s", target)
 	return c.Run("kill-window", "-t", target)
 }
 
 func (c *tmuxClient) RenameWindow(target, name string) error {
-	return c.Run("rename-window", "-t", target, name)
+	logging.Trace("tmux.RenameWindow: target=%s name=%s", target, name)
+	err := c.Run("rename-window", "-t", target, name)
+	if err != nil {
+		logging.Trace("tmux.RenameWindow: failed err=%v", err)
+	}
+	return err
 }
 
 func (c *tmuxClient) ListWindows() ([]Window, error) {
@@ -523,6 +537,7 @@ func (c *tmuxClient) Display(format string) (string, error) {
 
 // DisplayMessage shows a message in the status bar for the specified duration.
 func (c *tmuxClient) DisplayMessage(message string, durationMs int) error {
+	logging.Trace("tmux.DisplayMessage: message=%s durationMs=%d", message, durationMs)
 	return c.Run("display-message", "-d", fmt.Sprintf("%d", durationMs), message)
 }
 

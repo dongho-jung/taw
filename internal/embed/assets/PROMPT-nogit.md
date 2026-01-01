@@ -55,12 +55,12 @@ TAW_WAITING
 ```
 ```bash
 # Before asking - set to waiting
-tmux rename-window -t $WINDOW_ID "💬${TASK_NAME:0:12}"
+$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
 ```
 Switch back to 🤖 when you resume work.
 ```bash
 # After receiving a response - set to working
-tmux rename-window -t $WINDOW_ID "🤖${TASK_NAME:0:12}"
+$TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
 ```
 
 ---
@@ -113,7 +113,7 @@ Final tests → update status → write completion log
 ```
 
 1. Verify all changes
-2. `tmux rename-window -t $WINDOW_ID "✅..."`
+2. `$TAW_BIN internal rename-window $WINDOW_ID "✅..."`
 3. Write the completion log
 
 ### Automatic handling on errors
@@ -208,9 +208,9 @@ Window ID is already stored in the `$WINDOW_ID` environment variable:
 
 ```bash
 # Update status directly via tmux (inside the tmux session)
-tmux rename-window -t $WINDOW_ID "🤖${TASK_NAME:0:12}"  # Working
-tmux rename-window -t $WINDOW_ID "💬${TASK_NAME:0:12}"  # Need help
-tmux rename-window -t $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done
+$TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"  # Working
+$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"  # Need help
+$TAW_BIN internal rename-window $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done
 ```
 
 **Switch to 💬 when:**

@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+
+	"github.com/donghojung/taw/internal/logging"
 )
 
 // SoundType represents different notification sounds.
@@ -26,6 +28,9 @@ const (
 
 // Send shows a desktop notification when supported.
 func Send(title, message string) error {
+	logging.Trace("Send: start title=%q message=%q", title, message)
+	defer logging.Trace("Send: end title=%q", title)
+
 	if runtime.GOOS != "darwin" {
 		return nil
 	}
@@ -44,7 +49,11 @@ func Send(title, message string) error {
 
 // PlaySound plays a system sound (macOS only).
 // It runs in the background and does not block.
+// Uses nohup to ensure the sound plays even if parent process exits.
 func PlaySound(soundType SoundType) {
+	logging.Trace("PlaySound: start soundType=%s", soundType)
+	defer logging.Trace("PlaySound: end soundType=%s", soundType)
+
 	if runtime.GOOS != "darwin" {
 		return
 	}
@@ -53,12 +62,19 @@ func PlaySound(soundType SoundType) {
 
 	// Check if sound file exists
 	if _, err := os.Stat(soundPath); os.IsNotExist(err) {
+		logging.Trace("PlaySound: sound file not found path=%s", soundPath)
 		return
 	}
 
-	// Run afplay in background (non-blocking)
-	cmd := exec.Command("afplay", soundPath)
-	_ = cmd.Start()
+	// Run afplay via nohup to ensure it survives parent process exit
+	// Redirect output to /dev/null to fully detach
+	cmd := exec.Command("nohup", "afplay", soundPath)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = nil
+	if err := cmd.Start(); err != nil {
+		logging.Trace("PlaySound: failed to start afplay err=%v", err)
+	}
 }
 
 func appleScriptCommand(args ...string) *exec.Cmd {

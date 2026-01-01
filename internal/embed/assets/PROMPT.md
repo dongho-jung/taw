@@ -60,12 +60,12 @@ TAW_WAITING
 ```
 ```bash
 # Before asking - set to waiting
-tmux rename-window -t $WINDOW_ID "💬${TASK_NAME:0:12}"
+$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
 ```
 Switch back to 🤖 when you resume work.
 ```bash
 # After receiving a response - set to working
-tmux rename-window -t $WINDOW_ID "🤖${TASK_NAME:0:12}"
+$TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
 ```
 
 **When should you ask?**
@@ -80,7 +80,7 @@ tmux rename-window -t $WINDOW_ID "🤖${TASK_NAME:0:12}"
 
 ```bash
 # 1. Switch window to 💬 before asking
-tmux rename-window -t $WINDOW_ID "💬${TASK_NAME:0:12}"
+$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
 ```
 
 ```
@@ -112,7 +112,7 @@ AskUserQuestion:
 
 ```bash
 # 2. Switch back to 🤖 after receiving the answer
-tmux rename-window -t $WINDOW_ID "🤖${TASK_NAME:0:12}"
+$TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
 ```
 
 **Example – simple task (no question):**
@@ -234,7 +234,7 @@ Run verification → success? → commit → push → call end-task
 **If verification is impossible or fails → switch to 💬:**
 1. Commit all changes.
 2. `git push -u origin $TASK_NAME`
-3. `tmux rename-window -t $WINDOW_ID "💬${TASK_NAME:0:12}"`
+3. `$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"`
 4. Log: "Work complete - user review required (verification unavailable/failed)"
 5. Message the user: "Verification is needed. Please review and run `⌃R → end-task` to finish."
 
@@ -257,7 +257,7 @@ Commit → push → create PR → update status
    ## Test
    - [x] Tests passed"
    ```
-4. `tmux rename-window -t $WINDOW_ID "✅..."`
+4. `$TAW_BIN internal rename-window $WINDOW_ID "✅..."`
 5. Save PR number: `gh pr view --json number -q '.number' > $TAW_DIR/agents/$TASK_NAME/.pr`
 6. Log: "Work complete - created PR #N"
 
@@ -267,7 +267,7 @@ Commit → push → update status (no PR/merge)
 ```
 1. Commit all changes.
 2. `git push -u origin $TASK_NAME`
-3. `tmux rename-window -t $WINDOW_ID "✅..."`
+3. `$TAW_BIN internal rename-window $WINDOW_ID "✅..."`
 4. Log: "Work complete - branch pushed"
 
 ### Automatic handling on errors
@@ -362,9 +362,9 @@ Window ID is already stored in the `$WINDOW_ID` environment variable:
 
 ```bash
 # Update status directly via tmux (inside the tmux session)
-tmux rename-window -t $WINDOW_ID "🤖${TASK_NAME:0:12}"  # Working - in progress
-tmux rename-window -t $WINDOW_ID "💬${TASK_NAME:0:12}"  # Waiting - awaiting user response
-tmux rename-window -t $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done - completed
+$TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"  # Working - in progress
+$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"  # Waiting - awaiting user response
+$TAW_BIN internal rename-window $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done - completed
 ```
 
 **Switch to 💬 when:**
@@ -383,7 +383,7 @@ tmux rename-window -t $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done - completed
 - Commit granularity and messages
 - PR title and content
 
-**Ask the user** (switch to `tmux rename-window -t $WINDOW_ID "💬..."` first):
+**Ask the user** (switch to `$TAW_BIN internal rename-window $WINDOW_ID "💬..."` first):
 - When the task is complex and you need Plan confirmation
 - When requirements are unclear
 - When trade-offs between options are significant

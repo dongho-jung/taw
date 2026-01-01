@@ -53,6 +53,9 @@ var watchWaitCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
+		logging.Trace("watchWaitCmd: start session=%s windowID=%s task=%s", sessionName, windowID, taskName)
+		defer logging.Trace("watchWaitCmd: end")
+
 		tm := tmux.New(sessionName)
 		paneID := windowID + ".0"
 
@@ -181,6 +184,9 @@ func isFinalWindow(name string) bool {
 }
 
 func ensureWaitingWindow(tm tmux.Client, windowID, taskName string) error {
+	logging.Trace("ensureWaitingWindow: start windowID=%s task=%s", windowID, taskName)
+	defer logging.Trace("ensureWaitingWindow: end")
+
 	windowName, err := getWindowName(tm, windowID)
 	if err != nil {
 		// Window doesn't exist, nothing to do
@@ -209,7 +215,9 @@ func ensureWaitingWindow(tm tmux.Client, windowID, taskName string) error {
 		return nil
 	}
 
-	return tm.RenameWindow(windowID, waitingWindowName(taskName))
+	newName := waitingWindowName(taskName)
+	logging.Trace("ensureWaitingWindow: renaming window from=%s to=%s", windowName, newName)
+	return tm.RenameWindow(windowID, newName)
 }
 
 func waitingWindowName(taskName string) string {
@@ -302,22 +310,31 @@ func findAskUserQuestionUIIndex(lines []string) int {
 }
 
 func notifyWaiting(taskName, reason string) {
+	logging.Trace("notifyWaiting: start task=%s reason=%s", taskName, reason)
+	defer logging.Trace("notifyWaiting: end")
+
 	title := "TAW: Waiting for input"
 	message := fmt.Sprintf("Task %s needs your response.", taskName)
+	logging.Trace("notifyWaiting: sending desktop notification title=%s", title)
 	if err := notify.Send(title, message); err != nil {
 		logging.Trace("Failed to send notification: %v", err)
 	}
 	// Play sound to alert user
+	logging.Trace("notifyWaiting: playing SoundNeedInput")
 	notify.PlaySound(notify.SoundNeedInput)
 }
 
 func notifyWaitingWithDisplay(tm tmux.Client, taskName, reason string) {
+	logging.Trace("notifyWaitingWithDisplay: start task=%s reason=%s", taskName, reason)
+	defer logging.Trace("notifyWaitingWithDisplay: end")
+
 	notifyWaiting(taskName, reason)
 	// Show message in tmux status bar
 	displayMsg := fmt.Sprintf("💬 %s needs input", taskName)
 	if reason != "" && reason != "window" && reason != "marker" {
 		displayMsg = fmt.Sprintf("💬 %s: %s", taskName, reason)
 	}
+	logging.Trace("notifyWaitingWithDisplay: displaying message=%s", displayMsg)
 	if err := tm.DisplayMessage(displayMsg, 3000); err != nil {
 		logging.Trace("Failed to display message: %v", err)
 	}

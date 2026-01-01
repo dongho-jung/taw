@@ -43,6 +43,7 @@ func init() {
 	internalCmd.AddCommand(endTaskUICmd)
 	internalCmd.AddCommand(ctrlCCmd)
 	internalCmd.AddCommand(cancelTaskCmd)
+	internalCmd.AddCommand(cancelTaskUICmd)
 	internalCmd.AddCommand(doneTaskCmd)
 	internalCmd.AddCommand(popupShellCmd)
 	internalCmd.AddCommand(toggleLogCmd)
@@ -53,6 +54,7 @@ func init() {
 	internalCmd.AddCommand(loadingScreenCmd)
 	internalCmd.AddCommand(toggleTaskListCmd)
 	internalCmd.AddCommand(taskListViewerCmd)
+	internalCmd.AddCommand(renameWindowCmd)
 
 	// Add flags to end-task command
 	endTaskCmd.Flags().StringVar(&paneCaptureFile, "pane-capture-file", "", "Path to pre-captured pane content file")
@@ -64,6 +66,23 @@ var toggleNewCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer logger.Close()
+			logger.SetScript("toggle-new")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Trace("toggleNewCmd: start session=%s", sessionName)
+		defer logging.Trace("toggleNewCmd: end")
+
 		tm := tmux.New(sessionName)
 
 		// Check if _ window exists
@@ -75,16 +94,13 @@ var toggleNewCmd = &cobra.Command{
 		for _, w := range windows {
 			if strings.HasPrefix(w.Name, constants.EmojiNew) {
 				// Window exists, just select it (don't send command again to avoid pasting into vim/editor)
+				logging.Trace("toggleNewCmd: new task window already exists, selecting windowID=%s", w.ID)
 				return tm.SelectWindow(w.ID)
 			}
 		}
 
 		// Create new window without command (keeps shell open)
-		app, err := getAppFromSession(sessionName)
-		if err != nil {
-			return err
-		}
-
+		logging.Trace("toggleNewCmd: creating new task window name=%s", constants.NewWindowName)
 		windowID, err := tm.NewWindow(tmux.WindowOpts{
 			Name:     constants.NewWindowName,
 			StartDir: app.ProjectDir,
@@ -92,6 +108,7 @@ var toggleNewCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		logging.Trace("toggleNewCmd: new task window created windowID=%s", windowID)
 
 		// Send new-task command to the new window
 		tawBin, _ := os.Executable()
@@ -185,6 +202,9 @@ var spawnTaskCmd = &cobra.Command{
 	Short: "Spawn a task in a separate window (shows progress)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Trace("spawnTaskCmd: start session=%s contentFile=%s", args[0], args[1])
+		defer logging.Trace("spawnTaskCmd: end")
+
 		sessionName := args[0]
 		contentFile := args[1]
 
@@ -216,6 +236,7 @@ var spawnTaskCmd = &cobra.Command{
 
 		// Create a temporary "⏳" window for progress display
 		progressWindowName := "⏳..."
+		logging.Trace("spawnTaskCmd: creating progress window name=%s", progressWindowName)
 		progressWindowID, err := tm.NewWindow(tmux.WindowOpts{
 			Name:     progressWindowName,
 			StartDir: app.ProjectDir,
@@ -224,6 +245,7 @@ var spawnTaskCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create progress window: %w", err)
 		}
+		logging.Trace("spawnTaskCmd: progress window created windowID=%s", progressWindowID)
 
 		logging.Debug("Created progress window: %s", progressWindowID)
 
@@ -278,6 +300,9 @@ var handleTaskCmd = &cobra.Command{
 	Short: "Handle a task (create window, start Claude)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Trace("handleTaskCmd: start session=%s agentDir=%s", args[0], args[1])
+		defer logging.Trace("handleTaskCmd: end")
+
 		sessionName := args[0]
 		agentDir := args[1]
 
@@ -361,10 +386,12 @@ var handleTaskCmd = &cobra.Command{
 		// Create tmux window
 		tm := tmux.New(sessionName)
 		workDir := mgr.GetWorkingDirectory(t)
+		windowName := t.GetWindowName()
+		logging.Trace("handleTaskCmd: creating task window name=%s workDir=%s", windowName, workDir)
 		logging.Debug("Creating tmux window: session=%s, workDir=%s", sessionName, workDir)
 
 		windowID, err := tm.NewWindow(tmux.WindowOpts{
-			Name:     t.GetWindowName(),
+			Name:     windowName,
 			StartDir: workDir,
 			Detached: true,
 		})
@@ -373,7 +400,8 @@ var handleTaskCmd = &cobra.Command{
 			t.RemoveTabLock()
 			return fmt.Errorf("failed to create window: %w", err)
 		}
-		logging.Debug("Tmux window created: windowID=%s, name=%s", windowID, t.GetWindowName())
+		logging.Trace("handleTaskCmd: task window created windowID=%s name=%s", windowID, windowName)
+		logging.Debug("Tmux window created: windowID=%s, name=%s", windowID, windowName)
 
 		// Save window ID
 		if err := t.SaveWindowID(windowID); err != nil {
@@ -607,12 +635,15 @@ __PROMPT_END__
 		}
 
 		// Notify user
+		logging.Trace("handleTaskCmd: playing SoundTaskCreated for task=%s", taskName)
 		notify.PlaySound(notify.SoundTaskCreated)
 		if isReopen {
+			logging.Trace("handleTaskCmd: displaying session resumed message for task=%s", taskName)
 			if err := tm.DisplayMessage(fmt.Sprintf("🔄 Session resumed: %s", taskName), 2000); err != nil {
 				logging.Trace("Failed to display message: %v", err)
 			}
 		} else {
+			logging.Trace("handleTaskCmd: displaying task started message for task=%s", taskName)
 			if err := tm.DisplayMessage(fmt.Sprintf("🤖 Task started: %s", taskName), 2000); err != nil {
 				logging.Trace("Failed to display message: %v", err)
 			}
@@ -629,6 +660,9 @@ var endTaskCmd = &cobra.Command{
 	Short: "End a task (commit, merge, cleanup)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Trace("endTaskCmd: start session=%s windowID=%s", args[0], args[1])
+		defer logging.Trace("endTaskCmd: end")
+
 		sessionName := args[0]
 		windowID := args[1]
 
@@ -867,11 +901,14 @@ var endTaskCmd = &cobra.Command{
 					fmt.Println()
 					fmt.Println("  ✗ Merge failed - manual resolution needed")
 					warningWindowName := constants.EmojiWarning + targetTask.Name
+					logging.Trace("endTaskCmd: renaming window to warning state name=%s", warningWindowName)
 					if err := tm.RenameWindow(windowID, warningWindowName); err != nil {
 						logging.Warn("Failed to rename window: %v", err)
 					}
 					// Notify user of merge failure
+					logging.Trace("endTaskCmd: playing SoundError for merge failure task=%s", targetTask.Name)
 					notify.PlaySound(notify.SoundError)
+					logging.Trace("endTaskCmd: displaying merge failure message for task=%s", targetTask.Name)
 					if err := tm.DisplayMessage(fmt.Sprintf("⚠️ Merge failed: %s - manual resolution needed", targetTask.Name), 3000); err != nil {
 						logging.Trace("Failed to display message: %v", err)
 					}
@@ -950,7 +987,9 @@ var endTaskCmd = &cobra.Command{
 		}
 
 		// Notify user that task completed successfully
+		logging.Trace("endTaskCmd: playing SoundTaskCompleted for task=%s", targetTask.Name)
 		notify.PlaySound(notify.SoundTaskCompleted)
+		logging.Trace("endTaskCmd: displaying completion message for task=%s", targetTask.Name)
 		if err := tm.DisplayMessage(fmt.Sprintf("✅ Task completed: %s", targetTask.Name), 2000); err != nil {
 			logging.Trace("Failed to display message: %v", err)
 		}
@@ -987,6 +1026,22 @@ var endTaskUICmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
 		windowID := args[1]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer logger.Close()
+			logger.SetScript("end-task-ui")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Trace("endTaskUICmd: start session=%s windowID=%s", sessionName, windowID)
+		defer logging.Trace("endTaskUICmd: end")
 
 		tm := tmux.New(sessionName)
 
@@ -1072,6 +1127,23 @@ var ctrlCCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer logger.Close()
+			logger.SetScript("ctrl-c")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Trace("ctrlCCmd: start session=%s", sessionName)
+		defer logging.Trace("ctrlCCmd: end")
+
 		tm := tmux.New(sessionName)
 
 		// Get current window name to check if this is a task window
@@ -1097,23 +1169,32 @@ var ctrlCCmd = &cobra.Command{
 				// Double-press detected, cancel the task
 				tm.SetOption("@taw_cancel_pending", "", true) // Clear pending state
 
-				// Delegate to cancel-task
+				// Get current window ID
+				windowID, err := tm.Display("#{window_id}")
+				if err != nil {
+					return fmt.Errorf("failed to get window ID: %w", err)
+				}
+				windowID = strings.TrimSpace(windowID)
+
+				// Delegate to cancel-task-ui (shows progress in top pane)
 				tawBin, _ := os.Executable()
-				cancelCmd := exec.Command(tawBin, "internal", "cancel-task", sessionName)
+				cancelCmd := exec.Command(tawBin, "internal", "cancel-task-ui", sessionName, windowID)
 				return cancelCmd.Run()
 			}
 		}
 
-		// First press: send Ctrl+C to the pane and set pending state
-		if err := tm.SendKeys("", "C-c"); err != nil {
-			return err
-		}
+		// First press: just show warning, don't send Ctrl+C to pane
+		// (sending Ctrl+C would cause Claude to exit immediately)
 
 		// Store current timestamp
 		tm.SetOption("@taw_cancel_pending", fmt.Sprintf("%d", now), true)
 
 		// Play sound to indicate pending cancel state
+		logging.Trace("ctrlCCmd: playing SoundCancelPending (first press, waiting for second)")
 		notify.PlaySound(notify.SoundCancelPending)
+
+		// Show message to user
+		tm.DisplayMessage("⌃C again to cancel task", 2000)
 
 		return nil
 	},
@@ -1126,43 +1207,45 @@ func parseUnixTime(s string) (int64, error) {
 }
 
 var cancelTaskCmd = &cobra.Command{
-	Use:   "cancel-task [session]",
-	Short: "Cancel the current task",
-	Args:  cobra.ExactArgs(1),
+	Use:   "cancel-task [session] [window-id]",
+	Short: "Cancel a task (with revert if merged)",
+	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
+		windowID := args[1]
 
 		app, err := getAppFromSession(sessionName)
 		if err != nil {
 			return err
 		}
 
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer logger.Close()
+			logger.SetScript("cancel-task")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Trace("cancelTaskCmd: start session=%s windowID=%s", sessionName, windowID)
+		defer logging.Trace("cancelTaskCmd: end")
+
 		tm := tmux.New(sessionName)
 
-		// Get current window ID
-		windowID, err := tm.Display("#{window_id}")
-		if err != nil {
-			return fmt.Errorf("failed to get window ID: %w", err)
-		}
-		windowID = strings.TrimSpace(windowID)
-
-		// Get current window name
-		windowName, _ := tm.Display("#{window_name}")
-		windowName = strings.TrimSpace(windowName)
-
-		// Check if this is a task window (has emoji prefix)
-		if !strings.HasPrefix(windowName, constants.EmojiWorking) &&
-			!strings.HasPrefix(windowName, constants.EmojiWaiting) &&
-			!strings.HasPrefix(windowName, constants.EmojiDone) &&
-			!strings.HasPrefix(windowName, constants.EmojiWarning) {
-			tm.DisplayMessage("Not a task window", 1500)
-			return nil
-		}
+		fmt.Println()
+		fmt.Println("  ╭─────────────────────────────────────╮")
+		fmt.Println("  │         Cancelling Task...          │")
+		fmt.Println("  ╰─────────────────────────────────────╯")
+		fmt.Println()
 
 		// Find task by window ID
+		findSpinner := tui.NewSimpleSpinner("Finding task")
+		findSpinner.Start()
+
 		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
 		tasks, err := mgr.ListTasks()
 		if err != nil {
+			findSpinner.Stop(false, "Failed")
 			return fmt.Errorf("failed to list tasks: %w", err)
 		}
 
@@ -1175,21 +1258,183 @@ var cancelTaskCmd = &cobra.Command{
 		}
 
 		if targetTask == nil {
-			tm.DisplayMessage("Task not found", 1500)
+			findSpinner.Stop(false, "Not found")
+			fmt.Println("  ✗ Task not found")
 			return nil
 		}
+		findSpinner.Stop(true, "Found")
+		fmt.Printf("  Task: %s\n\n", targetTask.Name)
 
-		// Kill window
+		revertNeeded := false
+		revertSuccess := false
+
+		// Check if task was merged and needs to be reverted
+		if app.IsGitRepo {
+			gitClient := git.New()
+			mainBranch := gitClient.GetMainBranch(app.ProjectDir)
+
+			// Check if branch was merged into main
+			if gitClient.BranchMerged(app.ProjectDir, targetTask.Name, mainBranch) {
+				revertNeeded = true
+				logging.Trace("cancelTaskCmd: task %s was merged, attempting revert", targetTask.Name)
+
+				revertSpinner := tui.NewSimpleSpinner("Reverting merge")
+				revertSpinner.Start()
+
+				// Find the merge commit
+				mergeCommit, err := gitClient.FindMergeCommit(app.ProjectDir, targetTask.Name, mainBranch)
+				if err != nil {
+					revertSpinner.Stop(false, "Failed")
+					logging.Warn("Failed to find merge commit: %v", err)
+					fmt.Println("  ✗ Failed to find merge commit")
+				} else if mergeCommit != "" {
+					logging.Trace("cancelTaskCmd: found merge commit %s, reverting", mergeCommit)
+
+					// Checkout main branch first
+					if err := gitClient.Checkout(app.ProjectDir, mainBranch); err != nil {
+						revertSpinner.Stop(false, "Checkout failed")
+						logging.Warn("Failed to checkout main branch: %v", err)
+						fmt.Printf("  ✗ Failed to checkout %s\n", mainBranch)
+					} else {
+						// Revert the merge commit
+						if err := gitClient.RevertCommit(app.ProjectDir, mergeCommit, ""); err != nil {
+							revertSpinner.Stop(false, "Conflict")
+							logging.Warn("Failed to revert merge commit: %v", err)
+							fmt.Println("  ✗ Revert failed (conflict?)")
+							fmt.Println()
+							fmt.Println("  ⚠️  Manual resolution required:")
+							fmt.Printf("     cd %s\n", app.ProjectDir)
+							fmt.Printf("     git revert -m 1 %s\n", mergeCommit)
+							fmt.Println("     # Resolve conflicts, then commit and push")
+							fmt.Println()
+
+							// Abort revert if in progress
+							abortCmd := exec.Command("git", "revert", "--abort")
+							abortCmd.Dir = app.ProjectDir
+							_ = abortCmd.Run()
+
+							// Rename window to warning state
+							warningName := constants.EmojiWarning + targetTask.Name
+							if len(warningName) > 14 {
+								warningName = warningName[:14]
+							}
+							tm.RenameWindow(windowID, warningName)
+							notify.PlaySound(notify.SoundError)
+							return nil // Don't cleanup - keep task for manual resolution
+						} else {
+							revertSpinner.Stop(true, "Reverted")
+							logging.Log("Reverted merge commit %s for task %s", mergeCommit, targetTask.Name)
+
+							// Push the revert
+							pushSpinner := tui.NewSimpleSpinner("Pushing revert")
+							pushSpinner.Start()
+
+							if err := gitClient.Push(app.ProjectDir, "origin", mainBranch, false); err != nil {
+								pushSpinner.Stop(false, "Push failed")
+								logging.Warn("Failed to push revert: %v", err)
+								fmt.Println("  ⚠️  Reverted locally but push failed")
+								fmt.Printf("     Run: git push origin %s\n", mainBranch)
+							} else {
+								pushSpinner.Stop(true, "Pushed")
+								logging.Log("Pushed revert for task %s", targetTask.Name)
+								revertSuccess = true
+							}
+						}
+					}
+				} else {
+					revertSpinner.Stop(false, "Not found")
+					fmt.Println("  ✗ Merge commit not found")
+				}
+			}
+		}
+
+		fmt.Println()
+
+		// Cleanup task
+		cleanupSpinner := tui.NewSimpleSpinner("Cleaning up")
+		cleanupSpinner.Start()
+
+		if err := mgr.CleanupTask(targetTask); err != nil {
+			cleanupSpinner.Stop(false, "Failed")
+			logging.Warn("Failed to cleanup task: %v", err)
+		} else {
+			cleanupSpinner.Stop(true, "Done")
+		}
+
+		// Kill window (after cleanup to ensure we're done with task data)
 		if err := tm.KillWindow(windowID); err != nil {
 			logging.Warn("Failed to kill window: %v", err)
 		}
 
-		// Cleanup task
-		if err := mgr.CleanupTask(targetTask); err != nil {
-			logging.Warn("Failed to cleanup task: %v", err)
+		fmt.Println()
+		if revertNeeded && revertSuccess {
+			fmt.Println("  ✅ Task cancelled and merge reverted")
+		} else if revertNeeded {
+			fmt.Println("  ⚠️  Task cancelled (revert may need attention)")
+		} else {
+			fmt.Println("  ✅ Task cancelled")
 		}
 
-		tm.DisplayMessage(fmt.Sprintf("Task cancelled: %s", targetTask.Name), 2000)
+		notify.PlaySound(notify.SoundTaskCompleted)
+		return nil
+	},
+}
+
+var cancelTaskUICmd = &cobra.Command{
+	Use:   "cancel-task-ui [session] [window-id]",
+	Short: "Cancel task with UI feedback (creates visible pane)",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		windowID := args[1]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer logger.Close()
+			logger.SetScript("cancel-task-ui")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Trace("cancelTaskUICmd: start session=%s windowID=%s", sessionName, windowID)
+		defer logging.Trace("cancelTaskUICmd: end")
+
+		tm := tmux.New(sessionName)
+
+		// Get the taw binary path
+		tawBin, err := os.Executable()
+		if err != nil {
+			tawBin = "taw"
+		}
+
+		// Get working directory from pane
+		panePath, err := tm.Display("#{pane_current_path}")
+		if err != nil || panePath == "" {
+			panePath = app.ProjectDir
+		}
+
+		// Build cancel-task command
+		cancelTaskCmdStr := fmt.Sprintf("%s internal cancel-task %s %s; echo; echo 'Press Enter to close...'; read",
+			tawBin, sessionName, windowID)
+
+		// Create a top pane (40% height) spanning full window width
+		_, err = tm.SplitWindowPane(tmux.SplitOpts{
+			Horizontal: false,
+			Size:       "40%",
+			StartDir:   panePath,
+			Command:    cancelTaskCmdStr,
+			Before:     true,
+			Full:       true,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create cancel-task pane: %w", err)
+		}
+
 		return nil
 	},
 }
@@ -1200,6 +1445,23 @@ var doneTaskCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer logger.Close()
+			logger.SetScript("done-task")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Trace("doneTaskCmd: start session=%s", sessionName)
+		defer logging.Trace("doneTaskCmd: end")
+
 		tm := tmux.New(sessionName)
 
 		// Get current window ID
@@ -1300,7 +1562,7 @@ var toggleLogCmd = &cobra.Command{
 		tm.DisplayPopup(tmux.PopupOpts{
 			Width:  "90%",
 			Height: "80%",
-			Title:  " Log Viewer (↑↓:scroll  g/G:top/end  s:tail  w:wrap  ⌃L/q:close) ",
+			Title:  " Log Viewer ",
 			Close:  true,
 			Style:  "fg=terminal,bg=terminal",
 		}, logCmd)
@@ -1351,7 +1613,7 @@ var toggleHelpCmd = &cobra.Command{
 		tm.DisplayPopup(tmux.PopupOpts{
 			Width:  "80%",
 			Height: "80%",
-			Title:  " Help (q to close) ",
+			Title:  " Help ",
 			Close:  true,
 			Style:  "fg=terminal,bg=terminal",
 		}, popupCmd)
@@ -1392,7 +1654,7 @@ var toggleGitStatusCmd = &cobra.Command{
 		tm.DisplayPopup(tmux.PopupOpts{
 			Width:     "80%",
 			Height:    "60%",
-			Title:     " Git Status (q to close) ",
+			Title:     " Git Status ",
 			Close:     true,
 			Style:     "fg=terminal,bg=terminal",
 			Directory: panePath,
@@ -1475,7 +1737,7 @@ var toggleTaskListCmd = &cobra.Command{
 		tm.DisplayPopup(tmux.PopupOpts{
 			Width:     "90%",
 			Height:    "80%",
-			Title:     " Tasks (↑↓:nav  c:cancel  m:merge  p:push  r:resume  ⏎:focus  ⌃T/q:close) ",
+			Title:     " Tasks ",
 			Close:     true,
 			Style:     "fg=terminal,bg=terminal",
 			Directory: app.ProjectDir,
@@ -1497,6 +1759,17 @@ var taskListViewerCmd = &cobra.Command{
 			return err
 		}
 
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer logger.Close()
+			logger.SetScript("task-list-viewer")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Trace("taskListViewerCmd: start session=%s", sessionName)
+		defer logging.Trace("taskListViewerCmd: end")
+
 		action, item, err := tui.RunTaskListUI(
 			app.AgentsDir,
 			app.GetHistoryDir(),
@@ -1517,25 +1790,27 @@ var taskListViewerCmd = &cobra.Command{
 		gitClient := git.New()
 		tawBin, _ := os.Executable()
 
+		logging.Trace("taskListViewerCmd: action=%v item=%s", action, item.Name)
+
 		switch action {
 		case tui.TaskListActionSelect:
 			// Focus the task window
+			logging.Trace("taskListViewerCmd: selecting window task=%s windowID=%s", item.Name, item.WindowID)
 			if item.WindowID != "" {
 				return tm.SelectWindow(item.WindowID)
 			}
 
 		case tui.TaskListActionCancel:
-			// Kill the window and cleanup
+			// Trigger cancel-task-ui for cancellation with revert if needed
+			logging.Trace("taskListViewerCmd: cancelling task=%s windowID=%s", item.Name, item.WindowID)
 			if item.WindowID != "" {
-				tm.KillWindow(item.WindowID)
-			}
-			mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
-			if t, err := mgr.GetTask(item.Name); err == nil {
-				mgr.CleanupTask(t)
+				cancelCmd := exec.Command(tawBin, "internal", "cancel-task-ui", sessionName, item.WindowID)
+				return cancelCmd.Start()
 			}
 
 		case tui.TaskListActionMerge:
 			// Trigger end-task for merge
+			logging.Trace("taskListViewerCmd: merging task=%s windowID=%s", item.Name, item.WindowID)
 			if item.WindowID != "" {
 				endCmd := exec.Command(tawBin, "internal", "end-task", sessionName, item.WindowID)
 				return endCmd.Start()
@@ -1543,6 +1818,7 @@ var taskListViewerCmd = &cobra.Command{
 
 		case tui.TaskListActionPush:
 			// Push the branch
+			logging.Trace("taskListViewerCmd: pushing task=%s", item.Name)
 			if item.AgentDir != "" {
 				worktreeDir := filepath.Join(item.AgentDir, "worktree")
 				if _, err := os.Stat(worktreeDir); err == nil {
@@ -1557,6 +1833,7 @@ var taskListViewerCmd = &cobra.Command{
 
 		case tui.TaskListActionResume:
 			// Resume a completed task from history
+			logging.Trace("taskListViewerCmd: resuming task=%s", item.Name)
 			if item.HistoryFile != "" && item.Content != "" {
 				// Create a new task with the same content
 				mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
@@ -1570,6 +1847,67 @@ var taskListViewerCmd = &cobra.Command{
 				return handleCmd.Start()
 			}
 		}
+
+		return nil
+	},
+}
+
+var renameWindowCmd = &cobra.Command{
+	Use:   "rename-window [window-id] [name]",
+	Short: "Rename a tmux window (with logging and sound)",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		windowID := args[0]
+		name := args[1]
+
+		// Try to get app for logging (use TAW_DIR or SESSION_NAME env)
+		var logPath string
+		var debug bool
+		if tawDir := os.Getenv("TAW_DIR"); tawDir != "" {
+			logPath = filepath.Join(tawDir, "log")
+			debug = os.Getenv("TAW_DEBUG") == "1"
+		}
+
+		if logPath != "" {
+			logger, _ := logging.New(logPath, debug)
+			if logger != nil {
+				defer logger.Close()
+				logger.SetScript("rename-window")
+				if taskName := os.Getenv("TASK_NAME"); taskName != "" {
+					logger.SetTask(taskName)
+				}
+				logging.SetGlobal(logger)
+			}
+		}
+
+		logging.Trace("renameWindowCmd: start windowID=%s name=%s", windowID, name)
+		defer logging.Trace("renameWindowCmd: end")
+
+		// Get session name from environment or use default
+		sessionName := os.Getenv("SESSION_NAME")
+		if sessionName == "" {
+			sessionName = "taw" // fallback
+		}
+
+		tm := tmux.New(sessionName)
+		err := tm.RenameWindow(windowID, name)
+		if err != nil {
+			return err
+		}
+
+		// Play sound based on window state (emoji prefix)
+		switch {
+		case strings.HasPrefix(name, constants.EmojiDone):
+			logging.Trace("renameWindowCmd: playing SoundTaskCompleted (done state)")
+			notify.PlaySound(notify.SoundTaskCompleted)
+		case strings.HasPrefix(name, constants.EmojiWaiting):
+			logging.Trace("renameWindowCmd: playing SoundNeedInput (waiting state)")
+			notify.PlaySound(notify.SoundNeedInput)
+		case strings.HasPrefix(name, constants.EmojiWarning):
+			logging.Trace("renameWindowCmd: playing SoundError (warning state)")
+			notify.PlaySound(notify.SoundError)
+		}
+		// No sound for EmojiWorking (🤖) - too frequent
 
 		return nil
 	},
