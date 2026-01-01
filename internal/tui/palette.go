@@ -189,8 +189,10 @@ func (m *PaletteUI) View() tea.View {
 			var line string
 			if i == m.cursor {
 				prefix = "> "
-				// Format: name (description)
-				line = selectedStyle.Render(prefix + cmd.Name + " " + dimStyle.Render(cmd.Description))
+				// Format: name description
+				// Note: Don't nest dimStyle inside selectedStyle - nested lipgloss styles
+				// cause ANSI escape code conflicts that truncate the rendered text
+				line = selectedStyle.Render(prefix + cmd.Name + " " + cmd.Description)
 			} else {
 				line = normalStyle.Render(prefix+cmd.Name) + " " + dimStyle.Render(cmd.Description)
 			}
