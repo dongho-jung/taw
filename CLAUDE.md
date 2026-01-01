@@ -15,6 +15,46 @@ go install github.com/donghojung/taw@latest
 
 > **Note (macOS)**: `make install` automatically runs `xattr -cr` and `codesign -fs -` to prevent the `zsh: killed` error.
 
+## Testing
+
+```bash
+# Run all tests
+go test ./...
+
+# Run tests with verbose output
+go test ./... -v
+
+# Run tests with coverage report
+go test ./... -cover
+
+# Run tests for a specific package
+go test ./internal/config -v
+
+# Run a specific test
+go test ./internal/config -run TestParseConfig -v
+
+# Generate coverage HTML report
+go test ./... -coverprofile=coverage.out
+go tool cover -html=coverage.out -o coverage.html
+```
+
+### Test coverage by package
+
+| Package | Coverage | Notes |
+|---------|----------|-------|
+| internal/constants | 100% | Fully tested |
+| internal/config | ~93% | Fully tested |
+| internal/logging | ~93% | Fully tested |
+| internal/app | ~80% | Fully tested |
+| internal/embed | ~79% | Fully tested |
+| internal/task | ~35% | Manager tests require mocks |
+| internal/claude | ~17% | CLI operations need mocks |
+| internal/git | ~8% | Requires git repository |
+| internal/github | 0% | Requires `gh` CLI |
+| internal/tmux | 0% | Requires tmux server |
+| internal/notify | 0% | Platform-specific (macOS) |
+| internal/tui | 0% | Interactive UI components |
+
 ## Directory structure
 
 ```
@@ -61,6 +101,7 @@ taw/                           # This repository
         ├── worktree/          # Git worktree (auto-created in git mode)
         ├── .tab-lock/         # Tab creation lock (atomic mkdir prevents races)
         │   └── window_id      # Tmux window ID (used in cleanup)
+        ├── .session-started   # Session marker (for resume on reopen)
         └── .pr                # PR number (when created)
 ```
 
