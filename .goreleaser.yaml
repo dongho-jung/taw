@@ -1,0 +1,105 @@
+# GoReleaser configuration for taw
+# Documentation: https://goreleaser.com
+
+version: 2
+
+project_name: taw
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: taw
+    main: ./cmd/taw
+    binary: taw
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.Commit}}
+      - -X main.Date={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Performance
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Refactor
+      regexp: '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: donghojung
+    name: taw
+  draft: false
+  prerelease: auto
+  mode: replace
+  name_template: "{{.Tag}}"
+  footer: |
+    ## Installation
+
+    ### Using Go
+    ```bash
+    go install github.com/donghojung/taw@{{.Tag}}
+    ```
+
+    ### Manual Download
+    Download the appropriate archive for your platform from the assets below, extract it, and add the binary to your PATH.
+
+    **macOS users**: After extracting, you may need to run:
+    ```bash
+    xattr -cr taw && codesign -fs - taw
+    ```

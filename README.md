@@ -1,6 +1,34 @@
 # TAW (Tmux + Agent + Worktree)
 
+[![CI](https://github.com/donghojung/taw/actions/workflows/ci.yml/badge.svg)](https://github.com/donghojung/taw/actions/workflows/ci.yml)
+[![Release](https://github.com/donghojung/taw/actions/workflows/release.yml/badge.svg)](https://github.com/donghojung/taw/actions/workflows/release.yml)
+
 A project management system built on Claude Code.
+
+## Installation
+
+### Using Go
+
+```bash
+go install github.com/donghojung/taw@latest
+```
+
+### From Releases
+
+Download the latest release from [GitHub Releases](https://github.com/donghojung/taw/releases) and extract the binary to your PATH.
+
+**macOS users**: After extracting, you may need to run:
+```bash
+xattr -cr taw && codesign -fs - taw
+```
+
+### From Source
+
+```bash
+git clone https://github.com/donghojung/taw.git
+cd taw
+make install
+```
 
 ## Overview
 
