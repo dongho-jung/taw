@@ -373,6 +373,13 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 		Table:   "copy-mode-vi",
 	})
 
+	// Clean up legacy keybindings that may interfere with terminal behavior
+	// These were previously bound but are no longer used
+	legacyKeys := []string{"C-c", "C-d"}
+	for _, key := range legacyKeys {
+		tm.Unbind(key, true) // noPrefix=true for root table bindings
+	}
+
 	// Setup keybindings (English + Korean layouts)
 	bindings := buildKeybindings(tawBin, app.SessionName)
 	for _, b := range bindings {

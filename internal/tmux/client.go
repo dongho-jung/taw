@@ -53,7 +53,7 @@ type Client interface {
 
 	// Keybindings
 	Bind(opts BindOpts) error
-	Unbind(key string) error
+	Unbind(key string, noPrefix bool) error
 
 	// Utility
 	Run(args ...string) error
@@ -511,8 +511,13 @@ func (c *tmuxClient) Bind(opts BindOpts) error {
 	return c.Run(args...)
 }
 
-func (c *tmuxClient) Unbind(key string) error {
-	return c.Run("unbind", key)
+func (c *tmuxClient) Unbind(key string, noPrefix bool) error {
+	args := []string{"unbind"}
+	if noPrefix {
+		args = append(args, "-n")
+	}
+	args = append(args, key)
+	return c.Run(args...)
 }
 
 // Display
