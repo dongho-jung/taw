@@ -100,6 +100,31 @@ func (t *Task) GetSessionMarkerPath() string {
 	return filepath.Join(t.AgentDir, ".session-started")
 }
 
+// GetStatusFilePath returns the path to the status file.
+func (t *Task) GetStatusFilePath() string {
+	return filepath.Join(t.AgentDir, ".status")
+}
+
+// SaveStatus saves the task status to the status file.
+func (t *Task) SaveStatus(status Status) error {
+	t.Status = status
+	return os.WriteFile(t.GetStatusFilePath(), []byte(string(status)), 0644)
+}
+
+// LoadStatus loads the task status from the status file.
+func (t *Task) LoadStatus() (Status, error) {
+	data, err := os.ReadFile(t.GetStatusFilePath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return StatusPending, nil
+		}
+		return "", err
+	}
+	status := Status(strings.TrimSpace(string(data)))
+	t.Status = status
+	return status, nil
+}
+
 // HasSessionMarker returns true if the session marker file exists.
 func (t *Task) HasSessionMarker() bool {
 	_, err := os.Stat(t.GetSessionMarkerPath())
