@@ -1662,7 +1662,7 @@ func runFzfPalette() (string, error) {
 
 	// Run fzf with proper TTY handling via bash
 	fzfCmd := exec.Command("bash", "-c",
-		fmt.Sprintf("fzf --height=100%% --reverse --no-info --prompt='Command> ' --bind=esc:abort --with-nth=1,2 < '%s' > '%s'",
+		fmt.Sprintf("fzf --height=100%% --reverse --no-info --prompt='Command> ' --bind=esc:abort,ctrl-r:abort --with-nth=1,2 < '%s' > '%s'",
 			tmpPath, outPath))
 
 	fzfCmd.Stdin = os.Stdin

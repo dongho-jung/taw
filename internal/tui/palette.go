@@ -50,7 +50,7 @@ func (m *PaletteUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "esc", "ctrl+c", "ctrl+d":
+		case "esc", "ctrl+c", "ctrl+d", "ctrl+r":
 			m.cancelled = true
 			m.done = true
 			return m, tea.Quit
