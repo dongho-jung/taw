@@ -236,7 +236,7 @@ Run verification → success? → commit → push → call end-task
 2. `git push -u origin $TASK_NAME`
 3. `tmux rename-window -t $WINDOW_ID "💬${TASK_NAME:0:12}"`
 4. Log: "Work complete - user review required (verification unavailable/failed)"
-5. Message the user: "Verification is needed. Please review and press ⌃⇧E to finish."
+5. Message the user: "Verification is needed. Please review and run `⌃R → end-task` to finish."
 
 **CRITICAL:**
 - In `auto-merge` mode, do **not** create a PR. end-task merges to main and cleans up.
@@ -405,16 +405,15 @@ Automatic execution is the default, but you can invoke commands manually if need
 
 **Completing a task**:
 - `auto-merge` mode: Call end-task as described above to finish automatically.
-- Other modes: User presses `⌃⇧E` to commit → PR/merge → clean up.
+- Other modes: User runs `⌃R → end-task` to commit → PR/merge → clean up.
 
 ---
 
 ## User-Initiated Task Completion
 
 When the user says phrases like:
-- "정리해라", "종료해라", "끝내라", "마무리해라"
-- "task 정리해", "task 끝내", "task 종료해"
 - "finish", "wrap up", "clean up the task", "close this task"
+- "end this task", "complete the task", "finalize"
 
 This means: **complete the task autonomously** including all steps below.
 
@@ -453,6 +452,6 @@ This means: **complete the task autonomously** including all steps below.
 ## Handling Unrelated Requests
 
 If a request is unrelated to the current task:
-> "This seems unrelated to `$TASK_NAME`. Press `⌃⇧N` to create a new task."
+> "This seems unrelated to `$TASK_NAME`. Run `⌃R → new-task` to create a new task."
 
 Small related fixes (typos, etc.) can be handled within the current task.
