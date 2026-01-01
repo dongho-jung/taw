@@ -71,13 +71,14 @@ View all active and completed tasks with preview panel.
   c           Cancel task (active tasks only)
   m           Merge task (triggers end-task flow)
   p           Push branch to remote
-  r           Resume task (history items only, creates new task)
+  r           Resume task (history/cancelled items, creates new task)
 
 ### Status Icons
   🤖  Working (agent active)
   💬  Waiting (needs user input)
   ✅  Done (ready to merge)
   📁  History (completed, from history)
+  ❌  Cancelled (from history, can resume)
 
 ## Log Viewer (⌃L)
 
