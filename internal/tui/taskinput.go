@@ -91,8 +91,8 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cancelled = true
 			return m, tea.Quit
 
-		// Submit: Alt+Enter, Ctrl+D, or Ctrl+S
-		case "alt+enter", "ctrl+d", "ctrl+s":
+		// Submit: Alt+Enter, Ctrl+Enter, Shift+Enter, Ctrl+D, Ctrl+S, or F5
+		case "alt+enter", "ctrl+enter", "shift+enter", "ctrl+d", "ctrl+s", "f5":
 			content := strings.TrimSpace(m.textarea.Value())
 			if content != "" {
 				m.submitted = true
@@ -182,7 +182,7 @@ func (m *TaskInput) View() tea.View {
 	sb.WriteString("\n\n")
 	sb.WriteString(m.textarea.View())
 	sb.WriteString("\n")
-	sb.WriteString(helpStyle.Render("Alt+Enter: Submit  |  Esc: Cancel"))
+	sb.WriteString(helpStyle.Render("Ctrl/Shift/Alt+Enter or F5: Submit  |  Esc: Cancel"))
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
