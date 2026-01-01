@@ -47,6 +47,7 @@ go tool cover -html=coverage.out -o coverage.html
 | internal/logging | ~93% | Fully tested |
 | internal/app | ~83% | Fully tested |
 | internal/embed | ~79% | Fully tested |
+| internal/service | ~90% | History service with mocks |
 | internal/task | ~25% | Manager tests require mocks |
 | internal/claude | ~17% | CLI operations need mocks |
 | internal/git | ~8% | Requires git repository |
@@ -60,11 +61,17 @@ go tool cover -html=coverage.out -o coverage.html
 ```
 taw/                           # This repository
 ├── cmd/taw/                   # Go main package
+│   ├── main.go                # Entry point and root command
+│   ├── internal.go            # Internal command registration
+│   ├── internal_create.go     # Task creation commands (toggleNew, newTask, spawnTask, handleTask)
+│   ├── internal_lifecycle.go  # Task lifecycle commands (endTask, cancelTask, doneTask)
+│   ├── internal_popup.go      # Popup/UI commands (toggleLog, toggleHelp, taskList)
+│   └── internal_utils.go      # Utility commands and helpers (ctrlC, renameWindow)
 ├── internal/                  # Go internal packages
 │   ├── app/                   # Application context
 │   ├── claude/                # Claude API client
 │   ├── config/                # Configuration management
-│   ├── constants/             # Constants
+│   ├── constants/             # Constants and magic numbers
 │   ├── embed/                 # Embedded assets
 │   │   └── assets/            # Embedded files (compiled into binary)
 │   │       ├── HELP.md        # Help text
@@ -75,6 +82,7 @@ taw/                           # This repository
 │   ├── github/                # GitHub API client
 │   ├── logging/               # Logging (L0-L5 levels)
 │   ├── notify/                # Desktop/audio/statusline notifications
+│   ├── service/               # Business logic services (history, etc.)
 │   ├── task/                  # Task management
 │   ├── tmux/                  # Tmux client
 │   └── tui/                   # Terminal UI (log viewer)
