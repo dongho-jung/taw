@@ -79,16 +79,16 @@ func (c *claudeClient) GenerateSummary(paneContent string) (string, error) {
 		paneContent = paneContent[len(paneContent)-maxLen:]
 	}
 
-	prompt := fmt.Sprintf(`다음은 개발 작업의 터미널 출력입니다. 이 작업에서 수행된 내용을 한국어로 간단하게 요약해주세요 (3-5줄).
+	prompt := fmt.Sprintf(`Below is the terminal output from a development task. Please provide a brief summary of what was done (3-5 lines).
 
-- 어떤 변경/수정이 이루어졌는지
-- 주요 파일이나 기능
-- 결과 (성공/실패 여부)
+- What changes/modifications were made
+- Key files or features affected
+- Result (success/failure)
 
-터미널 출력:
+Terminal output:
 %s
 
-간결한 요약만 작성하세요.`, paneContent)
+Write a concise summary only.`, paneContent)
 
 	logging.Trace("GenerateSummary: starting with content length=%d", len(paneContent))
 
