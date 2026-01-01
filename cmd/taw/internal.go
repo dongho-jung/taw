@@ -378,6 +378,13 @@ var handleTaskCmd = &cobra.Command{
 			}
 		}
 
+		// Load saved status for reopen (to restore window name with correct emoji)
+		if isReopen {
+			if status, err := t.LoadStatus(); err == nil && status != "" {
+				logging.Debug("Loaded saved status for resume: %s", status)
+			}
+		}
+
 		// Setup symlinks (error is non-fatal)
 		if err := t.SetupSymlinks(app.ProjectDir); err != nil {
 			logging.Warn("Failed to setup symlinks: %v", err)
@@ -501,7 +508,7 @@ exec "%s" internal end-task "%s" "%s"
 
 		var startAgentContent string
 		if isReopen {
-			// Resume mode: use --resume to continue previous session
+			// Resume mode: use --continue to automatically continue previous session
 			startAgentContent = fmt.Sprintf(`#!/bin/bash
 # Auto-generated start-agent script for this task (RESUME MODE)
 export TASK_NAME='%s'
@@ -513,11 +520,11 @@ export TAW_HOME='%s'
 export TAW_BIN='%s'
 export SESSION_NAME='%s'
 
-# Resume the previous Claude session
-exec claude --resume --dangerously-skip-permissions
+# Continue the previous Claude session (--continue auto-selects last session)
+exec claude --continue --dangerously-skip-permissions
 `, taskName, app.TawDir, app.ProjectDir, worktreeDirExport, windowID,
 				app.Config.OnComplete, filepath.Dir(filepath.Dir(tawBin)), tawBin, sessionName)
-			logging.Log("Session resume: using --resume flag for task %s", taskName)
+			logging.Log("Session resume: using --continue flag for task %s", taskName)
 		} else {
 			// New session: start fresh with system prompt
 			encodedPrompt := base64.StdEncoding.EncodeToString([]byte(systemPrompt))
@@ -1350,6 +1357,56 @@ var cancelTaskCmd = &cobra.Command{
 
 		fmt.Println()
 
+		// Save to history before cleanup (with .cancelled extension)
+		historyDir := app.GetHistoryDir()
+		if err := os.MkdirAll(historyDir, 0755); err != nil {
+			logging.Warn("Failed to create history directory: %v", err)
+		} else {
+			historySpinner := tui.NewSimpleSpinner("Saving history")
+			historySpinner.Start()
+
+			// Capture pane content
+			paneContent, captureErr := tm.CapturePane(windowID+".0", 10000)
+			if captureErr != nil {
+				logging.Warn("Failed to capture pane content: %v", captureErr)
+				historySpinner.Stop(false, "capture failed")
+			} else if paneContent != "" {
+				// Generate summary using Claude
+				claudeClient := claude.New()
+				summary, err := claudeClient.GenerateSummary(paneContent)
+				if err != nil {
+					logging.Warn("Failed to generate summary: %v", err)
+					summary = "" // Continue without summary
+				}
+
+				// Build history content: task + summary + pane capture
+				var historyContent strings.Builder
+				taskContent, _ := targetTask.LoadContent()
+				if taskContent != "" {
+					historyContent.WriteString(taskContent)
+					historyContent.WriteString("\n---summary---\n")
+				}
+				if summary != "" {
+					historyContent.WriteString(summary)
+				}
+				historyContent.WriteString("\n---capture---\n")
+				historyContent.WriteString(paneContent)
+
+				// Generate filename: YYMMDD_HHMMSS_taskname.cancelled
+				timestamp := time.Now().Format("060102_150405")
+				historyFile := filepath.Join(historyDir, fmt.Sprintf("%s_%s.cancelled", timestamp, targetTask.Name))
+				if err := os.WriteFile(historyFile, []byte(historyContent.String()), 0644); err != nil {
+					logging.Warn("Failed to write history file: %v", err)
+					historySpinner.Stop(false, "save failed")
+				} else {
+					logging.Debug("Cancelled task history saved: %s", historyFile)
+					historySpinner.Stop(true, "saved")
+				}
+			} else {
+				historySpinner.Stop(false, "empty capture")
+			}
+		}
+
 		// Cleanup task
 		cleanupSpinner := tui.NewSimpleSpinner("Cleaning up")
 		cleanupSpinner.Start()
@@ -1648,12 +1705,12 @@ var toggleGitStatusCmd = &cobra.Command{
 		panePath = strings.TrimSpace(panePath)
 
 		// Build command to show git status with color
-		// Uses less -R to preserve colors, closes with q
-		popupCmd := fmt.Sprintf("cd '%s' && git status; echo; echo 'Press q to close'; read -n 1", panePath)
+		// Uses less -R to preserve colors and allow scrolling, closes with q
+		popupCmd := fmt.Sprintf("cd '%s' && git -c color.status=always status | less -R", panePath)
 
 		tm.DisplayPopup(tmux.PopupOpts{
 			Width:     "80%",
-			Height:    "60%",
+			Height:    "80%",
 			Title:     " Git Status ",
 			Close:     true,
 			Style:     "fg=terminal,bg=terminal",
@@ -1895,19 +1952,40 @@ var renameWindowCmd = &cobra.Command{
 			return err
 		}
 
-		// Play sound based on window state (emoji prefix)
+		// Determine status from emoji prefix and save it
+		var newStatus task.Status
 		switch {
 		case strings.HasPrefix(name, constants.EmojiDone):
+			newStatus = task.StatusDone
 			logging.Trace("renameWindowCmd: playing SoundTaskCompleted (done state)")
 			notify.PlaySound(notify.SoundTaskCompleted)
 		case strings.HasPrefix(name, constants.EmojiWaiting):
+			newStatus = task.StatusWaiting
 			logging.Trace("renameWindowCmd: playing SoundNeedInput (waiting state)")
 			notify.PlaySound(notify.SoundNeedInput)
 		case strings.HasPrefix(name, constants.EmojiWarning):
+			newStatus = task.StatusCorrupted
 			logging.Trace("renameWindowCmd: playing SoundError (warning state)")
 			notify.PlaySound(notify.SoundError)
+		case strings.HasPrefix(name, constants.EmojiWorking):
+			newStatus = task.StatusWorking
+			// No sound for EmojiWorking (🤖) - too frequent
 		}
-		// No sound for EmojiWorking (🤖) - too frequent
+
+		// Save status to disk for resume
+		if newStatus != "" {
+			tawDir := os.Getenv("TAW_DIR")
+			taskName := os.Getenv("TASK_NAME")
+			if tawDir != "" && taskName != "" {
+				agentDir := filepath.Join(tawDir, "agents", taskName)
+				t := task.New(taskName, agentDir)
+				if err := t.SaveStatus(newStatus); err != nil {
+					logging.Trace("Failed to save status: %v", err)
+				} else {
+					logging.Trace("Status saved: %s", newStatus)
+				}
+			}
+		}
 
 		return nil
 	},

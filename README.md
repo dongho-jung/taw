@@ -50,7 +50,7 @@ Slash commands available to the agent:
 
 If a task is left unfinished and the window or tmux session closes, the next `taw` run automatically reopens those task windows.
 
-**Session Resume**: When reopening, Claude resumes the previous conversation session (using `claude --resume`), preserving the full conversation history and context. The agent continues exactly where it left off without restarting from scratch.
+**Session Resume**: When reopening, Claude automatically continues the previous conversation session (using `claude --continue`), preserving the full conversation history and context. The agent continues exactly where it left off without restarting from scratch.
 </details>
 
 <details>
