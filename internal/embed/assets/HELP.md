@@ -61,8 +61,9 @@ Claude Code-based autonomous agent work environment
 View all active and completed tasks with preview panel.
 
 ### Navigation
-  ↑/↓         Navigate tasks
+  ↑/↓/j/k     Navigate tasks
   PgUp/PgDn   Scroll preview panel
+  Ctrl+U/D    Scroll preview panel (vim-style)
   ⏎/Space     Focus selected task window
   q/Esc       Close the task list
 
@@ -92,11 +93,15 @@ View all active and completed tasks with preview panel.
 
 ## Environment Variables (for agents)
 
-  TASK_NAME     Task name
+  TASK_NAME     Task identifier (branch name)
   TAW_DIR       .taw directory path
   PROJECT_DIR   Project root path
-  WORKTREE_DIR  Worktree path
-  WINDOW_ID     tmux window ID (for status updates)
+  WORKTREE_DIR  Worktree path (git mode only)
+  WINDOW_ID     tmux window ID
+  ON_COMPLETE   Completion mode (confirm/auto-commit/auto-merge/auto-pr)
+  TAW_HOME      TAW installation directory
+  TAW_BIN       TAW binary path
+  SESSION_NAME  tmux session name
 
 ---
 Press q to exit
