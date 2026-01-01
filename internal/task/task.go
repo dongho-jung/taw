@@ -95,6 +95,22 @@ func (t *Task) GetUserPromptPath() string {
 	return filepath.Join(t.AgentDir, ".user-prompt")
 }
 
+// GetSessionMarkerPath returns the path to the session started marker file.
+func (t *Task) GetSessionMarkerPath() string {
+	return filepath.Join(t.AgentDir, ".session-started")
+}
+
+// HasSessionMarker returns true if the session marker file exists.
+func (t *Task) HasSessionMarker() bool {
+	_, err := os.Stat(t.GetSessionMarkerPath())
+	return err == nil
+}
+
+// CreateSessionMarker creates the session marker file.
+func (t *Task) CreateSessionMarker() error {
+	return os.WriteFile(t.GetSessionMarkerPath(), []byte(time.Now().Format(time.RFC3339)), 0644)
+}
+
 // GetOriginPath returns the path to the origin symlink.
 func (t *Task) GetOriginPath() string {
 	return filepath.Join(t.AgentDir, "origin")

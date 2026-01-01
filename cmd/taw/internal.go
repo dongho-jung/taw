@@ -324,6 +324,9 @@ var handleTaskCmd = &cobra.Command{
 		}
 		logging.Debug("Tab-lock created successfully")
 
+		// Track if this is a reopen case (for session resume)
+		isReopen := false
+
 		// Setup worktree if git mode (skip if worktree already exists - reopen case)
 		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
 			worktreeDir := t.GetWorktreeDir()
@@ -340,6 +343,17 @@ var handleTaskCmd = &cobra.Command{
 				// Worktree already exists (reopen case)
 				logging.Debug("Worktree already exists, reusing: %s", worktreeDir)
 				t.WorktreeDir = worktreeDir
+				// Check if session was started before (has marker)
+				if t.HasSessionMarker() {
+					isReopen = true
+					logging.Log("Session resume: detected previous session for task %s", taskName)
+				}
+			}
+		} else if !app.IsGitRepo || app.Config.WorkMode == config.WorkModeMain {
+			// Non-git mode or main mode: check session marker for reopen
+			if t.HasSessionMarker() {
+				isReopen = true
+				logging.Log("Session resume: detected previous session for task %s", taskName)
 			}
 		}
 
@@ -461,8 +475,29 @@ exec "%s" internal end-task "%s" "%s"
 			worktreeDirExport = fmt.Sprintf("export WORKTREE_DIR='%s'\n", workDir)
 		}
 
-		encodedPrompt := base64.StdEncoding.EncodeToString([]byte(systemPrompt))
-		startAgentContent := fmt.Sprintf(`#!/bin/bash
+		var startAgentContent string
+		if isReopen {
+			// Resume mode: use --resume to continue previous session
+			startAgentContent = fmt.Sprintf(`#!/bin/bash
+# Auto-generated start-agent script for this task (RESUME MODE)
+export TASK_NAME='%s'
+export TAW_DIR='%s'
+export PROJECT_DIR='%s'
+%sexport WINDOW_ID='%s'
+export ON_COMPLETE='%s'
+export TAW_HOME='%s'
+export TAW_BIN='%s'
+export SESSION_NAME='%s'
+
+# Resume the previous Claude session
+exec claude --resume --dangerously-skip-permissions
+`, taskName, app.TawDir, app.ProjectDir, worktreeDirExport, windowID,
+				app.Config.OnComplete, filepath.Dir(filepath.Dir(tawBin)), tawBin, sessionName)
+			logging.Log("Session resume: using --resume flag for task %s", taskName)
+		} else {
+			// New session: start fresh with system prompt
+			encodedPrompt := base64.StdEncoding.EncodeToString([]byte(systemPrompt))
+			startAgentContent = fmt.Sprintf(`#!/bin/bash
 # Auto-generated start-agent script for this task
 export TASK_NAME='%s'
 export TAW_DIR='%s'
@@ -480,13 +515,14 @@ exec claude --dangerously-skip-permissions --system-prompt "$(base64 -d <<'__PRO
 __PROMPT_END__
 )"
 `, taskName, app.TawDir, app.ProjectDir, worktreeDirExport, windowID,
-			app.Config.OnComplete, filepath.Dir(filepath.Dir(tawBin)), tawBin, sessionName,
-			encodedPrompt)
+				app.Config.OnComplete, filepath.Dir(filepath.Dir(tawBin)), tawBin, sessionName,
+				encodedPrompt)
+		}
 
 		if err := os.WriteFile(startAgentScriptPath, []byte(startAgentContent), 0755); err != nil {
 			logging.Warn("Failed to create start-agent script: %v", err)
 		} else {
-			logging.Debug("Start-agent script created: %s", startAgentScriptPath)
+			logging.Debug("Start-agent script created: %s (resume=%v)", startAgentScriptPath, isReopen)
 		}
 
 		agentPane := windowID + ".0"
@@ -527,26 +563,42 @@ __PROMPT_END__
 		// Wait a bit more for Claude to be fully ready
 		time.Sleep(1 * time.Second)
 
-		// Clear scrollback history and screen before sending task instruction
-		if err := tm.ClearHistory(agentPane); err != nil {
-			logging.Trace("Failed to clear history: %v", err)
-		}
-		if err := tm.SendKeys(agentPane, "C-l"); err != nil {
-			logging.Trace("Failed to clear screen: %v", err)
-		}
-
-		// Small delay after clearing screen
-		time.Sleep(200 * time.Millisecond)
-
-		// Send task instruction - tell Claude to read from file
-		taskInstruction := fmt.Sprintf("ultrathink Read and execute the task from '%s'", t.GetUserPromptPath())
-		logging.Trace("Sending task instruction: length=%d", len(taskInstruction))
-		if err := claudeClient.SendInputWithRetry(tm, agentPane, taskInstruction, 5); err != nil {
-			logging.Warn("Failed to send task instruction: %v", err)
-			// As a last resort, try the basic send
-			if err := claudeClient.SendInput(tm, agentPane, taskInstruction); err != nil {
-				logging.Error("Final attempt to send task instruction failed: %v", err)
+		if isReopen {
+			// Resume mode: don't clear history or send task instruction
+			// Claude will resume the previous conversation with full context
+			logging.Log("Session resumed: task=%s, windowID=%s", taskName, windowID)
+		} else {
+			// New task: clear screen and send task instruction
+			// Clear scrollback history and screen before sending task instruction
+			if err := tm.ClearHistory(agentPane); err != nil {
+				logging.Trace("Failed to clear history: %v", err)
 			}
+			if err := tm.SendKeys(agentPane, "C-l"); err != nil {
+				logging.Trace("Failed to clear screen: %v", err)
+			}
+
+			// Small delay after clearing screen
+			time.Sleep(200 * time.Millisecond)
+
+			// Send task instruction - tell Claude to read from file
+			taskInstruction := fmt.Sprintf("ultrathink Read and execute the task from '%s'", t.GetUserPromptPath())
+			logging.Trace("Sending task instruction: length=%d", len(taskInstruction))
+			if err := claudeClient.SendInputWithRetry(tm, agentPane, taskInstruction, 5); err != nil {
+				logging.Warn("Failed to send task instruction: %v", err)
+				// As a last resort, try the basic send
+				if err := claudeClient.SendInput(tm, agentPane, taskInstruction); err != nil {
+					logging.Error("Final attempt to send task instruction failed: %v", err)
+				}
+			}
+
+			// Create session marker to track that Claude was started
+			if err := t.CreateSessionMarker(); err != nil {
+				logging.Warn("Failed to create session marker: %v", err)
+			} else {
+				logging.Debug("Session marker created for task: %s", taskName)
+			}
+
+			logging.Log("Task started successfully: name=%s, windowID=%s", taskName, windowID)
 		}
 
 		// Start wait watcher to handle window status + notifications when user input is needed
@@ -558,12 +610,16 @@ __PROMPT_END__
 			logging.Debug("Wait watcher started for windowID=%s", windowID)
 		}
 
-		logging.Log("Task started successfully: name=%s, windowID=%s", taskName, windowID)
-
-		// Notify user that task has started
+		// Notify user
 		notify.PlaySound(notify.SoundTaskCreated)
-		if err := tm.DisplayMessage(fmt.Sprintf("🤖 Task started: %s", taskName), 2000); err != nil {
-			logging.Trace("Failed to display message: %v", err)
+		if isReopen {
+			if err := tm.DisplayMessage(fmt.Sprintf("🔄 Session resumed: %s", taskName), 2000); err != nil {
+				logging.Trace("Failed to display message: %v", err)
+			}
+		} else {
+			if err := tm.DisplayMessage(fmt.Sprintf("🤖 Task started: %s", taskName), 2000); err != nil {
+				logging.Trace("Failed to display message: %v", err)
+			}
 		}
 
 		return nil

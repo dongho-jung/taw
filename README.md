@@ -46,9 +46,11 @@ Slash commands available to the agent:
 - Other modes: Press `⌃R` → `end-task` to commit → PR/merge → clean up according to ON_COMPLETE
 
 <details>
-<summary>Automatically reopen incomplete tasks</summary>
+<summary>Automatically reopen incomplete tasks with session resume</summary>
 
 If a task is left unfinished and the window or tmux session closes, the next `taw` run automatically reopens those task windows.
+
+**Session Resume**: When reopening, Claude resumes the previous conversation session (using `claude --resume`), preserving the full conversation history and context. The agent continues exactly where it left off without restarting from scratch.
 </details>
 
 <details>
