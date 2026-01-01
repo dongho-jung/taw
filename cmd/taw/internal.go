@@ -1570,13 +1570,16 @@ var commandPaletteCmd = &cobra.Command{
 			tawBin = "taw"
 		}
 
-		// Run palette UI, capture output, then execute selected command
-		// The popup runs palette-ui, captures its output, and executes the command after popup closes
+		// Run palette UI inside popup, save selected command to tmux option
+		// The command will be executed AFTER popup closes (to avoid nested popup issue)
 		paletteCmd := fmt.Sprintf(
-			"CMD=$(%s internal palette-ui %s) && [ -n \"$CMD\" ] && %s internal execute-cmd %s \"$CMD\"",
-			tawBin, sessionName, tawBin, sessionName)
+			"CMD=$(%s internal palette-ui %s) && [ -n \"$CMD\" ] && tmux -L \"taw-%s\" set-option -g @taw_pending_cmd \"$CMD\"",
+			tawBin, sessionName, sessionName)
 
-		return tm.DisplayPopup(tmux.PopupOpts{
+		// Note: We ignore the error from DisplayPopup like toggleLogCmd and toggleTaskListCmd do.
+		// When user closes the popup (Esc), it returns a non-zero exit code which would
+		// cause tmux to display "returned 1" error message if we propagated it.
+		tm.DisplayPopup(tmux.PopupOpts{
 			Width:     "60%",
 			Height:    "50%",
 			Title:     " Commands (↑↓:nav  ⏎:run  Esc:close) ",
@@ -1584,6 +1587,15 @@ var commandPaletteCmd = &cobra.Command{
 			Style:     "fg=terminal,bg=terminal",
 			Directory: app.ProjectDir,
 		}, paletteCmd)
+
+		// After popup closes, read and execute the pending command
+		pendingCmd, _ := tm.GetOption("@taw_pending_cmd")
+		if pendingCmd != "" {
+			tm.SetOption("@taw_pending_cmd", "", true) // clear
+			return executePaletteCommand(sessionName, pendingCmd)
+		}
+
+		return nil
 	},
 }
 
