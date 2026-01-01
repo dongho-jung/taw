@@ -20,10 +20,11 @@ import (
 type TaskItemStatus string
 
 const (
-	TaskItemWorking TaskItemStatus = "working"
-	TaskItemWaiting TaskItemStatus = "waiting"
-	TaskItemDone    TaskItemStatus = "done"
-	TaskItemHistory TaskItemStatus = "history" // Completed and cleaned up (from history dir)
+	TaskItemWorking   TaskItemStatus = "working"
+	TaskItemWaiting   TaskItemStatus = "waiting"
+	TaskItemDone      TaskItemStatus = "done"
+	TaskItemHistory   TaskItemStatus = "history"   // Completed and cleaned up (from history dir)
+	TaskItemCancelled TaskItemStatus = "cancelled" // Cancelled (from history dir with .cancelled extension)
 )
 
 // TaskItem represents a task in the list view.
@@ -154,7 +155,7 @@ func (m *TaskListUI) loadTasks() tea.Cmd {
 			}
 		}
 
-		// Load completed tasks from history directory
+		// Load completed/cancelled tasks from history directory
 		if entries, err := os.ReadDir(m.historyDir); err == nil {
 			for _, entry := range entries {
 				if entry.IsDir() {
@@ -163,6 +164,12 @@ func (m *TaskListUI) loadTasks() tea.Cmd {
 
 				fileName := entry.Name()
 				historyFile := filepath.Join(m.historyDir, fileName)
+
+				// Check if this is a cancelled task (has .cancelled extension)
+				isCancelled := strings.HasSuffix(fileName, ".cancelled")
+				if isCancelled {
+					fileName = strings.TrimSuffix(fileName, ".cancelled")
+				}
 
 				// Parse filename: YYMMDD_HHMMSS_taskname
 				parts := strings.SplitN(fileName, "_", 3)
@@ -178,9 +185,14 @@ func (m *TaskListUI) loadTasks() tea.Cmd {
 					continue
 				}
 
+				status := TaskItemHistory
+				if isCancelled {
+					status = TaskItemCancelled
+				}
+
 				item := TaskItem{
 					Name:        taskName,
-					Status:      TaskItemHistory,
+					Status:      status,
 					HistoryFile: historyFile,
 				}
 
@@ -307,10 +319,10 @@ func (m *TaskListUI) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "r":
-		// Resume - only for history tasks
+		// Resume - for history and cancelled tasks
 		if len(m.items) > 0 {
 			item := m.items[m.cursor]
-			if item.Status == TaskItemHistory {
+			if item.Status == TaskItemHistory || item.Status == TaskItemCancelled {
 				m.action = TaskListActionResume
 				m.selectedItem = &item
 				m.done = true
@@ -376,6 +388,9 @@ func (m *TaskListUI) View() tea.View {
 	statusHistoryStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240"))
 
+	statusCancelledStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("203")) // Red-ish color
+
 	previewStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250"))
 
@@ -435,6 +450,9 @@ func (m *TaskListUI) View() tea.View {
 		case TaskItemHistory:
 			statusEmoji = "📁"
 			statusStyle = statusHistoryStyle
+		case TaskItemCancelled:
+			statusEmoji = "❌"
+			statusStyle = statusCancelledStyle
 		}
 
 		// Truncate name if needed
@@ -503,8 +521,8 @@ func (m *TaskListUI) View() tea.View {
 			previewBuilder.WriteString("\n")
 		}
 
-		// Show summary separator and summary for done/history tasks
-		if (item.Status == TaskItemHistory || item.Status == TaskItemDone) && item.Summary != "" {
+		// Show summary separator and summary for done/history/cancelled tasks
+		if (item.Status == TaskItemHistory || item.Status == TaskItemDone || item.Status == TaskItemCancelled) && item.Summary != "" {
 			if visibleEnd == len(previewLines) {
 				previewBuilder.WriteString("\n")
 				previewBuilder.WriteString(dimStyle.Render("─── Summary ───"))
@@ -572,7 +590,7 @@ func (m *TaskListUI) View() tea.View {
 			statusHints = append(statusHints, "c:cancel", "m:merge", "p:push", "⏎:focus")
 		case TaskItemDone:
 			statusHints = append(statusHints, "m:merge", "p:push")
-		case TaskItemHistory:
+		case TaskItemHistory, TaskItemCancelled:
 			statusHints = append(statusHints, "r:resume")
 		}
 	}
