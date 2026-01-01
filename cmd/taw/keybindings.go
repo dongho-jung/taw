@@ -18,8 +18,10 @@ func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
 
 	// Double quit command (Ctrl+C/D twice to exit)
 	// First send the key to pane, then check for double quit in background
-	cmdDoubleQuitC := fmt.Sprintf("send-keys C-c \\; run-shell -b '%s internal double-quit %s'", tawBin, sessionName)
-	cmdDoubleQuitD := fmt.Sprintf("send-keys C-d \\; run-shell -b '%s internal double-quit %s'", tawBin, sessionName)
+	// Note: Use ';' not '\;' for command separation since we're using exec.Command (no shell)
+	// '\;' would be interpreted as a literal semicolon character by tmux's parser
+	cmdDoubleQuitC := fmt.Sprintf("send-keys C-c ; run-shell -b '%s internal double-quit %s'", tawBin, sessionName)
+	cmdDoubleQuitD := fmt.Sprintf("send-keys C-d ; run-shell -b '%s internal double-quit %s'", tawBin, sessionName)
 
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
