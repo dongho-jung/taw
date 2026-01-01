@@ -7,19 +7,16 @@ import (
 )
 
 // buildKeybindings creates tmux keybindings for TAW.
-// New simplified hotkey scheme:
+// Hotkey scheme:
 //   - Alt+Tab: Cycle panes
 //   - Alt+Left/Right: Navigate windows
 //   - Ctrl+R: Command palette (fzf-based fuzzy search)
-//   - Ctrl+C/D twice: Exit session
+//
+// Note: Ctrl+C/D are NOT bound to preserve normal terminal behavior.
+// To exit the session, use Ctrl+R → detach.
 func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
 	// Command palette command
 	cmdPalette := fmt.Sprintf("run-shell '%s internal command-palette %s'", tawBin, sessionName)
-
-	// Double quit command (Ctrl+C/D twice to exit)
-	// First send the key to pane, then check for double quit in background
-	cmdDoubleQuitC := fmt.Sprintf("send-keys C-c \\; run-shell -b '%s internal double-quit %s'", tawBin, sessionName)
-	cmdDoubleQuitD := fmt.Sprintf("send-keys C-d \\; run-shell -b '%s internal double-quit %s'", tawBin, sessionName)
 
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
@@ -29,9 +26,5 @@ func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
 
 		// Command palette (Ctrl+R)
 		{Key: "C-r", Command: cmdPalette, NoPrefix: true},
-
-		// Double quit (Ctrl+C/D twice to exit)
-		{Key: "C-c", Command: cmdDoubleQuitC, NoPrefix: true},
-		{Key: "C-d", Command: cmdDoubleQuitD, NoPrefix: true},
 	}
 }

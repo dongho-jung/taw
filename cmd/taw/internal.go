@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -56,7 +55,6 @@ func init() {
 	internalCmd.AddCommand(commandPaletteCmd)
 	internalCmd.AddCommand(paletteUICmd)
 	internalCmd.AddCommand(executeCmd)
-	internalCmd.AddCommand(doubleQuitCmd)
 
 	// Add flags to end-task command
 	endTaskCmd.Flags().StringVar(&paneCaptureFile, "pane-capture-file", "", "Path to pre-captured pane content file")
@@ -1741,29 +1739,3 @@ var executeCmd = &cobra.Command{
 	},
 }
 
-var doubleQuitCmd = &cobra.Command{
-	Use:    "double-quit [session]",
-	Short:  "Check for double Ctrl+C/D to quit",
-	Args:   cobra.ExactArgs(1),
-	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		sessionName := args[0]
-		tm := tmux.New(sessionName)
-
-		// Check last quit attempt time
-		lastQuit, _ := tm.GetOption("@taw_last_quit")
-		now := time.Now().Unix()
-
-		if lastQuit != "" {
-			if lastTime, err := strconv.ParseInt(lastQuit, 10, 64); err == nil {
-				if now-lastTime <= 1 { // Within 1 second
-					tm.SetOption("@taw_last_quit", "", true)
-					return tm.Run("detach-client")
-				}
-			}
-		}
-
-		tm.SetOption("@taw_last_quit", fmt.Sprintf("%d", now), true)
-		return nil
-	},
-}
