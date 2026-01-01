@@ -13,22 +13,18 @@ Claude Code-based autonomous agent work environment
 ### Navigation
   ⌥Tab        Move to next pane (cycle)
   ⌥←/→        Move to previous/next window
-  ⌃C ⌃C       Exit session (press twice within 1 second)
-  ⌃D ⌃D       Exit session (press twice within 1 second)
 
-### Command Palette
-  ⌃R          Open command palette (fuzzy search)
+### Task Commands
+  ⌃N          New task
+  ⌃C          Send Ctrl+C (double-press within 2s to cancel task)
+  ⌃D          Done task (complete and cleanup)
+  ⌃Q          Quit taw
 
-Available commands in palette:
-  new-task      Create a new task
-  end-task      End current task
-  show-tasks    Show task list (active + done)
-  show-log      Show log viewer
-  show-shell    Open shell pane
-  show-help     Show this help
-  add-queue     Add task to queue
-  merge-all     Merge all completed tasks
-  detach        Exit session
+### Toggle Panels
+  ⌃T          Toggle tasks (show task list)
+  ⌃L          Toggle logs (show log viewer)
+  ⌃B          Toggle bottom (shell pane)
+  ⌃/          Toggle help
 
 ## Slash Commands (for agents)
 
@@ -44,7 +40,6 @@ Available commands in palette:
   ├── PROMPT.md              Project-specific agent instructions
   ├── memory                 Shared project memory (YAML)
   ├── log                    Unified log file
-  ├── .queue/                Quick task queue (add with add-queue)
   ├── history/               Completed task history
   │   └── YYMMDD_HHMMSS_name Task content + work capture
   └── agents/{task-name}/
@@ -60,7 +55,7 @@ Available commands in palette:
   ✅  Task completed
   ⚠️  Warning (merge failed, needs manual resolution)
 
-## Task List Viewer (show-tasks)
+## Task List Viewer (⌃T)
 
 View all active and completed tasks with preview panel.
 
@@ -82,7 +77,7 @@ View all active and completed tasks with preview panel.
   ✅  Done (ready to merge)
   📁  History (completed, from history)
 
-## Log Viewer (show-log)
+## Log Viewer (⌃L)
 
   ↑/↓         Scroll vertically
   ←/→         Scroll horizontally (when word wrap is off)

@@ -40,24 +40,3 @@ func TestDetectWaitInContentMarkerWithoutPrompt(t *testing.T) {
 		t.Fatalf("expected reason marker, got %q", reason)
 	}
 }
-
-func TestBuildAppleScriptUsesSystemEvents(t *testing.T) {
-	script := buildAppleScript("Pick one?", []string{"Yes", "No"})
-	if !strings.Contains(script, "display dialog") {
-		t.Fatalf("expected display dialog in AppleScript")
-	}
-}
-
-func TestBuildWaitDialogScriptUsesSystemEvents(t *testing.T) {
-	script := buildWaitDialogScript("Need input")
-	if !strings.Contains(script, "display dialog") {
-		t.Fatalf("expected display dialog in wait dialog script")
-	}
-}
-
-func TestBuildWaitDialogJXAScript(t *testing.T) {
-	script := buildWaitDialogJXAScript("Need input")
-	if !strings.Contains(script, "NSAlert") {
-		t.Fatalf("expected NSAlert usage in JXA wait dialog script")
-	}
-}

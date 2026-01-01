@@ -25,7 +25,7 @@ The first launch automatically opens the task editor.
 
 ### Create a task
 
-To add another task inside the tmux session, press `⌃R` and select `new-task`:
+To add another task inside the tmux session, press `⌃N`:
 - The editor opens so you can write the task content.
 - Save and exit to automatically launch the agent.
 - vi/vim/nvim start in insert mode automatically.
@@ -43,7 +43,7 @@ Slash commands available to the agent:
 
 **Task completion**:
 - `auto-merge` mode: Automatically commit → merge → clean up → close the window when the task ends
-- Other modes: Press `⌃R` → `end-task` to commit → PR/merge → clean up according to ON_COMPLETE
+- Other modes: Press `⌃D` to commit → PR/merge → clean up according to ON_COMPLETE
 
 <details>
 <summary>Automatically reopen incomplete tasks with session resume</summary>
@@ -161,41 +161,31 @@ brew install tmux gh
 
 ## tmux shortcuts
 
+### Navigation
 | Action | Shortcut |
 |--------|----------|
-| Command palette | `⌃R` (fzf-based fuzzy search) |
 | Cycle panes | `⌥Tab` |
 | Move window | `⌥←/→` |
-| Exit session | `⌃C` or `⌃D` twice |
 
-All commands are accessible via the command palette (`⌃R`):
-- `new-task` — Create a new task
-- `end-task` — Complete current task (commit → PR/merge → cleanup)
-- `show-tasks` — View all tasks (active + completed)
-- `show-log` — Live log viewer
-- `show-shell` — Open shell pane (bottom 40%)
-- `show-help` — Show help
-- `add-queue` — Add quick task to queue
-- `merge-all` — Merge all done tasks
-- `detach` — Leave session
+### Task Commands
+| Action | Shortcut |
+|--------|----------|
+| New task | `⌃N` |
+| Cancel task | `⌃C` |
+| Done task | `⌃D` |
+| Quit taw | `⌃Q` |
 
-## Quick task queue
-
-Quickly capture ideas or follow-up work while you are busy.
-
-1. Press `⌃R` and select `add-queue`.
-2. Enter the task description and hit Enter.
-3. When the current task finishes (`end-task`), queued tasks start automatically.
-
-Queue layout:
-```bash
-.taw/.queue/      # Queue directory
-└── 001.task      # Pending task file
-```
+### Toggle Panels
+| Action | Shortcut |
+|--------|----------|
+| Toggle tasks | `⌃T` |
+| Toggle logs | `⌃L` |
+| Toggle bottom (shell) | `⌃B` |
+| Toggle help | `⌃/` |
 
 ## Log viewer
 
-Press `⌃R` and select `show-log` to open the live log viewer.
+Press `⌃L` to open the live log viewer.
 
 <details>
 <summary>Controls</summary>

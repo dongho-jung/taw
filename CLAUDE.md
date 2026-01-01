@@ -45,9 +45,9 @@ go tool cover -html=coverage.out -o coverage.html
 | internal/constants | 100% | Fully tested |
 | internal/config | ~93% | Fully tested |
 | internal/logging | ~93% | Fully tested |
-| internal/app | ~80% | Fully tested |
+| internal/app | ~83% | Fully tested |
 | internal/embed | ~79% | Fully tested |
-| internal/task | ~35% | Manager tests require mocks |
+| internal/task | ~25% | Manager tests require mocks |
 | internal/claude | ~17% | CLI operations need mocks |
 | internal/git | ~8% | Requires git repository |
 | internal/github | 0% | Requires `gh` CLI |
@@ -90,8 +90,6 @@ taw/                           # This repository
     ├── .claude/               # Claude settings and slash commands (copied from embed)
     │   ├── settings.local.json
     │   └── commands/          # Slash commands (/commit, /test, /pr, /merge)
-    ├── .queue/                # Quick task queue (add with ⌃R → add-queue)
-    │   └── 001.task           # Pending tasks (processed in order)
     ├── history/               # Task history directory
     │   └── YYMMDD_HHMMSS_task-name  # Task + summary + pane capture at task end
     └── agents/{task-name}/    # Per-task workspace
@@ -120,7 +118,7 @@ TAW uses a 6-level logging system (L0-L5):
 
 - Enable debug mode: `TAW_DEBUG=1 taw`
 - Log file location: `.taw/log`
-- View logs: Press `⌃R` → `show-log` to open the log viewer
+- View logs: Press `⌃L` to open the log viewer
 - Filter levels in log viewer: Press `l` to cycle through L0+ → L1+ → ... → L5 only
 
 ## Notifications
@@ -132,6 +130,7 @@ TAW uses multiple notification channels to alert users (macOS only):
 | Task created             | Glass       | -                    | `🤖 Task started: {name}` |
 | Task completed           | Hero        | -                    | `✅ Task completed: {name}` |
 | User input needed        | Funk        | Yes                  | `💬 {name} needs input` |
+| Cancel pending (⌃C)      | Tink        | -                    | -                 |
 | Error (merge failed etc) | Basso       | -                    | `⚠️ Merge failed: {name}` |
 
 - Sounds use macOS system sounds (`/System/Library/Sounds/`)
@@ -145,6 +144,13 @@ TAW uses multiple notification channels to alert users (macOS only):
 - Test before saying "done."
 - A successful build is not enough—verify the feature actually works.
 - If interactive testing is impossible (e.g., terminal attach), create a test script to validate.
+
+### Test after every change
+
+- **Always run `go test ./...` after making any code changes.**
+- If tests fail, fix the test code or implementation before proceeding.
+- Update existing tests when behavior changes.
+- Add new tests for new functionality when appropriate.
 
 ### Keep docs in sync
 

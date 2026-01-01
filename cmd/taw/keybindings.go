@@ -7,20 +7,27 @@ import (
 )
 
 // buildKeybindings creates tmux keybindings for TAW.
-// New simplified hotkey scheme:
-//   - Alt+Tab: Cycle panes
-//   - Alt+Left/Right: Navigate windows
-//   - Ctrl+R: Command palette (fzf-based fuzzy search)
-//   - Ctrl+C/D twice: Exit session
+// Keyboard shortcuts:
+//   - Ctrl+N: New task
+//   - Ctrl+C: Send Ctrl+C (double-press to cancel task)
+//   - Ctrl+D: Done task
+//   - Ctrl+Q: Quit taw
+//   - Ctrl+T: Toggle tasks
+//   - Ctrl+L: Toggle logs
+//   - Ctrl+B: Toggle bottom (shell)
+//   - Ctrl+/: Toggle help
+//   - Alt+Left/Right: Move window
+//   - Alt+Tab: Cycle pane
 func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
-	// Command palette command
-	cmdPalette := fmt.Sprintf("run-shell '%s internal command-palette %s'", tawBin, sessionName)
-
-	// Double quit command (Ctrl+C/D twice to exit)
-	// The key is passed as an argument to double-quit, which will forward it to the pane
-	// if it's not a double-quit. This avoids tmux command chaining issues with ';'.
-	cmdDoubleQuitC := fmt.Sprintf("run-shell -b '%s internal double-quit %s C-c'", tawBin, sessionName)
-	cmdDoubleQuitD := fmt.Sprintf("run-shell -b '%s internal double-quit %s C-d'", tawBin, sessionName)
+	// Command shortcuts
+	cmdNewTask := fmt.Sprintf("run-shell '%s internal toggle-new %s'", tawBin, sessionName)
+	cmdCtrlC := fmt.Sprintf("run-shell '%s internal ctrl-c %s'", tawBin, sessionName)
+	cmdDoneTask := fmt.Sprintf("run-shell '%s internal done-task %s'", tawBin, sessionName)
+	cmdQuit := "detach-client"
+	cmdToggleTasks := fmt.Sprintf("run-shell '%s internal toggle-task-list %s'", tawBin, sessionName)
+	cmdToggleLogs := fmt.Sprintf("run-shell '%s internal toggle-log %s'", tawBin, sessionName)
+	cmdToggleBottom := fmt.Sprintf("run-shell '%s internal popup-shell %s'", tawBin, sessionName)
+	cmdToggleHelp := fmt.Sprintf("run-shell '%s internal toggle-help %s'", tawBin, sessionName)
 
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
@@ -28,11 +35,16 @@ func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
 		{Key: "M-Left", Command: "previous-window", NoPrefix: true},
 		{Key: "M-Right", Command: "next-window", NoPrefix: true},
 
-		// Command palette (Ctrl+R)
-		{Key: "C-r", Command: cmdPalette, NoPrefix: true},
+		// Task commands (Ctrl-based)
+		{Key: "C-n", Command: cmdNewTask, NoPrefix: true},
+		{Key: "C-c", Command: cmdCtrlC, NoPrefix: true},
+		{Key: "C-d", Command: cmdDoneTask, NoPrefix: true},
+		{Key: "C-q", Command: cmdQuit, NoPrefix: true},
 
-		// Double quit (Ctrl+C/D twice to exit)
-		{Key: "C-c", Command: cmdDoubleQuitC, NoPrefix: true},
-		{Key: "C-d", Command: cmdDoubleQuitD, NoPrefix: true},
+		// Toggle commands (Ctrl-based)
+		{Key: "C-t", Command: cmdToggleTasks, NoPrefix: true},
+		{Key: "C-l", Command: cmdToggleLogs, NoPrefix: true},
+		{Key: "C-b", Command: cmdToggleBottom, NoPrefix: true},
+		{Key: "C-_", Command: cmdToggleHelp, NoPrefix: true}, // Ctrl+/ sends C-_
 	}
 }

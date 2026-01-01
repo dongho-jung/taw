@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -42,9 +41,9 @@ func init() {
 	internalCmd.AddCommand(watchWaitCmd)
 	internalCmd.AddCommand(endTaskCmd)
 	internalCmd.AddCommand(endTaskUICmd)
-	internalCmd.AddCommand(processQueueCmd)
-	internalCmd.AddCommand(quickTaskCmd)
-	internalCmd.AddCommand(mergeCompletedCmd)
+	internalCmd.AddCommand(ctrlCCmd)
+	internalCmd.AddCommand(cancelTaskCmd)
+	internalCmd.AddCommand(doneTaskCmd)
 	internalCmd.AddCommand(popupShellCmd)
 	internalCmd.AddCommand(toggleLogCmd)
 	internalCmd.AddCommand(logViewerCmd)
@@ -53,10 +52,6 @@ func init() {
 	internalCmd.AddCommand(loadingScreenCmd)
 	internalCmd.AddCommand(toggleTaskListCmd)
 	internalCmd.AddCommand(taskListViewerCmd)
-	internalCmd.AddCommand(commandPaletteCmd)
-	internalCmd.AddCommand(paletteUICmd)
-	internalCmd.AddCommand(executeCmd)
-	internalCmd.AddCommand(doubleQuitCmd)
 
 	// Add flags to end-task command
 	endTaskCmd.Flags().StringVar(&paneCaptureFile, "pane-capture-file", "", "Path to pre-captured pane content file")
@@ -980,12 +975,6 @@ var endTaskCmd = &cobra.Command{
 		fmt.Println()
 		fmt.Println("  ✓ Done!")
 
-		// Process queue
-		tawBin, _ := os.Executable()
-		if err := exec.Command(tawBin, "internal", "process-queue", sessionName).Start(); err != nil {
-			logging.Trace("Failed to start process-queue: %v", err)
-		}
-
 		return nil
 	},
 }
@@ -1076,186 +1065,201 @@ var endTaskUICmd = &cobra.Command{
 	},
 }
 
-var processQueueCmd = &cobra.Command{
-	Use:   "process-queue [session]",
-	Short: "Process the next task in queue",
+var ctrlCCmd = &cobra.Command{
+	Use:   "ctrl-c [session]",
+	Short: "Handle Ctrl+C (double-press to cancel task)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
-
-		app, err := getAppFromSession(sessionName)
-		if err != nil {
-			return err
-		}
-
-		queueMgr := task.NewQueueManager(app.QueueDir)
-		queuedTask, err := queueMgr.Pop()
-		if err != nil {
-			return err
-		}
-
-		if queuedTask == nil {
-			return nil // Queue is empty
-		}
-
-		// Create task from queue
-		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
-		newTask, err := mgr.CreateTask(queuedTask.Content)
-		if err != nil {
-			return err
-		}
-
-		// Handle task
-		tawBin, _ := os.Executable()
-		handleCmd := exec.Command(tawBin, "internal", "handle-task", sessionName, newTask.AgentDir)
-		return handleCmd.Start()
-	},
-}
-
-var quickTaskCmd = &cobra.Command{
-	Use:   "quick-task [session]",
-	Short: "Add a quick task to the queue",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		sessionName := args[0]
-
-		app, err := getAppFromSession(sessionName)
-		if err != nil {
-			return err
-		}
-
 		tm := tmux.New(sessionName)
 
-		// Use tmux display-popup to get input
-		popupCmd := fmt.Sprintf("read -p 'Quick task: ' task && echo \"$task\" >> %s/.queue/$(date +%%s).task", app.TawDir)
+		// Get current window name to check if this is a task window
+		windowName, _ := tm.Display("#{window_name}")
+		windowName = strings.TrimSpace(windowName)
 
-		return tm.DisplayPopup(tmux.PopupOpts{
-			Width:  "60",
-			Height: "3",
-			Title:  "Quick Task",
-			Close:  true,
-			Style:  "fg=terminal,bg=terminal",
-		}, fmt.Sprintf("bash -c '%s'", popupCmd))
-	},
-}
+		// If not a task window, just send Ctrl+C to the pane
+		if !strings.HasPrefix(windowName, constants.EmojiWorking) &&
+			!strings.HasPrefix(windowName, constants.EmojiWaiting) &&
+			!strings.HasPrefix(windowName, constants.EmojiDone) &&
+			!strings.HasPrefix(windowName, constants.EmojiWarning) {
+			return tm.SendKeys("", "C-c")
+		}
 
-var mergeCompletedCmd = &cobra.Command{
-	Use:   "merge-completed [session]",
-	Short: "Merge all completed tasks",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		sessionName := args[0]
+		// Get pending cancel timestamp from tmux option
+		pendingTimeStr, _ := tm.GetOption("@taw_cancel_pending")
+		now := time.Now().Unix()
 
-		app, err := getAppFromSession(sessionName)
-		if err != nil {
+		// Check if there's a pending cancel within 2 seconds
+		if pendingTimeStr != "" {
+			pendingTime, err := parseUnixTime(pendingTimeStr)
+			if err == nil && now-pendingTime <= 2 {
+				// Double-press detected, cancel the task
+				tm.SetOption("@taw_cancel_pending", "", true) // Clear pending state
+
+				// Delegate to cancel-task
+				tawBin, _ := os.Executable()
+				cancelCmd := exec.Command(tawBin, "internal", "cancel-task", sessionName)
+				return cancelCmd.Run()
+			}
+		}
+
+		// First press: send Ctrl+C to the pane and set pending state
+		if err := tm.SendKeys("", "C-c"); err != nil {
 			return err
 		}
 
-		if !app.IsGitRepo {
-			return fmt.Errorf("merge-completed only works in git repositories")
-		}
+		// Store current timestamp
+		tm.SetOption("@taw_cancel_pending", fmt.Sprintf("%d", now), true)
 
-		tm := tmux.New(sessionName)
-		gitClient := git.New()
-
-		// Find windows with ✅ emoji
-		windows, err := tm.ListWindows()
-		if err != nil {
-			return err
-		}
-
-		for _, w := range windows {
-			if !strings.HasPrefix(w.Name, constants.EmojiDone) {
-				continue
-			}
-
-			// Extract task name
-			taskName := strings.TrimPrefix(w.Name, constants.EmojiDone)
-
-			fmt.Printf("Merging task: %s\n", taskName)
-
-			// Merge branch
-			err := gitClient.Merge(app.ProjectDir, taskName, true, fmt.Sprintf("Merge branch '%s'", taskName))
-			if err != nil {
-				fmt.Printf("Failed to merge %s: %v\n", taskName, err)
-				gitClient.MergeAbort(app.ProjectDir)
-				continue
-			}
-
-			// End task
-			tawBin, _ := os.Executable()
-			exec.Command(tawBin, "internal", "end-task", sessionName, w.ID).Run()
-		}
+		// Play sound to indicate pending cancel state
+		notify.PlaySound(notify.SoundCancelPending)
 
 		return nil
 	},
 }
 
-var popupShellCmd = &cobra.Command{
-	Use:   "popup-shell [session]",
-	Short: "Open shell pane at bottom 40%",
+func parseUnixTime(s string) (int64, error) {
+	var t int64
+	_, err := fmt.Sscanf(s, "%d", &t)
+	return t, err
+}
+
+var cancelTaskCmd = &cobra.Command{
+	Use:   "cancel-task [session]",
+	Short: "Cancel the current task",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		tm := tmux.New(sessionName)
+
+		// Get current window ID
+		windowID, err := tm.Display("#{window_id}")
+		if err != nil {
+			return fmt.Errorf("failed to get window ID: %w", err)
+		}
+		windowID = strings.TrimSpace(windowID)
+
+		// Get current window name
+		windowName, _ := tm.Display("#{window_name}")
+		windowName = strings.TrimSpace(windowName)
+
+		// Check if this is a task window (has emoji prefix)
+		if !strings.HasPrefix(windowName, constants.EmojiWorking) &&
+			!strings.HasPrefix(windowName, constants.EmojiWaiting) &&
+			!strings.HasPrefix(windowName, constants.EmojiDone) &&
+			!strings.HasPrefix(windowName, constants.EmojiWarning) {
+			tm.DisplayMessage("Not a task window", 1500)
+			return nil
+		}
+
+		// Find task by window ID
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+		tasks, err := mgr.ListTasks()
+		if err != nil {
+			return fmt.Errorf("failed to list tasks: %w", err)
+		}
+
+		var targetTask *task.Task
+		for _, t := range tasks {
+			if id, _ := t.LoadWindowID(); id == windowID {
+				targetTask = t
+				break
+			}
+		}
+
+		if targetTask == nil {
+			tm.DisplayMessage("Task not found", 1500)
+			return nil
+		}
+
+		// Kill window
+		if err := tm.KillWindow(windowID); err != nil {
+			logging.Warn("Failed to kill window: %v", err)
+		}
+
+		// Cleanup task
+		if err := mgr.CleanupTask(targetTask); err != nil {
+			logging.Warn("Failed to cleanup task: %v", err)
+		}
+
+		tm.DisplayMessage(fmt.Sprintf("Task cancelled: %s", targetTask.Name), 2000)
+		return nil
+	},
+}
+
+var doneTaskCmd = &cobra.Command{
+	Use:   "done-task [session]",
+	Short: "Complete the current task",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
-		// Check if shell pane exists
-		paneID, _ := tm.GetOption("@taw_shell_pane_id")
-		if paneID != "" && tm.HasPane(paneID) {
-			// Shell pane exists, focus it instead of killing
-			return tm.SelectPane(paneID)
+		// Get current window ID
+		windowID, err := tm.Display("#{window_id}")
+		if err != nil {
+			return fmt.Errorf("failed to get window ID: %w", err)
+		}
+		windowID = strings.TrimSpace(windowID)
+
+		// Get current window name
+		windowName, _ := tm.Display("#{window_name}")
+		windowName = strings.TrimSpace(windowName)
+
+		// Check if this is a task window (has emoji prefix)
+		if !strings.HasPrefix(windowName, constants.EmojiWorking) &&
+			!strings.HasPrefix(windowName, constants.EmojiWaiting) &&
+			!strings.HasPrefix(windowName, constants.EmojiDone) &&
+			!strings.HasPrefix(windowName, constants.EmojiWarning) {
+			tm.DisplayMessage("Not a task window", 1500)
+			return nil
 		}
 
-		// Get current pane's working directory (worktree path)
+		// Delegate to end-task-ui
+		tawBin, _ := os.Executable()
+		endCmd := exec.Command(tawBin, "internal", "end-task-ui", sessionName, windowID)
+		return endCmd.Run()
+	},
+}
+
+var popupShellCmd = &cobra.Command{
+	Use:   "popup-shell [session]",
+	Short: "Toggle shell pane at bottom 40%",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		tm := tmux.New(sessionName)
+
+		// Check if shell pane exists - if so, close it (toggle off)
+		paneID, _ := tm.GetOption("@taw_shell_pane_id")
+		if paneID != "" && tm.HasPane(paneID) {
+			tm.KillPane(paneID)
+			tm.SetOption("@taw_shell_pane_id", "", true)
+			return nil
+		}
+
+		// Get current pane's working directory
 		panePath, err := tm.Display("#{pane_current_path}")
 		if err != nil || panePath == "" {
-			// Fallback to project dir
 			app, err := getAppFromSession(sessionName)
 			if err != nil {
 				return err
 			}
 			panePath = app.ProjectDir
 		}
+		panePath = strings.TrimSpace(panePath)
 
-		shell := os.Getenv("SHELL")
-		if shell == "" {
-			shell = "/bin/bash"
-		}
-		shellName := filepath.Base(shell)
-
-		// Build shell command with Alt+P binding to close pane
-		// We create a temporary rcfile that binds Alt+P to exit
-		var shellCmd string
-
-		// Command to kill the shell pane and clear the option
-		// Note: We'll get the pane_id after creation and update the cleanup command
-		cleanupCmd := fmt.Sprintf("tmux -L \"taw-%s\" set-option -g @taw_shell_pane_id \"\" 2>/dev/null; exit", sessionName)
-
-		switch shellName {
-		case "zsh":
-			// For zsh: create temp ZDOTDIR with .zshrc that binds Alt+P
-			shellCmd = fmt.Sprintf(
-				"TMPZD=$(mktemp -d) && "+
-					"printf '%%s\\n' '[[ -f ~/.zshrc ]] && source ~/.zshrc' '_taw_close_shell() { %s; }' \"bindkey -s '\\\\ep' '\\\\C-u_taw_close_shell\\\\n'\" > \"$TMPZD/.zshrc\" && "+
-					"ZDOTDIR=\"$TMPZD\" zsh; "+
-					"rm -rf \"$TMPZD\" 2>/dev/null",
-				cleanupCmd)
-		default:
-			// For bash: use --rcfile with temp file
-			shellCmd = fmt.Sprintf(
-				"TMPRC=$(mktemp) && "+
-					"printf '%%s\\n' '[ -f ~/.bashrc ] && source ~/.bashrc' '_taw_close_shell() { %s; }' \"bind '\\\"\\\\ep\\\": \\\"\\\\C-u_taw_close_shell\\\\n\\\"'\" > \"$TMPRC\" && "+
-					"bash --rcfile \"$TMPRC\"; "+
-					"rm -f \"$TMPRC\" 2>/dev/null",
-				cleanupCmd)
-		}
-
-		// Create shell pane at bottom 40% spanning full window width
+		// Create shell pane at bottom 40%
 		newPaneID, err := tm.SplitWindowPane(tmux.SplitOpts{
 			Horizontal: false, // vertical split (top/bottom)
 			Size:       "40%",
 			StartDir:   panePath,
-			Command:    shellCmd,
 			Full:       true, // span entire window width
 		})
 		if err != nil {
@@ -1263,7 +1267,7 @@ var popupShellCmd = &cobra.Command{
 		}
 
 		// Store pane ID for toggle
-		tm.SetOption("@taw_shell_pane_id", newPaneID, true)
+		tm.SetOption("@taw_shell_pane_id", strings.TrimSpace(newPaneID), true)
 
 		return nil
 	},
@@ -1271,7 +1275,7 @@ var popupShellCmd = &cobra.Command{
 
 var toggleLogCmd = &cobra.Command{
 	Use:   "toggle-log [session]",
-	Short: "Show log viewer",
+	Short: "Toggle log viewer popup",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
@@ -1284,19 +1288,18 @@ var toggleLogCmd = &cobra.Command{
 
 		logPath := app.GetLogPath()
 
-		// Get the taw binary path
 		tawBin, err := os.Executable()
 		if err != nil {
 			tawBin = "taw"
 		}
 
-		// Run log viewer (closes with q/Esc/Ctrl+C/Ctrl+D)
+		// Run log viewer in popup (closes with q/Esc/Ctrl+L)
 		logCmd := fmt.Sprintf("%s internal log-viewer %s", tawBin, logPath)
 
 		tm.DisplayPopup(tmux.PopupOpts{
 			Width:  "90%",
 			Height: "80%",
-			Title:  " Log Viewer (↑↓:scroll  g/G:top/end  s:tail  w:wrap  q/Esc:close) ",
+			Title:  " Log Viewer (↑↓:scroll  g/G:top/end  s:tail  w:wrap  ⌃L/q:close) ",
 			Close:  true,
 			Style:  "fg=terminal,bg=terminal",
 		}, logCmd)
@@ -1407,7 +1410,7 @@ var loadingScreenCmd = &cobra.Command{
 
 var toggleTaskListCmd = &cobra.Command{
 	Use:   "toggle-task-list [session]",
-	Short: "Show task list popup",
+	Short: "Toggle task list popup",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
@@ -1418,19 +1421,18 @@ var toggleTaskListCmd = &cobra.Command{
 			return err
 		}
 
-		// Get the taw binary path
 		tawBin, err := os.Executable()
 		if err != nil {
 			tawBin = "taw"
 		}
 
-		// Run task list viewer (closes with q/Esc)
+		// Run task list viewer in popup (closes with q/Esc/Ctrl+T)
 		listCmd := fmt.Sprintf("%s internal task-list-viewer %s", tawBin, sessionName)
 
 		tm.DisplayPopup(tmux.PopupOpts{
 			Width:     "90%",
 			Height:    "80%",
-			Title:     " Tasks (↑↓:nav  c:cancel  m:merge  p:push  r:resume  ⏎:focus  q/Esc:close) ",
+			Title:     " Tasks (↑↓:nav  c:cancel  m:merge  p:push  r:resume  ⏎:focus  ⌃T/q:close) ",
 			Close:     true,
 			Style:     "fg=terminal,bg=terminal",
 			Directory: app.ProjectDir,
@@ -1594,251 +1596,4 @@ func getShell() string {
 		shell = "/bin/bash"
 	}
 	return shell
-}
-
-// paletteCommands defines all available commands in the command palette.
-var paletteCommands = []tui.PaletteCommand{
-	{Name: "new-task", Description: "Create a new task"},
-	{Name: "end-task", Description: "End current task"},
-	{Name: "show-tasks", Description: "Show task list (active + done)"},
-	{Name: "show-log", Description: "Show log viewer"},
-	{Name: "show-shell", Description: "Open shell pane"},
-	{Name: "show-help", Description: "Show help"},
-	{Name: "add-queue", Description: "Add task to queue"},
-	{Name: "merge-all", Description: "Merge all completed tasks"},
-	{Name: "detach", Description: "Exit session"},
-}
-
-var commandPaletteCmd = &cobra.Command{
-	Use:   "command-palette [session]",
-	Short: "Show command palette",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		sessionName := args[0]
-		tm := tmux.New(sessionName)
-
-		app, err := getAppFromSession(sessionName)
-		if err != nil {
-			return err
-		}
-
-		tawBin, err := os.Executable()
-		if err != nil {
-			tawBin = "taw"
-		}
-
-		// Run palette UI inside popup, save selected command to tmux option
-		// The command will be executed AFTER popup closes (to avoid nested popup issue)
-		paletteCmd := fmt.Sprintf(
-			"CMD=$(%s internal palette-ui %s) && [ -n \"$CMD\" ] && tmux -L \"taw-%s\" set-option -g @taw_pending_cmd \"$CMD\"",
-			tawBin, sessionName, sessionName)
-
-		// Note: We ignore the error from DisplayPopup like toggleLogCmd and toggleTaskListCmd do.
-		// When user closes the popup (Esc), it returns a non-zero exit code which would
-		// cause tmux to display "returned 1" error message if we propagated it.
-		tm.DisplayPopup(tmux.PopupOpts{
-			Width:     "60%",
-			Height:    "50%",
-			Title:     " Commands (↑↓:nav  ⏎:run  Esc:close) ",
-			Close:     true,
-			Style:     "fg=terminal,bg=terminal",
-			Directory: app.ProjectDir,
-		}, paletteCmd)
-
-		// After popup closes, read and execute the pending command
-		pendingCmd, _ := tm.GetOption("@taw_pending_cmd")
-		if pendingCmd != "" {
-			tm.SetOption("@taw_pending_cmd", "", true) // clear
-			return executePaletteCommand(sessionName, pendingCmd)
-		}
-
-		return nil
-	},
-}
-
-var paletteUICmd = &cobra.Command{
-	Use:    "palette-ui [session]",
-	Short:  "Run the command palette UI",
-	Args:   cobra.ExactArgs(1),
-	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// Check if fzf is available
-		_, fzfErr := exec.LookPath("fzf")
-		hasFzf := fzfErr == nil
-
-		var selectedCmd string
-		var err error
-
-		if hasFzf {
-			selectedCmd, err = runFzfPalette()
-		} else {
-			selectedCmd, err = tui.RunPalette(paletteCommands)
-		}
-
-		if err != nil || selectedCmd == "" {
-			return nil // cancelled or error
-		}
-
-		// Output selected command (will be captured by caller)
-		fmt.Println(selectedCmd)
-		return nil
-	},
-}
-
-// runFzfPalette runs fzf for command selection.
-func runFzfPalette() (string, error) {
-	// Build input for fzf
-	var input strings.Builder
-	for _, cmd := range paletteCommands {
-		input.WriteString(fmt.Sprintf("%-15s %s\n", cmd.Name, cmd.Description))
-	}
-
-	// Create temp file for input (fzf needs file input for proper TTY handling)
-	tmpFile, err := os.CreateTemp("", "taw-palette-*.txt")
-	if err != nil {
-		return "", err
-	}
-	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
-
-	if _, err := tmpFile.WriteString(input.String()); err != nil {
-		tmpFile.Close()
-		return "", err
-	}
-	tmpFile.Close()
-
-	// Create temp file for output
-	outFile, err := os.CreateTemp("", "taw-palette-out-*.txt")
-	if err != nil {
-		return "", err
-	}
-	outPath := outFile.Name()
-	outFile.Close()
-	defer os.Remove(outPath)
-
-	// Run fzf with proper TTY handling via bash
-	fzfCmd := exec.Command("bash", "-c",
-		fmt.Sprintf("fzf --height=100%% --reverse --no-info --prompt='Command> ' --bind=esc:abort,ctrl-r:abort --with-nth=1,2 < '%s' > '%s'",
-			tmpPath, outPath))
-
-	fzfCmd.Stdin = os.Stdin
-	fzfCmd.Stdout = os.Stdout
-	fzfCmd.Stderr = os.Stderr
-
-	if err := fzfCmd.Run(); err != nil {
-		return "", nil // cancelled or error
-	}
-
-	// Read output
-	output, err := os.ReadFile(outPath)
-	if err != nil {
-		return "", nil
-	}
-
-	// Extract command name from output
-	line := strings.TrimSpace(string(output))
-	fields := strings.Fields(line)
-	if len(fields) > 0 {
-		return fields[0], nil
-	}
-
-	return "", nil
-}
-
-// executePaletteCommand executes the selected command.
-func executePaletteCommand(sessionName, cmdName string) error {
-	tm := tmux.New(sessionName)
-	tawBin, _ := os.Executable()
-
-	switch cmdName {
-	case "show-log":
-		return tm.Run("run-shell", fmt.Sprintf("%s internal toggle-log %s", tawBin, sessionName))
-
-	case "show-shell":
-		return tm.Run("run-shell", fmt.Sprintf("%s internal popup-shell %s", tawBin, sessionName))
-
-	case "show-tasks":
-		return tm.Run("run-shell", fmt.Sprintf("%s internal toggle-task-list %s", tawBin, sessionName))
-
-	case "show-help":
-		return tm.Run("run-shell", fmt.Sprintf("%s internal toggle-help %s", tawBin, sessionName))
-
-	case "new-task":
-		return tm.Run("run-shell", fmt.Sprintf("%s internal toggle-new %s", tawBin, sessionName))
-
-	case "end-task":
-		// Get current window ID
-		windowID, _ := tm.Display("#{window_id}")
-		return tm.Run("run-shell", fmt.Sprintf("%s internal end-task-ui %s %s", tawBin, sessionName, strings.TrimSpace(windowID)))
-
-	case "add-queue":
-		return tm.Run("run-shell", fmt.Sprintf("%s internal quick-task %s", tawBin, sessionName))
-
-	case "merge-all":
-		return tm.Run("run-shell", fmt.Sprintf("%s internal merge-completed %s", tawBin, sessionName))
-
-	case "detach":
-		return tm.Run("detach-client")
-
-	default:
-		return fmt.Errorf("unknown command: %s", cmdName)
-	}
-}
-
-var executeCmd = &cobra.Command{
-	Use:    "execute-cmd [session] [command]",
-	Short:  "Execute a palette command",
-	Args:   cobra.ExactArgs(2),
-	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		sessionName := args[0]
-		cmdName := args[1]
-		return executePaletteCommand(sessionName, cmdName)
-	},
-}
-
-var doubleQuitCmd = &cobra.Command{
-	Use:    "double-quit [session] [key]",
-	Short:  "Check for double Ctrl+C/D to quit",
-	Args:   cobra.RangeArgs(1, 2),
-	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		sessionName := args[0]
-		keyToForward := ""
-		if len(args) > 1 {
-			keyToForward = args[1]
-		}
-
-		tm := tmux.New(sessionName)
-
-		// Check last quit attempt time
-		lastQuit, _ := tm.GetOption("@taw_last_quit")
-		now := time.Now().Unix()
-
-		if lastQuit != "" {
-			if lastTime, err := strconv.ParseInt(lastQuit, 10, 64); err == nil {
-				if now-lastTime <= 1 { // Within 1 second
-					tm.SetOption("@taw_last_quit", "", true)
-					return tm.Run("detach-client")
-				}
-			}
-		}
-
-		tm.SetOption("@taw_last_quit", fmt.Sprintf("%d", now), true)
-
-		// Show hint message
-		keyName := "Ctrl+C"
-		if keyToForward == "C-d" {
-			keyName = "Ctrl+D"
-		}
-		tm.DisplayMessage(fmt.Sprintf("Press %s again to exit", keyName), 1500)
-
-		// Forward the key to the current pane if not a double-quit
-		if keyToForward != "" {
-			// Send the key to the active pane
-			tm.Run("send-keys", keyToForward)
-		}
-
-		return nil
-	},
 }

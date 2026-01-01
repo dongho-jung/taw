@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/donghojung/taw/internal/config"
 	"github.com/donghojung/taw/internal/constants"
@@ -13,11 +14,10 @@ import (
 // App represents the main application context with all dependencies.
 type App struct {
 	// Paths
-	ProjectDir  string // Root directory of the user's project
-	TawDir      string // .taw directory path
-	AgentsDir   string // agents directory path
-	QueueDir    string // .queue directory path
-	TawHome     string // TAW installation directory
+	ProjectDir string // Root directory of the user's project
+	TawDir     string // .taw directory path
+	AgentsDir  string // agents directory path
+	TawHome    string // TAW installation directory
 
 	// Session
 	SessionName string // tmux session name
@@ -39,7 +39,6 @@ func New(projectDir string) (*App, error) {
 
 	tawDir := filepath.Join(absPath, constants.TawDirName)
 	agentsDir := filepath.Join(tawDir, constants.AgentsDirName)
-	queueDir := filepath.Join(tawDir, constants.QueueDirName)
 
 	// Determine session name from project directory name
 	sessionName := filepath.Base(absPath)
@@ -51,7 +50,6 @@ func New(projectDir string) (*App, error) {
 		ProjectDir:  absPath,
 		TawDir:      tawDir,
 		AgentsDir:   agentsDir,
-		QueueDir:    queueDir,
 		SessionName: sessionName,
 		Debug:       debug,
 	}
@@ -65,7 +63,6 @@ func (a *App) Initialize() error {
 	dirs := []string{
 		a.TawDir,
 		a.AgentsDir,
-		a.QueueDir,
 	}
 
 	for _, dir := range dirs {
@@ -154,9 +151,23 @@ func (a *App) UpdateSessionNameForGitRepo(repoRoot string) {
 	}
 }
 
+// tawEnvVars lists environment variables managed by TAW.
+// These are filtered from os.Environ() before adding new values to prevent duplicates.
+var tawEnvVars = []string{
+	"TASK_NAME",
+	"TAW_DIR",
+	"PROJECT_DIR",
+	"WINDOW_ID",
+	"TAW_HOME",
+	"SESSION_NAME",
+	"ON_COMPLETE",
+	"WORKTREE_DIR",
+}
+
 // GetEnvVars returns environment variables to be passed to Claude.
 func (a *App) GetEnvVars(taskName, worktreeDir, windowID string) []string {
-	env := os.Environ()
+	// Filter out existing TAW env vars to prevent duplicates
+	env := filterEnv(os.Environ(), tawEnvVars)
 
 	env = append(env,
 		"TASK_NAME="+taskName,
@@ -176,4 +187,22 @@ func (a *App) GetEnvVars(taskName, worktreeDir, windowID string) []string {
 	}
 
 	return env
+}
+
+// filterEnv removes specified environment variables from the list.
+func filterEnv(env []string, exclude []string) []string {
+	result := make([]string, 0, len(env))
+	for _, e := range env {
+		excluded := false
+		for _, prefix := range exclude {
+			if strings.HasPrefix(e, prefix+"=") {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			result = append(result, e)
+		}
+	}
+	return result
 }

@@ -20,6 +20,8 @@ const (
 	SoundNeedInput SoundType = "Funk"
 	// SoundError is played when an error or problem occurs.
 	SoundError SoundType = "Basso"
+	// SoundCancelPending is played when waiting for second Ctrl+C to cancel.
+	SoundCancelPending SoundType = "Tink"
 )
 
 // Send shows a desktop notification when supported.

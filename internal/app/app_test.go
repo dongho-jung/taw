@@ -31,11 +31,6 @@ func TestNew(t *testing.T) {
 		t.Errorf("AgentsDir = %q, want %q", app.AgentsDir, expectedAgentsDir)
 	}
 
-	expectedQueueDir := filepath.Join(expectedTawDir, constants.QueueDirName)
-	if app.QueueDir != expectedQueueDir {
-		t.Errorf("QueueDir = %q, want %q", app.QueueDir, expectedQueueDir)
-	}
-
 	expectedSessionName := filepath.Base(tempDir)
 	if app.SessionName != expectedSessionName {
 		t.Errorf("SessionName = %q, want %q", app.SessionName, expectedSessionName)
@@ -55,7 +50,7 @@ func TestAppInitialize(t *testing.T) {
 	}
 
 	// Check directories were created
-	dirs := []string{app.TawDir, app.AgentsDir, app.QueueDir}
+	dirs := []string{app.TawDir, app.AgentsDir}
 	for _, dir := range dirs {
 		info, err := os.Stat(dir)
 		if err != nil {

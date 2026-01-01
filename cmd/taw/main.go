@@ -332,12 +332,16 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 		tawBin = "taw"
 	}
 
+	// Disable default prefix key (Ctrl+B) so we can use it for toggle-bottom
+	tm.SetOption("prefix", "None", true)
+	tm.SetOption("prefix2", "None", true)
+
 	// Setup status bar
 	tm.SetOption("status", "on", true)
 	tm.SetOption("status-position", "bottom", true)
 	tm.SetOption("status-left", " "+app.SessionName+" ", true)
 	tm.SetOption("status-left-length", "30", true)
-	tm.SetOption("status-right", " ⌃R:commands  ⌥Tab:pane  ⌥←→:window ", true)
+	tm.SetOption("status-right", " ⌃T:tasks ⌃L:logs ⌃B:shell ⌃/:help ", true)
 	tm.SetOption("status-right-length", "100", true)
 
 	// Window status format - removes index numbers (0:, 1:, 2:) and asterisk (*)
