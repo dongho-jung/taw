@@ -7,12 +7,34 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/dongho-jung/taw/internal/constants"
+	"github.com/dongho-jung/taw/internal/embed"
 	"github.com/dongho-jung/taw/internal/logging"
 )
+
+// configPath holds the path to TAW's custom tmux configuration file.
+var configPath string
+
+func init() {
+	// Write TAW-specific tmux config to temp directory
+	content, err := embed.GetTmuxConfig()
+	if err != nil {
+		// Fallback: use /dev/null to ignore user's config
+		configPath = "/dev/null"
+		return
+	}
+
+	tmpDir := os.TempDir()
+	configPath = filepath.Join(tmpDir, "taw-tmux.conf")
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		// Fallback: use /dev/null to ignore user's config
+		configPath = "/dev/null"
+	}
+}
 
 // Client defines the interface for tmux operations.
 type Client interface {
@@ -139,12 +161,12 @@ func New(sessionName string) Client {
 
 
 func (c *tmuxClient) cmd(args ...string) *exec.Cmd {
-	allArgs := append([]string{"-L", c.socket}, args...)
+	allArgs := append([]string{"-f", configPath, "-L", c.socket}, args...)
 	return exec.Command("tmux", allArgs...)
 }
 
 func (c *tmuxClient) cmdContext(ctx context.Context, args ...string) *exec.Cmd {
-	allArgs := append([]string{"-L", c.socket}, args...)
+	allArgs := append([]string{"-f", configPath, "-L", c.socket}, args...)
 	return exec.CommandContext(ctx, "tmux", allArgs...)
 }
 

@@ -33,6 +33,15 @@ func GetPrompt(isGitRepo bool) (string, error) {
 	return string(data), nil
 }
 
+// GetTmuxConfig returns the TAW-specific tmux configuration content.
+func GetTmuxConfig() (string, error) {
+	data, err := Assets.ReadFile("assets/tmux.conf")
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // WriteClaudeFiles writes the embedded claude directory to the target path.
 // This copies settings and slash commands to .taw/.claude/
 func WriteClaudeFiles(targetDir string) error {
