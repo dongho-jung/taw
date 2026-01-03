@@ -125,7 +125,11 @@ var watchWaitCmd = &cobra.Command{
 					// Try to parse the prompt - first YAML format, then rendered UI format
 					prompt, ok := parseAskUserQuestion(content)
 					if !ok {
+						logging.Trace("parseAskUserQuestion failed, trying UI parser")
 						prompt, ok = parseAskUserQuestionUI(content)
+						if !ok {
+							logging.Trace("parseAskUserQuestionUI also failed, content length=%d", len(content))
+						}
 					}
 					if ok {
 						promptKey := prompt.key()
@@ -410,37 +414,30 @@ func parseAskUserQuestionUI(content string) (askPrompt, bool) {
 		return askPrompt{}, false
 	}
 
-	// Find the UI markers to confirm this is an AskUserQuestion UI
-	uiIndex := findAskUserQuestionUIIndex(lines)
-	if uiIndex == -1 {
-		return askPrompt{}, false
-	}
-
 	var prompt askPrompt
 	var firstOptionIndex int = -1
 
-	// Find numbered options (lines like "> 1. Option" or "  2. Option")
-	for i := uiIndex; i >= 0; i-- {
+	// Scan ALL lines looking for numbered options ("> 1. Option" or "  2. Option")
+	for i := 0; i < len(lines); i++ {
 		if option, ok := parseUIOption(lines[i]); ok {
 			// Skip "Type something." or similar custom input options
 			if strings.Contains(strings.ToLower(option), "type something") ||
 				strings.Contains(strings.ToLower(option), "other") {
 				continue
 			}
-			// Prepend to maintain order (we're iterating backwards)
-			prompt.Options = append([]string{option}, prompt.Options...)
-			if firstOptionIndex == -1 || i < firstOptionIndex {
+			prompt.Options = append(prompt.Options, option)
+			if firstOptionIndex == -1 {
 				firstOptionIndex = i
 			}
 		}
 	}
 
-	if len(prompt.Options) == 0 || firstOptionIndex < 1 {
+	// Need at least 2 options to be a valid prompt
+	if len(prompt.Options) < 2 || firstOptionIndex < 1 {
 		return askPrompt{}, false
 	}
 
 	// The question is typically 1-2 lines above the first option
-	// Look for a line that looks like a question (ends with ?)
 	for i := firstOptionIndex - 1; i >= 0 && i >= firstOptionIndex-5; i-- {
 		line := strings.TrimSpace(lines[i])
 		// Skip empty lines, header lines (starting with □ or similar), and UI hints
@@ -456,6 +453,7 @@ func parseAskUserQuestionUI(content string) (askPrompt, bool) {
 		return askPrompt{}, false
 	}
 
+	logging.Trace("parseAskUserQuestionUI: parsed question=%q options=%v", prompt.Question, prompt.Options)
 	return prompt, true
 }
 
