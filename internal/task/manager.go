@@ -516,10 +516,12 @@ func (m *Manager) FindOrphanedWindows() ([]string, error) {
 			continue
 		}
 
-		// Check if agent directory exists
-		agentDir := filepath.Join(m.agentsDir, taskName)
-		if _, err := os.Stat(agentDir); os.IsNotExist(err) {
-			// No agent directory - orphaned window
+		// Use findTaskByTruncatedName to handle truncated window names correctly.
+		// Window names are limited to MaxWindowNameLen chars, so we need to find
+		// the task by matching the truncated name against all task directories.
+		task, _ := m.findTaskByTruncatedName(taskName)
+		if task == nil {
+			// No matching task found - orphaned window
 			orphaned = append(orphaned, w.ID)
 		}
 	}
