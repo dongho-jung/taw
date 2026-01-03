@@ -36,6 +36,7 @@ type Client interface {
 
 	// Changes
 	HasChanges(dir string) bool
+	HasStagedChanges(dir string) bool
 	HasUntrackedFiles(dir string) bool
 	GetUntrackedFiles(dir string) ([]string, error)
 	StashCreate(dir string) (string, error)
@@ -274,6 +275,14 @@ func (c *gitClient) HasChanges(dir string) bool {
 	return strings.TrimSpace(output) != ""
 }
 
+func (c *gitClient) HasStagedChanges(dir string) bool {
+	output, err := c.runOutput(dir, "diff", "--cached", "--name-only")
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(output) != ""
+}
+
 func (c *gitClient) HasUntrackedFiles(dir string) bool {
 	output, err := c.runOutput(dir, "ls-files", "--others", "--exclude-standard")
 	if err != nil {
@@ -369,6 +378,12 @@ func (c *gitClient) Merge(dir, branch string, noFF bool, message string) error {
 func (c *gitClient) MergeSquash(dir, branch, message string) error {
 	if err := c.run(dir, "merge", "--squash", branch); err != nil {
 		return err
+	}
+	// Check if there are staged changes to commit
+	// git merge --squash may succeed but result in no changes (already merged)
+	if !c.HasStagedChanges(dir) {
+		// No changes to commit - branch was already merged or has no new changes
+		return nil
 	}
 	return c.Commit(dir, message)
 }
