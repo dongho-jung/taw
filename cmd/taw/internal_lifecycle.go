@@ -26,7 +26,7 @@ var paneCaptureFile string
 
 var endTaskCmd = &cobra.Command{
 	Use:   "end-task [session] [window-id]",
-	Short: "End a task (commit, merge, cleanup)",
+	Short: "Finish a task (commit, merge, cleanup)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logging.Trace("endTaskCmd: start session=%s windowID=%s", args[0], args[1])
@@ -68,10 +68,10 @@ var endTaskCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Log("=== End task: %s ===", targetTask.Name)
+		logging.Log("=== Finish task: %s ===", targetTask.Name)
 
 		// Print task header for user feedback
-		fmt.Printf("\n  Ending task: %s\n\n", targetTask.Name)
+		fmt.Printf("\n  Finishing task: %s\n\n", targetTask.Name)
 		logging.Debug("Configuration: ON_COMPLETE=%s, WorkMode=%s", app.Config.OnComplete, app.Config.WorkMode)
 
 		tm := tmux.New(sessionName)
@@ -367,7 +367,7 @@ var endTaskCmd = &cobra.Command{
 
 var endTaskUICmd = &cobra.Command{
 	Use:   "end-task-ui [session] [window-id]",
-	Short: "End task with UI feedback (creates visible pane)",
+	Short: "Finish task with UI feedback (creates visible pane)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]

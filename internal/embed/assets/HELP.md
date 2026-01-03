@@ -70,7 +70,7 @@ View all active and completed tasks with preview panel.
 
 ### Actions
   c           Cancel task (active tasks only)
-  m           Merge task (triggers end-task flow)
+  m           Merge task (triggers finish-task flow)
   p           Push branch to remote
   r           Resume task (history/cancelled items, creates new task)
 

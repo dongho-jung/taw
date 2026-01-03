@@ -21,14 +21,14 @@ const (
 	StepFail    StepStatus = "fail"
 )
 
-// Step represents a step in the end task process.
+// Step represents a step in the finish task process.
 type Step struct {
 	Name    string
 	Status  StepStatus
 	Message string
 }
 
-// EndTaskUI provides UI for the end task process.
+// EndTaskUI provides UI for the finish task process.
 type EndTaskUI struct {
 	taskName    string
 	steps       []Step
@@ -46,7 +46,7 @@ type stepCompleteMsg struct {
 	message string
 }
 
-// NewEndTaskUI creates a new end task UI.
+// NewEndTaskUI creates a new finish task UI.
 func NewEndTaskUI(taskName string, isGitRepo bool) *EndTaskUI {
 	steps := []Step{}
 
@@ -70,7 +70,7 @@ func NewEndTaskUI(taskName string, isGitRepo bool) *EndTaskUI {
 	}
 }
 
-// Init initializes the end task UI.
+// Init initializes the finish task UI.
 func (m *EndTaskUI) Init() tea.Cmd {
 	return m.runNextStep()
 }
@@ -114,7 +114,7 @@ func (m *EndTaskUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the end task UI.
+// View renders the finish task UI.
 func (m *EndTaskUI) View() tea.View {
 	var sb strings.Builder
 
@@ -138,7 +138,7 @@ func (m *EndTaskUI) View() tea.View {
 		Foreground(lipgloss.Color("240"))
 
 	sb.WriteString("\n")
-	sb.WriteString(titleStyle.Render(fmt.Sprintf("Ending task: %s", m.taskName)))
+	sb.WriteString(titleStyle.Render(fmt.Sprintf("Finishing task: %s", m.taskName)))
 	sb.WriteString("\n\n")
 
 	for i, step := range m.steps {
@@ -218,7 +218,7 @@ func (m *EndTaskUI) runNextStep() tea.Cmd {
 	}
 }
 
-// RunEndTaskUI runs the end task UI.
+// RunEndTaskUI runs the finish task UI.
 func RunEndTaskUI(taskName string, isGitRepo bool) error {
 	m := NewEndTaskUI(taskName, isGitRepo)
 	p := tea.NewProgram(m)
