@@ -1,3 +1,5 @@
+//go:build darwin
+
 // taw-notify is a helper binary for macOS notifications with action buttons.
 // It runs as an app bundle to receive proper notification permissions.
 //
