@@ -36,6 +36,8 @@ func init() {
 	internalCmd.AddCommand(toggleTaskListCmd)
 	internalCmd.AddCommand(taskListViewerCmd)
 	internalCmd.AddCommand(loadingScreenCmd)
+	internalCmd.AddCommand(toggleSetupCmd)
+	internalCmd.AddCommand(setupWizardCmd)
 
 	// Utility commands
 	internalCmd.AddCommand(ctrlCCmd)

@@ -245,6 +245,77 @@ var toggleTaskListCmd = &cobra.Command{
 	},
 }
 
+var toggleSetupCmd = &cobra.Command{
+	Use:   "toggle-setup [session]",
+	Short: "Toggle setup wizard popup",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		tm := tmux.New(sessionName)
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		tawBin, err := os.Executable()
+		if err != nil {
+			tawBin = "taw"
+		}
+
+		// Run setup wizard in popup (closes when done)
+		// After setup completes, reload-config is called to apply changes
+		setupCmd := fmt.Sprintf("%s internal setup-wizard %s", tawBin, sessionName)
+
+		_ = tm.DisplayPopup(tmux.PopupOpts{
+			Width:     "60%",
+			Height:    "50%",
+			Title:     " Setup ",
+			Close:     true,
+			Style:     "fg=terminal,bg=terminal",
+			Directory: app.ProjectDir,
+		}, setupCmd)
+		return nil
+	},
+}
+
+var setupWizardCmd = &cobra.Command{
+	Use:    "setup-wizard [session]",
+	Short:  "Run the setup wizard (internal)",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Run the setup wizard
+		if err := runSetupWizard(app); err != nil {
+			return err
+		}
+
+		// Reload config and re-apply tmux settings
+		if err := app.LoadConfig(); err != nil {
+			return fmt.Errorf("failed to reload config: %w", err)
+		}
+
+		// Re-apply tmux configuration
+		tm := tmux.New(sessionName)
+		if err := reapplyTmuxConfig(app, tm); err != nil {
+			logging.Warn("Failed to re-apply tmux config: %v", err)
+		}
+
+		fmt.Println("\n✅ Settings applied!")
+		fmt.Println("Press Enter to close...")
+		fmt.Scanln()
+
+		return nil
+	},
+}
+
 var taskListViewerCmd = &cobra.Command{
 	Use:    "task-list-viewer [session]",
 	Short:  "Run the task list viewer",

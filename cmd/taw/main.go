@@ -341,6 +341,26 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 	return tm.AttachSession(app.SessionName)
 }
 
+// reapplyTmuxConfig re-applies tmux configuration after config reload.
+// This is a subset of setupTmuxConfig that updates settings that depend on config.
+func reapplyTmuxConfig(app *app.App, tm tmux.Client) error {
+	// Get path to taw binary
+	tawBin, err := os.Executable()
+	if err != nil {
+		tawBin = "taw"
+	}
+
+	// Re-apply keybindings (in case session name changed or for consistency)
+	bindings := buildKeybindings(tawBin, app.SessionName)
+	for _, b := range bindings {
+		if err := tm.Bind(b); err != nil {
+			logging.Debug("Failed to bind %s: %v", b.Key, err)
+		}
+	}
+
+	return nil
+}
+
 // setupTmuxConfig configures tmux keybindings and options
 func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	// Get path to taw binary
