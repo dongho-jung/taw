@@ -311,7 +311,7 @@ var handleTaskCmd = &cobra.Command{
 		isReopen := false
 
 		// Setup worktree if git mode (skip if worktree already exists - reopen case)
-		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
+		if app.IsWorktreeMode() {
 			worktreeDir := t.GetWorktreeDir()
 			if _, err := os.Stat(worktreeDir); os.IsNotExist(err) {
 				// Worktree doesn't exist, create it
@@ -332,8 +332,8 @@ var handleTaskCmd = &cobra.Command{
 					logging.Log("Session resume: detected previous session for task %s", taskName)
 				}
 			}
-		} else if !app.IsGitRepo || app.Config.WorkMode == config.WorkModeMain {
-			// Non-git mode or main mode: check session marker for reopen
+		} else {
+			// Non-worktree mode: check session marker for reopen
 			if t.HasSessionMarker() {
 				isReopen = true
 				logging.Log("Session resume: detected previous session for task %s", taskName)
@@ -399,7 +399,7 @@ var handleTaskCmd = &cobra.Command{
 		// Build user prompt with context
 		var userPrompt strings.Builder
 		userPrompt.WriteString(fmt.Sprintf("# Task: %s\n\n", taskName))
-		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
+		if app.IsWorktreeMode() {
 			userPrompt.WriteString(fmt.Sprintf("**Worktree**: %s\n", workDir))
 		}
 		userPrompt.WriteString(fmt.Sprintf("**Project**: %s\n\n", app.ProjectDir))
@@ -464,7 +464,7 @@ exec "%s" internal end-task "%s" "%s"
 		// The system prompt is base64 encoded to avoid issues with $, backticks, quotes, etc.
 		startAgentScriptPath := filepath.Join(t.AgentDir, "start-agent")
 		worktreeDirExport := ""
-		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
+		if app.IsWorktreeMode() {
 			worktreeDirExport = fmt.Sprintf("export WORKTREE_DIR='%s'\n", workDir)
 		}
 

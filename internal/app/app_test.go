@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dongho-jung/taw/internal/config"
 	"github.com/dongho-jung/taw/internal/constants"
 )
 
@@ -323,5 +324,58 @@ func TestEnsureMemoryFile(t *testing.T) {
 
 	if string(data) != "custom content" {
 		t.Errorf("Memory file was overwritten, got: %s", string(data))
+	}
+}
+
+func TestAppIsWorktreeMode(t *testing.T) {
+	tests := []struct {
+		name      string
+		isGitRepo bool
+		config    *config.Config
+		want      bool
+	}{
+		{
+			name:      "worktree mode enabled",
+			isGitRepo: true,
+			config:    &config.Config{WorkMode: config.WorkModeWorktree},
+			want:      true,
+		},
+		{
+			name:      "main mode",
+			isGitRepo: true,
+			config:    &config.Config{WorkMode: config.WorkModeMain},
+			want:      false,
+		},
+		{
+			name:      "not a git repo",
+			isGitRepo: false,
+			config:    &config.Config{WorkMode: config.WorkModeWorktree},
+			want:      false,
+		},
+		{
+			name:      "nil config",
+			isGitRepo: true,
+			config:    nil,
+			want:      false,
+		},
+		{
+			name:      "not git repo with nil config",
+			isGitRepo: false,
+			config:    nil,
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := &App{
+				IsGitRepo: tt.isGitRepo,
+				Config:    tt.config,
+			}
+
+			if got := app.IsWorktreeMode(); got != tt.want {
+				t.Errorf("IsWorktreeMode() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

@@ -134,6 +134,12 @@ func (a *App) SetGitRepo(isGit bool) {
 	a.IsGitRepo = isGit
 }
 
+// IsWorktreeMode returns true if the app is configured to use git worktrees.
+// This checks that we're in a git repo, config is loaded, and worktree mode is enabled.
+func (a *App) IsWorktreeMode() bool {
+	return a.IsGitRepo && a.Config != nil && a.Config.WorkMode == config.WorkModeWorktree
+}
+
 // UpdateSessionNameForGitRepo updates the session name to include repo name
 // when the project is in a subdirectory of a git repository.
 // Format: {repo-name}:{dir-name} when project is in a subdirectory

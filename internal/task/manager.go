@@ -49,6 +49,12 @@ func (m *Manager) SetTmuxClient(client tmux.Client) {
 	m.tmuxClient = client
 }
 
+// shouldUseWorktree returns true if the manager is configured to use git worktrees.
+// This checks that we're in a git repo, config is loaded, and worktree mode is enabled.
+func (m *Manager) shouldUseWorktree() bool {
+	return m.isGitRepo && m.config != nil && m.config.WorkMode == config.WorkModeWorktree
+}
+
 // CreateTask creates a new task with the given content.
 // It generates a task name using Claude and creates the task directory atomically.
 func (m *Manager) CreateTask(content string) (*Task, error) {
@@ -132,8 +138,8 @@ func (m *Manager) GetTask(name string) (*Task, error) {
 	// Load PR number if exists (error is non-fatal)
 	_, _ = task.LoadPRNumber()
 
-	// Set worktree directory (with nil check for config)
-	if m.isGitRepo && m.config != nil && m.config.WorkMode == config.WorkModeWorktree {
+	// Set worktree directory
+	if m.shouldUseWorktree() {
 		task.WorktreeDir = task.GetWorktreeDir()
 	}
 
@@ -228,7 +234,7 @@ func (m *Manager) FindIncompleteTasks(sessionName string) ([]*Task, error) {
 			if err != nil || !activeWindowIDs[windowID] {
 				shouldReopen = true
 			}
-		} else if m.isGitRepo && m.config != nil && m.config.WorkMode == config.WorkModeWorktree {
+		} else if m.shouldUseWorktree() {
 			// In worktree mode, check if worktree exists
 			worktreeDir := task.GetWorktreeDir()
 			if _, err := os.Stat(worktreeDir); err == nil {
@@ -248,7 +254,7 @@ func (m *Manager) FindIncompleteTasks(sessionName string) ([]*Task, error) {
 
 // FindCorruptedTasks finds tasks with corrupted worktrees.
 func (m *Manager) FindCorruptedTasks() ([]*Task, error) {
-	if !m.isGitRepo || m.config == nil || m.config.WorkMode != config.WorkModeWorktree {
+	if !m.shouldUseWorktree() {
 		return nil, nil
 	}
 
@@ -364,7 +370,7 @@ func (m *Manager) isTaskMerged(task *Task, mainBranch string) bool {
 
 	// Check if task was externally cleaned up (branch and worktree both gone)
 	// This handles cases where someone manually merged and cleaned up the task
-	if m.config != nil && m.config.WorkMode == config.WorkModeWorktree {
+	if m.shouldUseWorktree() {
 		branchExists := m.gitClient.BranchExists(m.projectDir, task.Name)
 		worktreeDir := task.GetWorktreeDir()
 		_, worktreeErr := os.Stat(worktreeDir)
@@ -381,7 +387,7 @@ func (m *Manager) isTaskMerged(task *Task, mainBranch string) bool {
 
 // CleanupTask cleans up a task's resources.
 func (m *Manager) CleanupTask(task *Task) error {
-	if m.isGitRepo && m.config != nil && m.config.WorkMode == config.WorkModeWorktree {
+	if m.shouldUseWorktree() {
 		worktreeDir := task.GetWorktreeDir()
 
 		// Remove worktree
@@ -416,7 +422,7 @@ func (m *Manager) CleanupTask(task *Task) error {
 // This should be called before any git operations to prevent errors
 // when worktree directories have been deleted but git still references them.
 func (m *Manager) PruneWorktrees() {
-	if !m.isGitRepo || m.config == nil || m.config.WorkMode != config.WorkModeWorktree {
+	if !m.shouldUseWorktree() {
 		return
 	}
 
@@ -427,7 +433,7 @@ func (m *Manager) PruneWorktrees() {
 
 // SetupWorktree creates a git worktree for the task.
 func (m *Manager) SetupWorktree(task *Task) error {
-	if !m.isGitRepo || m.config == nil || m.config.WorkMode != config.WorkModeWorktree {
+	if !m.shouldUseWorktree() {
 		return nil
 	}
 
@@ -491,7 +497,7 @@ func (m *Manager) executeWorktreeHook(worktreeDir string) {
 
 // GetWorkingDirectory returns the working directory for a task.
 func (m *Manager) GetWorkingDirectory(task *Task) string {
-	if m.isGitRepo && m.config != nil && m.config.WorkMode == config.WorkModeWorktree {
+	if m.shouldUseWorktree() {
 		return task.GetWorktreeDir()
 	}
 	return m.projectDir

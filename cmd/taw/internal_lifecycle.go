@@ -891,7 +891,7 @@ var resumeAgentCmd = &cobra.Command{
 
 		// Build start-agent script with --continue flag
 		worktreeDirExport := ""
-		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
+		if app.IsWorktreeMode() {
 			worktreeDirExport = fmt.Sprintf("export WORKTREE_DIR='%s'\n", workDir)
 		}
 
