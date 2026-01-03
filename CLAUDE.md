@@ -67,6 +67,9 @@ taw/                           # This repository
 │   ├── internal_lifecycle.go  # Task lifecycle commands (endTask, cancelTask, doneTask)
 │   ├── internal_popup.go      # Popup/UI commands (toggleLog, toggleHelp, taskList)
 │   └── internal_utils.go      # Utility commands and helpers (ctrlC, renameWindow)
+├── cmd/taw-notify/            # Notification helper (macOS app bundle)
+│   ├── main.go                # CGO code for UserNotifications
+│   └── Info.plist             # App bundle configuration
 ├── internal/                  # Go internal packages
 │   ├── app/                   # Application context
 │   ├── claude/                # Claude API client
@@ -139,12 +142,28 @@ TAW uses multiple notification channels to alert users (macOS only):
 |--------------------------|-------------|----------------------|-------------------|
 | Task created             | Glass       | -                    | `🤖 Task started: {name}` |
 | Task completed           | Hero        | -                    | `✅ Task completed: {name}` |
-| User input needed        | Funk        | Yes                  | `💬 {name} needs input` |
+| User input needed        | Funk        | Yes (with actions)   | `💬 {name} needs input` |
 | Cancel pending (⌃K)      | Tink        | -                    | -                 |
 | Error (merge failed etc) | Basso       | -                    | `⚠️ Merge failed: {name} - manual resolution needed` |
 
 - Sounds use macOS system sounds (`/System/Library/Sounds/`)
 - Statusline messages display via `tmux display-message -d 2000`
+
+### Notification Action Buttons
+
+When user input is needed and the prompt has 2-5 simple choices, TAW shows a banner notification with action buttons:
+
+- **Title**: `TAW: {task-name}`
+- **Body**: The question from the prompt
+- **Icon**: Uses `icon.png` from the app bundle
+- **Actions**: Up to 5 buttons matching the prompt options
+
+If the user clicks an action button, the response is sent directly to the agent without opening a popup. If the notification times out (30s) or is dismissed, the fallback popup is shown.
+
+**Requirements**:
+- macOS 10.15+
+- Notification permissions granted for `TAW Notify` app
+- `taw-notify.app` installed to `~/.local/share/taw/`
 
 ## Working rules
 

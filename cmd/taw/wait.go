@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,6 +23,10 @@ const (
 	waitAskUserMaxDistance = 32
 	waitPopupWidth         = "70%"
 	waitPopupHeight        = "50%"
+	// Maximum number of options for notification action buttons
+	notifyMaxActions = 5
+	// Timeout for waiting for notification response
+	notifyTimeoutSec = 30
 )
 
 var askUserQuestionUIMarkers = []string{
@@ -118,19 +123,26 @@ var watchWaitCmd = &cobra.Command{
 					if err := ensureWaitingWindow(tm, windowID, taskName); err != nil {
 						logging.Trace("Failed to rename window: %v", err)
 					}
-					if !notified {
-						logging.Debug("Wait detected: %s", reason)
-						notifyWaitingWithDisplay(tm, taskName, reason)
-						notified = true
-					}
 					if prompt, ok := parseAskUserQuestion(content); ok {
 						promptKey := prompt.key()
 						if promptKey != "" && promptKey != lastPromptKey {
 							lastPromptKey = promptKey
-							choice, promptErr := promptUserChoice(tm, prompt)
-							if promptErr != nil {
-								logging.Trace("Prompt choice failed: %v", promptErr)
-							} else if choice != "" {
+							// Try notification actions first for simple prompts
+							choice := tryNotificationAction(taskName, prompt)
+							if choice == "" {
+								// Notify and show popup if notification failed
+								if !notified {
+									logging.Debug("Wait detected: %s", reason)
+									notifyWaitingWithDisplay(tm, taskName, reason)
+									notified = true
+								}
+								var promptErr error
+								choice, promptErr = promptUserChoice(tm, prompt)
+								if promptErr != nil {
+									logging.Trace("Prompt choice failed: %v", promptErr)
+								}
+							}
+							if choice != "" {
 								if sendErr := sendAgentResponse(tm, paneID, choice); sendErr != nil {
 									logging.Trace("Failed to send prompt response: %v", sendErr)
 								} else {
@@ -138,6 +150,10 @@ var watchWaitCmd = &cobra.Command{
 								}
 							}
 						}
+					} else if !notified {
+						logging.Debug("Wait detected: %s", reason)
+						notifyWaitingWithDisplay(tm, taskName, reason)
+						notified = true
 					}
 				}
 			}
@@ -498,4 +514,75 @@ func sendAgentResponse(tm tmux.Client, paneID, response string) error {
 		return err
 	}
 	return tm.SendKeys(paneID, "Enter")
+}
+
+// tryNotificationAction attempts to show a notification with action buttons
+// for simple prompts (2-5 options). Returns the selected option or empty string
+// if notification was not shown or user didn't select an action.
+func tryNotificationAction(taskName string, prompt askPrompt) string {
+	logging.Trace("tryNotificationAction: start task=%s question=%q options=%v",
+		taskName, prompt.Question, prompt.Options)
+	defer logging.Trace("tryNotificationAction: end")
+
+	// Only use notification for simple prompts with 2-5 options
+	if len(prompt.Options) < 2 || len(prompt.Options) > notifyMaxActions {
+		logging.Trace("tryNotificationAction: skipped, option count=%d not in range [2,%d]",
+			len(prompt.Options), notifyMaxActions)
+		return ""
+	}
+
+	// Find the icon path
+	iconPath := findIconPath()
+
+	// Show notification with actions
+	title := fmt.Sprintf("TAW: %s", taskName)
+	message := prompt.Question
+
+	logging.Debug("tryNotificationAction: showing notification with %d actions", len(prompt.Options))
+	index, err := notify.SendWithActions(title, message, iconPath, prompt.Options, notifyTimeoutSec)
+	if err != nil {
+		logging.Trace("tryNotificationAction: notification failed err=%v", err)
+		return ""
+	}
+
+	if index >= 0 && index < len(prompt.Options) {
+		logging.Debug("tryNotificationAction: user selected action %d: %s", index, prompt.Options[index])
+		return prompt.Options[index]
+	}
+
+	logging.Trace("tryNotificationAction: no action selected (index=%d)", index)
+	return ""
+}
+
+// findIconPath locates the taw icon for notifications.
+func findIconPath() string {
+	// Check common locations
+	candidates := []string{}
+
+	// ~/.local/share/taw/icon.png
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".local", "share", "taw", "icon.png"))
+	}
+
+	// Same directory as taw binary
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		candidates = append(candidates, filepath.Join(exeDir, "icon.png"))
+	}
+
+	// Inside the app bundle's Resources
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".local", "share", "taw",
+			notify.NotifyAppName, "Contents", "Resources", "icon.png"))
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			logging.Trace("findIconPath: found at %s", path)
+			return path
+		}
+	}
+
+	logging.Trace("findIconPath: not found")
+	return ""
 }

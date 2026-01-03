@@ -2,12 +2,23 @@
 package notify
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 
 	"github.com/dongho-jung/taw/internal/logging"
+)
+
+const (
+	// NotifyAppName is the name of the notification helper app bundle.
+	NotifyAppName = "taw-notify.app"
+	// NotifyBinaryName is the name of the executable inside the app bundle.
+	NotifyBinaryName = "taw-notify"
 )
 
 // SoundType represents different notification sounds.
@@ -87,4 +98,116 @@ func appleScriptCommand(args ...string) *exec.Cmd {
 		return exec.Command("launchctl", cmdArgs...)
 	}
 	return exec.Command("osascript", args...)
+}
+
+// SendWithActions shows a notification with action buttons and returns the selected action index.
+// Returns the 0-based index of the selected action, or -1 if dismissed/timed out/clicked without action.
+// If the notification helper is not available, falls back to a simple notification and returns -1.
+func SendWithActions(title, message, iconPath string, actions []string, timeoutSec int) (int, error) {
+	logging.Trace("SendWithActions: start title=%q actions=%v timeout=%d", title, actions, timeoutSec)
+	defer logging.Trace("SendWithActions: end")
+
+	if runtime.GOOS != "darwin" {
+		return -1, nil
+	}
+
+	// Find the notification helper
+	helperPath := findNotifyHelper()
+	if helperPath == "" {
+		logging.Debug("SendWithActions: notification helper not found, falling back to simple notification")
+		if err := Send(title, message); err != nil {
+			return -1, err
+		}
+		return -1, nil
+	}
+
+	logging.Trace("SendWithActions: using helper at %s", helperPath)
+
+	// Build command arguments
+	args := []string{
+		"--title", title,
+		"--body", message,
+		"--timeout", strconv.Itoa(timeoutSec),
+	}
+	if iconPath != "" {
+		args = append(args, "--icon", iconPath)
+	}
+	for _, action := range actions {
+		args = append(args, "--action", action)
+	}
+
+	// Run the helper via 'open' command to ensure proper bundle ID recognition
+	openArgs := []string{
+		"--stdout", "/dev/stdout",
+		"--stderr", "/dev/stderr",
+		"-W", // Wait for app to finish
+		"-a", helperPath,
+		"--args",
+	}
+	openArgs = append(openArgs, args...)
+
+	cmd := exec.Command("open", openArgs...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	logging.Trace("SendWithActions: running command: open %v", openArgs)
+	if err := cmd.Run(); err != nil {
+		logging.Debug("SendWithActions: helper failed err=%v stderr=%s", err, stderr.String())
+		// Fall back to simple notification
+		if sendErr := Send(title, message); sendErr != nil {
+			return -1, sendErr
+		}
+		return -1, nil
+	}
+
+	result := strings.TrimSpace(stdout.String())
+	logging.Trace("SendWithActions: helper returned %q", result)
+
+	// Parse result
+	if strings.HasPrefix(result, "ACTION_") {
+		indexStr := strings.TrimPrefix(result, "ACTION_")
+		index, err := strconv.Atoi(indexStr)
+		if err == nil && index >= 0 && index < len(actions) {
+			return index, nil
+		}
+	}
+
+	return -1, nil
+}
+
+// findNotifyHelper locates the taw-notify.app helper.
+// It searches in the following order:
+// 1. ~/.local/share/taw/taw-notify.app (installed location)
+// 2. Same directory as the taw binary
+// 3. Current working directory
+func findNotifyHelper() string {
+	candidates := []string{}
+
+	// 1. ~/.local/share/taw/
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".local", "share", "taw", NotifyAppName))
+	}
+
+	// 2. Same directory as taw binary
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		candidates = append(candidates, filepath.Join(exeDir, NotifyAppName))
+	}
+
+	// 3. Current working directory
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, filepath.Join(cwd, NotifyAppName))
+	}
+
+	for _, path := range candidates {
+		binaryPath := filepath.Join(path, "Contents", "MacOS", NotifyBinaryName)
+		if _, err := os.Stat(binaryPath); err == nil {
+			logging.Trace("findNotifyHelper: found at %s", path)
+			return path
+		}
+	}
+
+	logging.Trace("findNotifyHelper: not found, searched %v", candidates)
+	return ""
 }

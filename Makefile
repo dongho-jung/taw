@@ -1,6 +1,8 @@
 # TAW Makefile
 
 BINARY_NAME=taw
+NOTIFY_BINARY=taw-notify
+NOTIFY_APP=$(NOTIFY_BINARY).app
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_FLAGS=-ldflags "-X main.Version=$(VERSION)"
 GO=go
@@ -8,7 +10,11 @@ GO=go
 # Detect Go binary path
 GO_PATH=$(shell which go 2>/dev/null || echo "/opt/homebrew/bin/go")
 
-.PHONY: all build install clean test fmt lint run help
+# Installation paths
+LOCAL_BIN=~/.local/bin
+LOCAL_SHARE=~/.local/share/taw
+
+.PHONY: all build build-notify install clean test fmt lint run help
 
 all: build
 
@@ -17,14 +23,32 @@ build:
 	@echo "Building $(BINARY_NAME)..."
 	$(GO_PATH) build $(BUILD_FLAGS) -o $(BINARY_NAME) ./cmd/taw
 
-## Install to ~/.local/bin
-install: build
-	@echo "Installing $(BINARY_NAME) to ~/.local/bin..."
-	@mkdir -p ~/.local/bin
-	@cp $(BINARY_NAME) ~/.local/bin/
-	@xattr -cr ~/.local/bin/$(BINARY_NAME)
-	@codesign -fs - ~/.local/bin/$(BINARY_NAME)
-	@echo "Done! Make sure ~/.local/bin is in your PATH"
+## Build the notification helper app bundle (macOS only)
+build-notify:
+	@echo "Building $(NOTIFY_APP)..."
+	@rm -rf $(NOTIFY_APP)
+	@mkdir -p $(NOTIFY_APP)/Contents/MacOS
+	@mkdir -p $(NOTIFY_APP)/Contents/Resources
+	@cp cmd/taw-notify/Info.plist $(NOTIFY_APP)/Contents/
+	@cp icon.png $(NOTIFY_APP)/Contents/Resources/ 2>/dev/null || true
+	CGO_ENABLED=1 $(GO_PATH) build -o $(NOTIFY_APP)/Contents/MacOS/$(NOTIFY_BINARY) ./cmd/taw-notify
+	@echo "Built $(NOTIFY_APP)"
+
+## Install to ~/.local/bin and ~/.local/share/taw
+install: build build-notify
+	@echo "Installing $(BINARY_NAME) to $(LOCAL_BIN)..."
+	@mkdir -p $(LOCAL_BIN)
+	@cp $(BINARY_NAME) $(LOCAL_BIN)/
+	@xattr -cr $(LOCAL_BIN)/$(BINARY_NAME)
+	@codesign -fs - $(LOCAL_BIN)/$(BINARY_NAME)
+	@echo "Installing $(NOTIFY_APP) to $(LOCAL_SHARE)..."
+	@mkdir -p $(LOCAL_SHARE)
+	@rm -rf $(LOCAL_SHARE)/$(NOTIFY_APP)
+	@cp -R $(NOTIFY_APP) $(LOCAL_SHARE)/
+	@cp icon.png $(LOCAL_SHARE)/ 2>/dev/null || true
+	@xattr -cr $(LOCAL_SHARE)/$(NOTIFY_APP)
+	@codesign -fs - $(LOCAL_SHARE)/$(NOTIFY_APP)
+	@echo "Done! Make sure $(LOCAL_BIN) is in your PATH"
 
 ## Install globally to /usr/local/bin (requires sudo)
 install-global: build
@@ -38,6 +62,7 @@ install-global: build
 clean:
 	@echo "Cleaning..."
 	@rm -f $(BINARY_NAME)
+	@rm -rf $(NOTIFY_APP)
 	@$(GO_PATH) clean
 
 ## Run tests
