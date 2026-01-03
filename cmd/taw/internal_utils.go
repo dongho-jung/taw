@@ -93,7 +93,7 @@ var ctrlCCmd = &cobra.Command{
 		notify.PlaySound(notify.SoundCancelPending)
 
 		// Show message to user
-		_ = tm.DisplayMessage("⌃C again to cancel task", 2000)
+		_ = tm.DisplayMessage("⌃K again to cancel task", 2000)
 
 		return nil
 	},
