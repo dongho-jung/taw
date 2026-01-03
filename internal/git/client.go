@@ -313,7 +313,7 @@ func (c *gitClient) StashApply(dir, stashHash string) error {
 }
 
 func (c *gitClient) StashPush(dir, message string) error {
-	args := []string{"stash", "push"}
+	args := []string{"stash", "push", "--include-untracked"}
 	if message != "" {
 		args = append(args, "-m", message)
 	}
