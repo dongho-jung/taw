@@ -4,7 +4,8 @@ BINARY_NAME=taw
 NOTIFY_BINARY=taw-notify
 NOTIFY_APP=$(NOTIFY_BINARY).app
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-BUILD_FLAGS=-ldflags "-X main.Version=$(VERSION)"
+COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_FLAGS=-ldflags "-X main.Version=$(VERSION) -X main.Commit=$(COMMIT)"
 GO=go
 
 # Detect Go binary path
