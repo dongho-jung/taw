@@ -65,6 +65,7 @@ type Client interface {
 	ClearHistory(target string) error
 	RespawnPane(target, startDir, command string) error
 	WaitForPane(target string, maxWait time.Duration, minContentLen int) error
+	GetPaneCommand(target string) (string, error)
 
 	// Display popup
 	DisplayPopup(opts PopupOpts, command string) error
@@ -405,6 +406,10 @@ func (c *tmuxClient) HasPane(target string) bool {
 	// Check if pane exists by trying to get its info
 	_, err := c.RunWithOutput("display-message", "-t", target, "-p", "#{pane_id}")
 	return err == nil
+}
+
+func (c *tmuxClient) GetPaneCommand(target string) (string, error) {
+	return c.RunWithOutput("display-message", "-t", target, "-p", "#{pane_current_command}")
 }
 
 func (c *tmuxClient) SendKeys(target string, keys ...string) error {

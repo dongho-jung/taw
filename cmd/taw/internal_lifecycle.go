@@ -791,3 +791,100 @@ var recoverTaskCmd = &cobra.Command{
 		return nil
 	},
 }
+
+var resumeAgentCmd = &cobra.Command{
+	Use:   "resume-agent [session] [window-id] [agent-dir]",
+	Short: "Resume a stopped Claude agent in an existing window",
+	Args:  cobra.ExactArgs(3),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		windowID := args[1]
+		agentDir := args[2]
+
+		taskName := filepath.Base(agentDir)
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer func() { _ = logger.Close() }()
+			logger.SetScript("resume-agent")
+			logger.SetTask(taskName)
+			logging.SetGlobal(logger)
+		}
+
+		logging.Log("=== Resuming agent: %s ===", taskName)
+
+		tm := tmux.New(sessionName)
+
+		// Get task
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+		t, err := mgr.GetTask(taskName)
+		if err != nil {
+			return fmt.Errorf("failed to get task: %w", err)
+		}
+
+		// Determine work directory
+		workDir := mgr.GetWorkingDirectory(t)
+
+		// Get taw binary path
+		tawBin, _ := os.Executable()
+
+		// Build start-agent script with --continue flag
+		worktreeDirExport := ""
+		if app.IsGitRepo && app.Config.WorkMode == config.WorkModeWorktree {
+			worktreeDirExport = fmt.Sprintf("export WORKTREE_DIR='%s'\n", workDir)
+		}
+
+		startAgentContent := fmt.Sprintf(`#!/bin/bash
+# Auto-generated start-agent script for this task (RESUME MODE)
+export TASK_NAME='%s'
+export TAW_DIR='%s'
+export PROJECT_DIR='%s'
+%sexport WINDOW_ID='%s'
+export ON_COMPLETE='%s'
+export TAW_HOME='%s'
+export TAW_BIN='%s'
+export SESSION_NAME='%s'
+
+# Continue the previous Claude session (--continue auto-selects last session)
+exec claude --continue --dangerously-skip-permissions
+`, taskName, app.TawDir, app.ProjectDir, worktreeDirExport, windowID,
+			app.Config.OnComplete, filepath.Dir(filepath.Dir(tawBin)), tawBin, sessionName)
+
+		startAgentScriptPath := filepath.Join(t.AgentDir, "start-agent")
+		if err := os.WriteFile(startAgentScriptPath, []byte(startAgentContent), 0755); err != nil {
+			return fmt.Errorf("failed to write start-agent script: %w", err)
+		}
+
+		agentPane := windowID + ".0"
+
+		// Respawn the agent pane with the resume script
+		if err := tm.RespawnPane(agentPane, workDir, startAgentScriptPath); err != nil {
+			return fmt.Errorf("failed to respawn agent pane: %w", err)
+		}
+
+		logging.Log("Agent resumed: task=%s, windowID=%s", taskName, windowID)
+
+		// Start wait watcher
+		watchCmd := exec.Command(tawBin, "internal", "watch-wait", sessionName, windowID, taskName)
+		watchCmd.Dir = app.ProjectDir
+		if err := watchCmd.Start(); err != nil {
+			logging.Warn("Failed to start wait watcher: %v", err)
+		} else {
+			logging.Debug("Wait watcher started for windowID=%s", windowID)
+		}
+
+		// Notify user
+		notify.PlaySound(notify.SoundTaskCreated)
+		if err := tm.DisplayMessage(fmt.Sprintf("🔄 Session resumed: %s", taskName), 2000); err != nil {
+			logging.Trace("Failed to display message: %v", err)
+		}
+
+		return nil
+	},
+}

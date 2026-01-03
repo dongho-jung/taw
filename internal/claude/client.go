@@ -37,6 +37,10 @@ type Client interface {
 
 	// VerifyPaneAlive checks that the pane has content (Claude is running).
 	VerifyPaneAlive(tm tmux.Client, target string, timeout time.Duration) error
+
+	// IsClaudeRunning checks if Claude is running in the specified pane.
+	// Returns true if Claude is running, false if the pane shows a shell.
+	IsClaudeRunning(tm tmux.Client, target string) bool
 }
 
 // claudeClient implements the Client interface.
@@ -405,6 +409,59 @@ func (c *claudeClient) VerifyPaneAlive(tm tmux.Client, target string, timeout ti
 	}
 
 	return fmt.Errorf("pane %s did not become alive within %v", target, timeout)
+}
+
+// shellCommands are common shell command names that indicate Claude has exited.
+var shellCommands = []string{"bash", "zsh", "sh", "fish", "tcsh", "csh", "ksh", "dash"}
+
+// IsClaudeRunning checks if Claude is running in the specified pane.
+// Returns true if Claude (or its start-agent script) is running.
+// Returns false if a shell is running (meaning Claude has exited).
+func (c *claudeClient) IsClaudeRunning(tm tmux.Client, target string) bool {
+	if !tm.HasPane(target) {
+		logging.Trace("IsClaudeRunning: pane %s does not exist", target)
+		return false
+	}
+
+	cmd, err := tm.GetPaneCommand(target)
+	if err != nil {
+		logging.Trace("IsClaudeRunning: failed to get pane command: %v", err)
+		return false
+	}
+
+	cmd = strings.ToLower(strings.TrimSpace(cmd))
+	logging.Trace("IsClaudeRunning: pane %s command=%q", target, cmd)
+
+	// Check if it's a shell command (Claude exited)
+	for _, shell := range shellCommands {
+		if cmd == shell {
+			logging.Debug("IsClaudeRunning: pane %s shows shell %q, Claude not running", target, cmd)
+			return false
+		}
+	}
+
+	// Check for common shell patterns
+	if strings.HasPrefix(cmd, "-") {
+		// Login shell like "-zsh" or "-bash"
+		shellName := strings.TrimPrefix(cmd, "-")
+		for _, shell := range shellCommands {
+			if shellName == shell {
+				logging.Debug("IsClaudeRunning: pane %s shows login shell %q, Claude not running", target, cmd)
+				return false
+			}
+		}
+	}
+
+	// If the command contains "claude" or "start-agent", it's running
+	if strings.Contains(cmd, "claude") || strings.Contains(cmd, "start-agent") {
+		logging.Debug("IsClaudeRunning: pane %s shows Claude-related command %q", target, cmd)
+		return true
+	}
+
+	// For other commands (like node, python which Claude might spawn), assume Claude is running
+	// This is a conservative approach - better to assume running than to restart unnecessarily
+	logging.Debug("IsClaudeRunning: pane %s shows command %q, assuming Claude subprocess", target, cmd)
+	return true
 }
 
 // BuildSystemPrompt builds the system prompt from global and project prompts.

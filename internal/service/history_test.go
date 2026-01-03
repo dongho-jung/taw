@@ -47,6 +47,10 @@ func (m *mockClaudeClient) VerifyPaneAlive(tm tmux.Client, target string, timeou
 	return nil
 }
 
+func (m *mockClaudeClient) IsClaudeRunning(tm tmux.Client, target string) bool {
+	return true
+}
+
 func TestHistoryService_SaveCompleted(t *testing.T) {
 	// Create temp directory
 	tmpDir, err := os.MkdirTemp("", "taw-history-test-*")

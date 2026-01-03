@@ -25,6 +25,7 @@ func init() {
 	internalCmd.AddCommand(cancelTaskUICmd)
 	internalCmd.AddCommand(doneTaskCmd)
 	internalCmd.AddCommand(recoverTaskCmd)
+	internalCmd.AddCommand(resumeAgentCmd)
 
 	// Popup/UI commands
 	internalCmd.AddCommand(popupShellCmd)

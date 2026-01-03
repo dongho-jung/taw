@@ -319,6 +319,23 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 		}
 	}
 
+	// Resume stopped agents (windows exist but Claude has exited)
+	stopped, err := mgr.FindStoppedTasks()
+	if err == nil && len(stopped) > 0 {
+		logging.Log("Found %d stopped agents to resume", len(stopped))
+		tawBin, _ := os.Executable()
+		for _, info := range stopped {
+			logging.Log("Resuming stopped agent: %s (window=%s)", info.Task.Name, info.WindowID)
+			// Run resume-agent to restart Claude with --continue flag
+			resumeCmd := exec.Command(tawBin, "internal", "resume-agent", app.SessionName, info.WindowID, info.Task.AgentDir)
+			if err := resumeCmd.Start(); err != nil {
+				logging.Warn("Failed to resume agent %s: %v", info.Task.Name, err)
+			} else {
+				fmt.Printf("🔄 Resuming agent: %s\n", info.Task.Name)
+			}
+		}
+	}
+
 	logging.Debug("Attaching to session: %s", app.SessionName)
 	// Attach to session
 	return tm.AttachSession(app.SessionName)

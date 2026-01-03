@@ -526,3 +526,81 @@ func (m *Manager) FindOrphanedWindows() ([]string, error) {
 
 	return orphaned, nil
 }
+
+// StoppedTaskInfo contains information about a task with a stopped agent.
+type StoppedTaskInfo struct {
+	Task     *Task
+	WindowID string
+}
+
+// FindStoppedTasks finds tasks that have a window but Claude has stopped running.
+// These are tasks where the window exists but the agent pane shows a shell prompt.
+func (m *Manager) FindStoppedTasks() ([]*StoppedTaskInfo, error) {
+	if m.tmuxClient == nil {
+		return nil, fmt.Errorf("tmux client not set")
+	}
+
+	windows, err := m.tmuxClient.ListWindows()
+	if err != nil {
+		return nil, err
+	}
+
+	var stopped []*StoppedTaskInfo
+	for _, w := range windows {
+		taskName, isTaskWindow := constants.ExtractTaskName(w.Name)
+		if !isTaskWindow {
+			continue
+		}
+
+		// Skip done or warning windows (task already completed or has issues)
+		if strings.HasPrefix(w.Name, constants.EmojiDone) ||
+			strings.HasPrefix(w.Name, constants.EmojiWarning) {
+			continue
+		}
+
+		// Get full task name by finding matching agent directory
+		task, fullTaskName := m.findTaskByTruncatedName(taskName)
+		if task == nil {
+			continue
+		}
+
+		// Check if Claude is running in the agent pane (pane .0)
+		agentPane := w.ID + ".0"
+		if !m.claudeClient.IsClaudeRunning(m.tmuxClient, agentPane) {
+			logging.Debug("FindStoppedTasks: task %s has stopped agent in window %s", fullTaskName, w.ID)
+			stopped = append(stopped, &StoppedTaskInfo{
+				Task:     task,
+				WindowID: w.ID,
+			})
+		}
+	}
+
+	return stopped, nil
+}
+
+// findTaskByTruncatedName finds a task whose name matches the truncated window name.
+// Returns the task and its full name, or nil if not found.
+func (m *Manager) findTaskByTruncatedName(truncatedName string) (*Task, string) {
+	entries, err := os.ReadDir(m.agentsDir)
+	if err != nil {
+		return nil, ""
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		fullName := entry.Name()
+		// Check if this task name matches the truncated name
+		if constants.TruncateForWindowName(fullName) == truncatedName {
+			task, err := m.GetTask(fullName)
+			if err != nil {
+				continue
+			}
+			return task, fullName
+		}
+	}
+
+	return nil, ""
+}
