@@ -21,8 +21,10 @@ import (
 )
 
 var (
-	// Version is set at build time
+	// Version is set at build time via ldflags
 	Version = "dev"
+	// Commit is the git commit hash, set at build time via ldflags
+	Commit = "unknown"
 )
 
 func main() {
@@ -41,6 +43,8 @@ It manages tasks in tmux sessions with optional git worktree isolation.`,
 	SilenceUsage: true,
 }
 
+var showVersion bool
+
 func init() {
 	rootCmd.AddCommand(cleanCmd)
 	rootCmd.AddCommand(setupCmd)
@@ -48,14 +52,31 @@ func init() {
 
 	// Internal commands (hidden, called by tmux keybindings)
 	rootCmd.AddCommand(internalCmd)
+
+	// Add -v/--version flag to root command
+	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Print version information")
+}
+
+// checkVersionFlag checks if -v flag was passed and prints version if so
+func checkVersionFlag() bool {
+	if showVersion {
+		printVersion()
+		return true
+	}
+	return false
 }
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("taw version %s\n", Version)
+		printVersion()
 	},
+}
+
+// printVersion prints the version and commit information
+func printVersion() {
+	fmt.Printf("taw %s (%s)\n", Version, Commit)
 }
 
 var cleanCmd = &cobra.Command{
@@ -74,6 +95,11 @@ var setupCmd = &cobra.Command{
 
 // runMain is the main entry point - starts or attaches to a tmux session
 func runMain(cmd *cobra.Command, args []string) error {
+	// Check for -v flag first
+	if checkVersionFlag() {
+		return nil
+	}
+
 	// Get current directory
 	cwd, err := os.Getwd()
 	if err != nil {
