@@ -17,6 +17,7 @@ import (
 //   - Ctrl+G: Toggle git status
 //   - Ctrl+B: Toggle bottom (shell)
 //   - Ctrl+/: Toggle help
+//   - Ctrl+,: Toggle setup (rerun setup wizard)
 //   - Alt+Left/Right: Move window
 //   - Alt+Tab: Cycle pane
 func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
@@ -30,6 +31,7 @@ func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
 	cmdToggleGitStatus := fmt.Sprintf("run-shell '%s internal toggle-git-status %s'", tawBin, sessionName)
 	cmdToggleBottom := fmt.Sprintf("run-shell '%s internal popup-shell %s'", tawBin, sessionName)
 	cmdToggleHelp := fmt.Sprintf("run-shell '%s internal toggle-help %s'", tawBin, sessionName)
+	cmdToggleSetup := fmt.Sprintf("run-shell '%s internal toggle-setup %s'", tawBin, sessionName)
 
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
@@ -49,5 +51,8 @@ func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
 		{Key: "C-g", Command: cmdToggleGitStatus, NoPrefix: true},
 		{Key: "C-b", Command: cmdToggleBottom, NoPrefix: true},
 		{Key: "C-_", Command: cmdToggleHelp, NoPrefix: true}, // Ctrl+/ sends C-_
+
+		// Settings
+		{Key: "C-,", Command: cmdToggleSetup, NoPrefix: true}, // Ctrl+, for setup
 	}
 }
