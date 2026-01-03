@@ -16,13 +16,13 @@ Claude Code-based autonomous agent work environment
 
 ### Task Commands
   ⌃N          New task
-  ⌃C          Cancel task (double-press within 2s)
+  ⌃K          Cancel task (double-press within 2s)
   ⌃D          Done task (complete and cleanup)
   ⌃Q          Quit taw
 
 ### Toggle Panels
   ⌃T          Toggle tasks (show task list)
-  ⌃L          Toggle logs (show log viewer)
+  ⌃O          Toggle logs (show log viewer)
   ⌃G          Toggle git status
   ⌃B          Toggle bottom (shell pane)
   ⌃/          Toggle help
@@ -80,7 +80,7 @@ View all active and completed tasks with preview panel.
   📁  History (completed, from history)
   ❌  Cancelled (from history, can resume)
 
-## Log Viewer (⌃L)
+## Log Viewer (⌃O)
 
   ↑/↓         Scroll vertically
   ←/→         Scroll horizontally (when word wrap is off)
