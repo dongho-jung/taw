@@ -88,7 +88,7 @@ func (m *LogViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey handles keyboard input.
 func (m *LogViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "esc", "ctrl+l", "ctrl+shift+l":
+	case "q", "esc", "ctrl+o", "ctrl+l", "ctrl+shift+l", "ctrl+shift+o":
 		return m, tea.Quit
 
 	case "down":
@@ -316,7 +316,7 @@ func (m *LogViewer) View() tea.View {
 	}
 
 	// Keybindings hint
-	hint := "↑↓←→:scroll s:tail w:wrap l:level g/G:top/end q:close"
+	hint := "↑↓←→:scroll s:tail w:wrap l:level g/G:top/end ⌃O/q:close"
 	padding := m.width - len(status) - len(hint)
 	if padding < 0 {
 		hint = "q:close"

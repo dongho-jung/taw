@@ -78,6 +78,6 @@ git -C "$PROJECT_DIR" log --oneline -5
 
 ## After Merge
 
-Inform user they can now run `⌃D` to clean up the task (worktree, branch, window).
+Inform user they can now run `⌃F` to clean up the task (worktree, branch, window).
 
 Proceed with merge.

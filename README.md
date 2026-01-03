@@ -71,7 +71,7 @@ Slash commands available to the agent:
 
 **Task completion**:
 - `auto-merge` mode: Automatically commit → merge → clean up → close the window when the task ends
-- Other modes: Press `⌃D` to commit → PR/merge → clean up according to ON_COMPLETE
+- Other modes: Press `⌃F` to commit → PR/merge → clean up according to ON_COMPLETE
 
 <details>
 <summary>Automatically reopen incomplete tasks with session resume</summary>
@@ -200,7 +200,7 @@ brew install tmux gh
 |--------|----------|
 | New task | `⌃N` |
 | Cancel task | `⌃K` |
-| Done task | `⌃D` |
+| Finish task | `⌃F` |
 | Quit taw | `⌃Q` |
 
 ### Toggle Panels

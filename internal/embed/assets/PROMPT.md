@@ -237,7 +237,7 @@ Run verification → success? → commit → push → call end-task
 2. `git push -u origin $TASK_NAME`
 3. `$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"`
 4. Log: "Work complete - user review required (verification unavailable/failed)"
-5. Message the user: "Verification is needed. Please review and run `⌃D` to finish."
+5. Message the user: "Verification is needed. Please review and run `⌃F` to finish."
 
 **CRITICAL:**
 - In `auto-merge` mode, do **not** create a PR. end-task merges to main and cleans up.
@@ -406,7 +406,7 @@ Automatic execution is the default, but you can invoke commands manually if need
 
 **Completing a task**:
 - `auto-merge` mode: Call end-task as described above to finish automatically.
-- Other modes: User runs `⌃D` to commit → PR/merge → clean up.
+- Other modes: User runs `⌃F` to commit → PR/merge → clean up.
 
 ---
 

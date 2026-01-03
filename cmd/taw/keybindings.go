@@ -10,7 +10,7 @@ import (
 // Keyboard shortcuts:
 //   - Ctrl+N: New task
 //   - Ctrl+K: Send Ctrl+C (double-press to cancel task)
-//   - Ctrl+D: Done task
+//   - Ctrl+F: Finish task
 //   - Ctrl+Q: Quit taw
 //   - Ctrl+T: Toggle tasks
 //   - Ctrl+O: Toggle logs
@@ -40,7 +40,7 @@ func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
 		// Task commands (Ctrl-based)
 		{Key: "C-n", Command: cmdNewTask, NoPrefix: true},
 		{Key: "C-k", Command: cmdCtrlC, NoPrefix: true},
-		{Key: "C-d", Command: cmdDoneTask, NoPrefix: true},
+		{Key: "C-f", Command: cmdDoneTask, NoPrefix: true},
 		{Key: "C-q", Command: cmdQuit, NoPrefix: true},
 
 		// Toggle commands (Ctrl-based)

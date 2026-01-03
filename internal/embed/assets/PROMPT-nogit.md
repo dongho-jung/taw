@@ -241,7 +241,7 @@ $TAW_BIN internal rename-window $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done
 |---------|-------------|
 | `/test` | Manually run tests |
 
-Note: Git-related commands (/commit, /pr, /merge) are unavailable in non-git mode. Run `⌃D` to finish tasks.
+Note: Git-related commands (/commit, /pr, /merge) are unavailable in non-git mode. Run `⌃F` to finish tasks.
 
 ---
 

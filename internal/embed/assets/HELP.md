@@ -17,7 +17,7 @@ Claude Code-based autonomous agent work environment
 ### Task Commands
   ⌃N          New task
   ⌃K          Cancel task (double-press within 2s)
-  ⌃D          Done task (complete and cleanup)
+  ⌃F          Finish task (complete and cleanup)
   ⌃Q          Quit taw
 
 ### Toggle Panels
@@ -90,7 +90,7 @@ View all active and completed tasks with preview panel.
   s           Toggle tail mode (follow new logs)
   w           Toggle word wrap
   l           Cycle log level filter (L0+ → L1+ → ... → L5 only)
-  q/Esc       Close the log viewer
+  ⌃O/q/Esc    Close the log viewer
 
 ## Environment Variables (for agents)
 
