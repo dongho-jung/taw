@@ -131,19 +131,12 @@ var watchWaitCmd = &cobra.Command{
 						promptKey := prompt.key()
 						if promptKey != "" && promptKey != lastPromptKey {
 							lastPromptKey = promptKey
-							// Try notification actions first for simple prompts
+							// Try notification actions for simple prompts
 							// Note: tryNotificationAction always shows a notification (either with actions
 							// or fallback to simple), so we mark notified=true before calling it
 							notified = true
 							choice := tryNotificationAction(taskName, prompt)
-							if choice == "" {
-								// User dismissed/timeout - show popup for selection
-								var promptErr error
-								choice, promptErr = promptUserChoice(tm, prompt)
-								if promptErr != nil {
-									logging.Trace("Prompt choice failed: %v", promptErr)
-								}
-							}
+							// If user selects an action from notification, send it to the agent
 							if choice != "" {
 								if sendErr := sendAgentResponse(tm, paneID, choice); sendErr != nil {
 									logging.Trace("Failed to send prompt response: %v", sendErr)
@@ -151,6 +144,7 @@ var watchWaitCmd = &cobra.Command{
 									logging.Debug("Sent prompt response: %s", choice)
 								}
 							}
+							// If dismissed/timeout, user will handle it directly in the UI
 						}
 					} else if !notified {
 						logging.Debug("Wait detected: %s", reason)
