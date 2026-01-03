@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -532,7 +531,7 @@ func tryNotificationAction(taskName string, prompt askPrompt) string {
 	}
 
 	// Find the icon path
-	iconPath := findIconPath()
+	iconPath := notify.FindIconPath()
 
 	// Show notification with actions
 	title := fmt.Sprintf("TAW: %s", taskName)
@@ -551,38 +550,5 @@ func tryNotificationAction(taskName string, prompt askPrompt) string {
 	}
 
 	logging.Trace("tryNotificationAction: no action selected (index=%d)", index)
-	return ""
-}
-
-// findIconPath locates the taw icon for notifications.
-func findIconPath() string {
-	// Check common locations
-	candidates := []string{}
-
-	// ~/.local/share/taw/icon.png
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, filepath.Join(home, ".local", "share", "taw", "icon.png"))
-	}
-
-	// Same directory as taw binary
-	if exe, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exe)
-		candidates = append(candidates, filepath.Join(exeDir, "icon.png"))
-	}
-
-	// Inside the app bundle's Resources
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, filepath.Join(home, ".local", "share", "taw",
-			notify.NotifyAppName, "Contents", "Resources", "icon.png"))
-	}
-
-	for _, path := range candidates {
-		if _, err := os.Stat(path); err == nil {
-			logging.Trace("findIconPath: found at %s", path)
-			return path
-		}
-	}
-
-	logging.Trace("findIconPath: not found")
 	return ""
 }

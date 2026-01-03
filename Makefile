@@ -32,6 +32,24 @@ build-notify:
 	@mkdir -p $(NOTIFY_APP)/Contents/Resources
 	@cp cmd/taw-notify/Info.plist $(NOTIFY_APP)/Contents/
 	@cp icon.png $(NOTIFY_APP)/Contents/Resources/ 2>/dev/null || true
+	@# Generate icon.icns from icon.png for app icon in notification settings
+	@if [ -f icon.png ]; then \
+		rm -rf icon.iconset && \
+		mkdir -p icon.iconset && \
+		sips -z 16 16 icon.png --out icon.iconset/icon_16x16.png >/dev/null && \
+		sips -z 32 32 icon.png --out icon.iconset/icon_16x16@2x.png >/dev/null && \
+		sips -z 32 32 icon.png --out icon.iconset/icon_32x32.png >/dev/null && \
+		sips -z 64 64 icon.png --out icon.iconset/icon_32x32@2x.png >/dev/null && \
+		sips -z 128 128 icon.png --out icon.iconset/icon_128x128.png >/dev/null && \
+		sips -z 256 256 icon.png --out icon.iconset/icon_128x128@2x.png >/dev/null && \
+		sips -z 256 256 icon.png --out icon.iconset/icon_256x256.png >/dev/null && \
+		sips -z 512 512 icon.png --out icon.iconset/icon_256x256@2x.png >/dev/null && \
+		sips -z 512 512 icon.png --out icon.iconset/icon_512x512.png >/dev/null && \
+		sips -z 1024 1024 icon.png --out icon.iconset/icon_512x512@2x.png >/dev/null && \
+		iconutil -c icns icon.iconset -o $(NOTIFY_APP)/Contents/Resources/icon.icns && \
+		rm -rf icon.iconset && \
+		echo "Generated icon.icns"; \
+	fi
 	CGO_ENABLED=1 $(GO_PATH) build -o $(NOTIFY_APP)/Contents/MacOS/$(NOTIFY_BINARY) ./cmd/taw-notify
 	@echo "Built $(NOTIFY_APP)"
 

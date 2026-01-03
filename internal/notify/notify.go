@@ -38,6 +38,8 @@ const (
 )
 
 // Send shows a desktop notification when supported.
+// It prefers using the taw-notify helper for consistent icon display,
+// falling back to AppleScript if the helper is not available.
 func Send(title, message string) error {
 	logging.Trace("Send: start title=%q message=%q", title, message)
 	defer logging.Trace("Send: end title=%q", title)
@@ -46,6 +48,16 @@ func Send(title, message string) error {
 		return nil
 	}
 
+	// Try taw-notify helper first for consistent icon display
+	if helperPath := findNotifyHelper(); helperPath != "" {
+		if err := sendViaHelper(helperPath, title, message); err == nil {
+			logging.Trace("Send: sent via taw-notify helper")
+			return nil
+		}
+		logging.Trace("Send: taw-notify helper failed, falling back to AppleScript")
+	}
+
+	// Fall back to AppleScript
 	script := fmt.Sprintf(`display notification %q with title %q`, message, title)
 	cmd := appleScriptCommand("-e", script)
 	if err := cmd.Run(); err != nil {
@@ -56,6 +68,64 @@ func Send(title, message string) error {
 		return err
 	}
 	return nil
+}
+
+// sendViaHelper sends a simple notification using the taw-notify helper.
+func sendViaHelper(helperPath, title, message string) error {
+	// Find icon path for notification attachment
+	iconPath := FindIconPath()
+
+	args := []string{
+		"--title", title,
+		"--body", message,
+		"--timeout", "1", // Short timeout since we don't need to wait for response
+	}
+	if iconPath != "" {
+		args = append(args, "--icon", iconPath)
+	}
+
+	// Run the helper via 'open' command to ensure proper bundle ID recognition
+	openArgs := []string{
+		"-W", // Wait for app to finish
+		"-a", helperPath,
+		"--args",
+	}
+	openArgs = append(openArgs, args...)
+
+	cmd := exec.Command("open", openArgs...)
+	return cmd.Run()
+}
+
+// FindIconPath locates the taw icon for notifications.
+func FindIconPath() string {
+	candidates := []string{}
+
+	// ~/.local/share/taw/icon.png
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".local", "share", "taw", "icon.png"))
+	}
+
+	// Same directory as current executable
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		candidates = append(candidates, filepath.Join(exeDir, "icon.png"))
+	}
+
+	// Inside the app bundle's Resources
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".local", "share", "taw",
+			NotifyAppName, "Contents", "Resources", "icon.png"))
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			logging.Trace("findIconPath: found at %s", path)
+			return path
+		}
+	}
+
+	logging.Trace("findIconPath: not found")
+	return ""
 }
 
 // PlaySound plays a system sound (macOS only).
