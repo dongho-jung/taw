@@ -15,6 +15,26 @@ go install github.com/dongho-jung/taw@latest
 
 > **Note (macOS)**: `make install` automatically runs `xattr -cr` and `codesign -fs -` to prevent the `zsh: killed` error.
 
+## Dependency check
+
+Run `taw check` to verify all dependencies are installed:
+
+```bash
+taw check
+```
+
+This checks:
+
+| Dependency | Required | Description |
+|------------|----------|-------------|
+| tmux | ✅ | Terminal multiplexer for managing task windows |
+| claude | ✅ | Claude Code CLI for AI-powered task execution |
+| git | ❌ | Git for worktree mode (optional, but recommended) |
+| gh | ❌ | GitHub CLI for PR creation (optional) |
+| taw-notify.app | ❌ | macOS notification helper (optional) |
+| notifications | ❌ | macOS notification permissions (optional) |
+| sounds | ❌ | macOS system sounds for alerts (optional) |
+
 ## Testing
 
 ```bash
@@ -62,6 +82,7 @@ go tool cover -html=coverage.out -o coverage.html
 taw/                           # This repository
 ├── cmd/taw/                   # Go main package
 │   ├── main.go                # Entry point and root command
+│   ├── check.go               # Dependency check command (taw check)
 │   ├── internal.go            # Internal command registration
 │   ├── internal_create.go     # Task creation commands (toggleNew, newTask, spawnTask, handleTask)
 │   ├── internal_lifecycle.go  # Task lifecycle commands (endTask, cancelTask, doneTask)
