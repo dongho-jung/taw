@@ -198,11 +198,7 @@ func ensureWaitingWindow(tm tmux.Client, windowID, taskName string) error {
 }
 
 func waitingWindowName(taskName string) string {
-	name := taskName
-	if len(name) > 12 {
-		name = name[:12]
-	}
-	return constants.EmojiWaiting + name
+	return constants.EmojiWaiting + constants.TruncateForWindowName(taskName)
 }
 
 func detectWaitInContent(content string) (bool, string) {

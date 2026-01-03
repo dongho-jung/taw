@@ -149,13 +149,15 @@ type Window struct {
 
 // tmuxClient implements the Client interface.
 type tmuxClient struct {
-	socket string
+	socket      string
+	sessionName string
 }
 
 // New creates a new tmux client with the given socket name.
 func New(sessionName string) Client {
 	return &tmuxClient{
-		socket: constants.TmuxSocketPrefix + sessionName,
+		socket:      constants.TmuxSocketPrefix + sessionName,
+		sessionName: sessionName,
 	}
 }
 
@@ -294,7 +296,8 @@ func (c *tmuxClient) RenameWindow(target, name string) error {
 }
 
 func (c *tmuxClient) ListWindows() ([]Window, error) {
-	output, err := c.RunWithOutput("list-windows", "-F", "#{window_id}|#{window_index}|#{window_name}|#{window_active}")
+	// Specify session target (-t) to ensure correct results when running from outside tmux
+	output, err := c.RunWithOutput("list-windows", "-t", c.sessionName, "-F", "#{window_id}|#{window_index}|#{window_name}|#{window_active}")
 	if err != nil {
 		return nil, err
 	}

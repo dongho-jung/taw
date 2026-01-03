@@ -240,12 +240,7 @@ func (t *Task) GetWindowName() string {
 		emoji = constants.EmojiWarning
 	}
 
-	name := t.Name
-	if len(name) > 12 {
-		name = name[:12]
-	}
-
-	return emoji + name
+	return emoji + constants.TruncateForWindowName(t.Name)
 }
 
 // SetupSymlinks creates the origin symlink.

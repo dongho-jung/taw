@@ -25,6 +25,7 @@ var TaskEmojis = []string{
 
 // ExtractTaskName extracts the task name from a window name by removing the emoji prefix.
 // Returns the task name and true if a task emoji was found, or empty string and false otherwise.
+// Note: The returned name may be truncated to MaxWindowNameLen characters.
 func ExtractTaskName(windowName string) (string, bool) {
 	for _, emoji := range TaskEmojis {
 		if strings.HasPrefix(windowName, emoji) {
@@ -34,11 +35,22 @@ func ExtractTaskName(windowName string) (string, bool) {
 	return "", false
 }
 
+// TruncateForWindowName truncates a task name to fit in window name display.
+// This should be used when comparing task names to window names since window
+// names are truncated to MaxWindowNameLen characters.
+func TruncateForWindowName(name string) string {
+	if len(name) > MaxWindowNameLen {
+		return name[:MaxWindowNameLen]
+	}
+	return name
+}
+
 // Display limits
 const (
-	MaxDisplayNameLen = 32
-	MaxTaskNameLen    = 32
-	MinTaskNameLen    = 8
+	MaxDisplayNameLen   = 32
+	MaxTaskNameLen      = 32
+	MinTaskNameLen      = 8
+	MaxWindowNameLen    = 12 // Max task name length in tmux window names
 )
 
 // Claude interaction timeouts

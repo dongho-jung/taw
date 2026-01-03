@@ -205,7 +205,9 @@ func (m *Manager) FindIncompleteTasks(sessionName string) ([]*Task, error) {
 	var incomplete []*Task
 	for _, task := range tasks {
 		// Skip if task already has a window (by task name)
-		if activeTaskNames[task.Name] {
+		// Use truncated name since window names are limited to MaxWindowNameLen chars
+		truncatedName := constants.TruncateForWindowName(task.Name)
+		if activeTaskNames[truncatedName] {
 			continue
 		}
 
