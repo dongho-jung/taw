@@ -301,8 +301,8 @@ func notifyWaiting(taskName, reason string) {
 	logging.Trace("notifyWaiting: start task=%s reason=%s", taskName, reason)
 	defer logging.Trace("notifyWaiting: end")
 
-	title := "TAW: Waiting for input"
-	message := fmt.Sprintf("Task %s needs your response.", taskName)
+	title := taskName
+	message := "Waiting for your response"
 	logging.Trace("notifyWaiting: sending desktop notification title=%s", title)
 	if err := notify.Send(title, message); err != nil {
 		logging.Trace("Failed to send notification: %v", err)
@@ -530,15 +530,12 @@ func tryNotificationAction(taskName string, prompt askPrompt) string {
 		return ""
 	}
 
-	// Find the icon path
-	iconPath := notify.FindIconPath()
-
-	// Show notification with actions
-	title := fmt.Sprintf("TAW: %s", taskName)
+	// Show notification with actions (no icon attachment - use only app icon on left side)
+	title := taskName
 	message := prompt.Question
 
 	logging.Debug("tryNotificationAction: showing notification with %d actions", len(prompt.Options))
-	index, err := notify.SendWithActions(title, message, iconPath, prompt.Options, notifyTimeoutSec)
+	index, err := notify.SendWithActions(title, message, "", prompt.Options, notifyTimeoutSec)
 	if err != nil {
 		logging.Trace("tryNotificationAction: notification failed err=%v", err)
 		return ""
