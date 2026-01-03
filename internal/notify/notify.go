@@ -71,17 +71,14 @@ func Send(title, message string) error {
 }
 
 // sendViaHelper sends a simple notification using the taw-notify helper.
+// Note: We don't pass icon as attachment because it would show on the right side
+// of the notification banner, taking space from action buttons. The app bundle
+// icon automatically shows on the left side.
 func sendViaHelper(helperPath, title, message string) error {
-	// Find icon path for notification attachment
-	iconPath := FindIconPath()
-
 	args := []string{
 		"--title", title,
 		"--body", message,
 		"--timeout", "1", // Short timeout since we don't need to wait for response
-	}
-	if iconPath != "" {
-		args = append(args, "--icon", iconPath)
 	}
 
 	// Run the helper via 'open' command to ensure proper bundle ID recognition
