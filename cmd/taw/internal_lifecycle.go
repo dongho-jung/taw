@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -153,6 +154,17 @@ var endTaskCmd = &cobra.Command{
 						lockAcquired = true
 						break
 					}
+
+					// Lock file exists - check if the process holding it is still alive
+					if isStaleLock(lockFile) {
+						logging.Debug("Detected stale merge lock, removing...")
+						if rmErr := os.Remove(lockFile); rmErr != nil {
+							logging.Warn("Failed to remove stale lock: %v", rmErr)
+						}
+						// Try again immediately without sleeping
+						continue
+					}
+
 					logging.Trace("Waiting for merge lock (attempt %d/%d)...", retries+1, constants.MergeLockMaxRetries)
 					time.Sleep(constants.MergeLockRetryInterval)
 				}
@@ -790,6 +802,49 @@ var recoverTaskCmd = &cobra.Command{
 		fmt.Printf("Task %s recovered successfully\n", taskName)
 		return nil
 	},
+}
+
+// isStaleLock checks if the merge lock file is stale (the process that created it is no longer running).
+// Returns true if the lock is stale and should be removed.
+func isStaleLock(lockFile string) bool {
+	content, err := os.ReadFile(lockFile)
+	if err != nil {
+		// Can't read lock file - assume it's not stale
+		return false
+	}
+
+	lines := strings.Split(string(content), "\n")
+	if len(lines) < 2 {
+		// Invalid lock file format - consider it stale
+		logging.Trace("Invalid lock file format (missing PID), treating as stale")
+		return true
+	}
+
+	var pid int
+	if _, err := fmt.Sscanf(lines[1], "%d", &pid); err != nil {
+		// Can't parse PID - consider it stale
+		logging.Trace("Invalid PID in lock file, treating as stale")
+		return true
+	}
+
+	// Check if the process is still running by sending signal 0
+	// os.FindProcess always succeeds on Unix, so we use the signal check
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		// Process doesn't exist - stale lock
+		return true
+	}
+
+	// Send signal 0 to check if process exists (doesn't actually send a signal)
+	if err := process.Signal(syscall.Signal(0)); err != nil {
+		// Process doesn't exist or we don't have permission (either way, treat as stale)
+		logging.Trace("Lock holder process %d not running (err=%v), treating as stale", pid, err)
+		return true
+	}
+
+	// Process is still running - lock is valid
+	logging.Trace("Lock holder process %d is still running", pid)
+	return false
 }
 
 var resumeAgentCmd = &cobra.Command{
