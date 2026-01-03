@@ -199,7 +199,7 @@ brew install tmux gh
 | Action | Shortcut |
 |--------|----------|
 | New task | `⌃N` |
-| Cancel task | `⌃C` |
+| Cancel task | `⌃K` |
 | Done task | `⌃D` |
 | Quit taw | `⌃Q` |
 
@@ -207,14 +207,14 @@ brew install tmux gh
 | Action | Shortcut |
 |--------|----------|
 | Toggle tasks | `⌃T` |
-| Toggle logs | `⌃L` |
+| Toggle logs | `⌃O` |
 | Toggle git status | `⌃G` |
 | Toggle bottom (shell) | `⌃B` |
 | Toggle help | `⌃/` |
 
 ## Log viewer
 
-Press `⌃L` to open the live log viewer.
+Press `⌃O` to open the live log viewer.
 
 <details>
 <summary>Controls</summary>

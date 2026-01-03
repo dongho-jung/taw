@@ -128,7 +128,7 @@ TAW uses a 6-level logging system (L0-L5):
 
 - Enable debug mode: `TAW_DEBUG=1 taw`
 - Log file location: `.taw/log`
-- View logs: Press `⌃L` to open the log viewer
+- View logs: Press `⌃O` to open the log viewer
 - Filter levels in log viewer: Press `l` to cycle through L0+ → L1+ → ... → L5 only
 
 ## Notifications
@@ -140,7 +140,7 @@ TAW uses multiple notification channels to alert users (macOS only):
 | Task created             | Glass       | -                    | `🤖 Task started: {name}` |
 | Task completed           | Hero        | -                    | `✅ Task completed: {name}` |
 | User input needed        | Funk        | Yes                  | `💬 {name} needs input` |
-| Cancel pending (⌃C)      | Tink        | -                    | -                 |
+| Cancel pending (⌃K)      | Tink        | -                    | -                 |
 | Error (merge failed etc) | Basso       | -                    | `⚠️ Merge failed: {name} - manual resolution needed` |
 
 - Sounds use macOS system sounds (`/System/Library/Sounds/`)
