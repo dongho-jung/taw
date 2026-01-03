@@ -122,7 +122,12 @@ var watchWaitCmd = &cobra.Command{
 					if err := ensureWaitingWindow(tm, windowID, taskName); err != nil {
 						logging.Trace("Failed to rename window: %v", err)
 					}
-					if prompt, ok := parseAskUserQuestion(content); ok {
+					// Try to parse the prompt - first YAML format, then rendered UI format
+					prompt, ok := parseAskUserQuestion(content)
+					if !ok {
+						prompt, ok = parseAskUserQuestionUI(content)
+					}
+					if ok {
 						promptKey := prompt.key()
 						if promptKey != "" && promptKey != lastPromptKey {
 							lastPromptKey = promptKey
@@ -393,6 +398,137 @@ func parseAskField(line, field string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// parseAskUserQuestionUI parses the rendered AskUserQuestion UI format.
+// The rendered format looks like:
+//
+//	□ 과일 선택                          <- header
+//	사과와 오렌지 중 어느 것을 선택하시겠습니까?  <- question
+//	> 1. 🍎 사과                         <- selected option
+//	      빨간색의 달콤하고 아삭한 과일      <- description
+//	  2. 🍊 오렌지                        <- option
+//	  3. Type something.                  <- custom input (skip)
+func parseAskUserQuestionUI(content string) (askPrompt, bool) {
+	lines := strings.Split(content, "\n")
+	lines = trimTrailingEmpty(lines)
+	if len(lines) == 0 {
+		return askPrompt{}, false
+	}
+
+	// Find the UI markers to confirm this is an AskUserQuestion UI
+	uiIndex := findAskUserQuestionUIIndex(lines)
+	if uiIndex == -1 {
+		return askPrompt{}, false
+	}
+
+	var prompt askPrompt
+	var firstOptionIndex int = -1
+
+	// Find numbered options (lines like "> 1. Option" or "  2. Option")
+	for i := uiIndex; i >= 0; i-- {
+		if option, ok := parseUIOption(lines[i]); ok {
+			// Skip "Type something." or similar custom input options
+			if strings.Contains(strings.ToLower(option), "type something") ||
+				strings.Contains(strings.ToLower(option), "other") {
+				continue
+			}
+			// Prepend to maintain order (we're iterating backwards)
+			prompt.Options = append([]string{option}, prompt.Options...)
+			if firstOptionIndex == -1 || i < firstOptionIndex {
+				firstOptionIndex = i
+			}
+		}
+	}
+
+	if len(prompt.Options) == 0 || firstOptionIndex < 1 {
+		return askPrompt{}, false
+	}
+
+	// The question is typically 1-2 lines above the first option
+	// Look for a line that looks like a question (ends with ?)
+	for i := firstOptionIndex - 1; i >= 0 && i >= firstOptionIndex-5; i-- {
+		line := strings.TrimSpace(lines[i])
+		// Skip empty lines, header lines (starting with □ or similar), and UI hints
+		if line == "" || isUIHeaderLine(line) || isUIHintLine(line) {
+			continue
+		}
+		// Take the first non-header, non-hint line as the question
+		prompt.Question = line
+		break
+	}
+
+	if prompt.Question == "" || len(prompt.Options) == 0 {
+		return askPrompt{}, false
+	}
+
+	return prompt, true
+}
+
+// parseUIOption extracts option text from a numbered option line.
+// Matches formats like "> 1. Option text" or "  2. Option text"
+func parseUIOption(line string) (string, bool) {
+	trimmed := strings.TrimSpace(line)
+	// Remove selection indicator (> or similar)
+	trimmed = strings.TrimPrefix(trimmed, ">")
+	trimmed = strings.TrimPrefix(trimmed, "❯")
+	trimmed = strings.TrimSpace(trimmed)
+
+	// Check if it starts with a number followed by dot
+	if len(trimmed) < 3 {
+		return "", false
+	}
+
+	// Find the number and dot pattern (e.g., "1.", "2.", etc.)
+	dotIndex := strings.Index(trimmed, ".")
+	if dotIndex < 1 || dotIndex > 2 {
+		return "", false
+	}
+
+	// Check if characters before dot are digits
+	for i := 0; i < dotIndex; i++ {
+		if trimmed[i] < '0' || trimmed[i] > '9' {
+			return "", false
+		}
+	}
+
+	// Extract the option text after "N. "
+	option := strings.TrimSpace(trimmed[dotIndex+1:])
+	if option == "" {
+		return "", false
+	}
+
+	return option, true
+}
+
+// isUIHeaderLine checks if a line is a UI header (checkbox, title decoration, etc.)
+func isUIHeaderLine(line string) bool {
+	// Common header prefixes/patterns
+	headerPrefixes := []string{"□", "■", "☐", "☑", "◯", "◉", "○", "●"}
+	for _, prefix := range headerPrefixes {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isUIHintLine checks if a line is a UI hint/instruction
+func isUIHintLine(line string) bool {
+	hints := []string{
+		"Enter to select",
+		"Tab/Arrow keys",
+		"Esc to cancel",
+		"Space to toggle",
+		"navigate",
+	}
+	lower := strings.ToLower(line)
+	for _, hint := range hints {
+		if strings.Contains(lower, strings.ToLower(hint)) {
+			return true
+		}
+	}
+	return false
 }
 
 func promptUserChoice(tm tmux.Client, prompt askPrompt) (string, error) {
