@@ -27,7 +27,6 @@ Claude Code-based autonomous agent work environment
   ⌃G          Toggle git status
   ⌃B          Toggle bottom (shell pane)
   ⌃/          Toggle help
-  ⌃,          Toggle setup (rerun setup wizard)
 
 ## Slash Commands (for agents)
 

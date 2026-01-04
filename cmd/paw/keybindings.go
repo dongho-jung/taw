@@ -17,7 +17,7 @@ import (
 //   - Ctrl+G: Toggle git status
 //   - Ctrl+B: Toggle bottom (shell)
 //   - Ctrl+/: Toggle help
-//   - Ctrl+,: Toggle setup (rerun setup wizard)
+//   - Ctrl+,: Toggle setup (disabled - requires extended-keys which breaks IME)
 //   - Alt+Left/Right: Move window
 //   - Alt+Tab: Cycle pane
 func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
@@ -31,7 +31,10 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	cmdToggleGitStatus := fmt.Sprintf("run-shell '%s internal toggle-git-status %s'", pawBin, sessionName)
 	cmdToggleBottom := fmt.Sprintf("run-shell '%s internal popup-shell %s'", pawBin, sessionName)
 	cmdToggleHelp := fmt.Sprintf("run-shell '%s internal toggle-help %s'", pawBin, sessionName)
-	cmdToggleSetup := fmt.Sprintf("run-shell '%s internal toggle-setup %s'", pawBin, sessionName)
+	// Note: cmdToggleSetup removed - Ctrl+, requires extended-keys which breaks IME input
+
+	// Ctrl+. sends F2 to open task options (used in new task window)
+	cmdTaskOpts := "send-keys F2"
 
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
@@ -50,10 +53,10 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 		{Key: "C-o", Command: cmdToggleLogs, NoPrefix: true},
 		{Key: "C-g", Command: cmdToggleGitStatus, NoPrefix: true},
 		{Key: "C-b", Command: cmdToggleBottom, NoPrefix: true},
-		{Key: "C-/", Command: cmdToggleHelp, NoPrefix: true}, // Ctrl+/ (extended-keys mode)
+		{Key: "C-_", Command: cmdToggleHelp, NoPrefix: true}, // Ctrl+/ sends C-_
 
 		// Settings
-		{Key: "C-,", Command: cmdToggleSetup, NoPrefix: true}, // Ctrl+, for setup
-		// Note: Ctrl+. is handled directly by the TUI (task input) for options panel
+		// Note: C-, (Ctrl+,) removed - requires extended-keys which breaks IME input
+		{Key: "C-.", Command: cmdTaskOpts, NoPrefix: true}, // Ctrl+. for task options (sends F2)
 	}
 }
