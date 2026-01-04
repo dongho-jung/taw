@@ -37,7 +37,9 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 
 	// Alt+Tab: context-aware - pass through to TUI in new task window, cycle panes otherwise
 	// #{m:pattern,string} checks if string matches pattern (⭐️* = starts with ⭐️)
-	cmdAltTab := `if "#{m:⭐️*,#{window_name}}" "send-keys M-Tab" "select-pane -t :.+"`
+	// Use "Escape Tab" instead of "M-Tab" because send-keys M-Tab may not produce
+	// the correct escape sequence (\x1b\x09) that bubbletea expects for "alt+tab"
+	cmdAltTab := `if "#{m:⭐️*,#{window_name}}" "send-keys Escape Tab" "select-pane -t :.+"`
 
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
