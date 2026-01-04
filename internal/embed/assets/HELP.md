@@ -11,12 +11,11 @@ Claude Code-based autonomous agent work environment
   Border drag     Resize pane
 
 ### Navigation
-  ⌥Tab        Move to next pane (cycle)
+  ⌥Tab        Cycle panes / Cycle options (in new task window)
   ⌥←/→        Move to previous/next window
 
 ### Task Commands
   ⌃N          New task
-  ⌃.          Task options (in new task window)
   ⌃K          Cancel task (double-press within 2s)
   ⌃F          Finish task (complete and cleanup)
   ⌃Q          Quit paw
@@ -94,7 +93,7 @@ View all active and completed tasks with preview panel.
   l           Cycle log level filter (L0+ → L1+ → ... → L5 only)
   ⌃O/q/Esc    Close the log viewer
 
-## Task Options (⌃. in new task window)
+## Task Options (⌥Tab in new task window)
 
 Configure per-task settings before submission:
 

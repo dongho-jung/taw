@@ -450,6 +450,11 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 		Table:   "copy-mode-vi",
 	})
 
+	// Unbind C-b from root table before setting up keybindings
+	// This ensures C-b doesn't act as prefix even if tmux.conf wasn't reloaded
+	// (tmux.conf is only loaded when server starts, not on reconnect)
+	_ = tm.Run("unbind-key", "-T", "root", "C-b")
+
 	// Setup keybindings (English + Korean layouts)
 	bindings := buildKeybindings(pawBin, app.SessionName)
 	for _, b := range bindings {

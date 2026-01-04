@@ -19,7 +19,7 @@ import (
 //   - Ctrl+/: Toggle help
 //   - Ctrl+,: Toggle setup (disabled - requires extended-keys which breaks IME)
 //   - Alt+Left/Right: Move window
-//   - Alt+Tab: Cycle pane
+//   - Alt+Tab: Cycle pane (in task windows) / Cycle options (in new task window)
 func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	// Command shortcuts
 	cmdNewTask := fmt.Sprintf("run-shell '%s internal toggle-new %s'", pawBin, sessionName)
@@ -33,12 +33,13 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	cmdToggleHelp := fmt.Sprintf("run-shell '%s internal toggle-help %s'", pawBin, sessionName)
 	// Note: cmdToggleSetup removed - Ctrl+, requires extended-keys which breaks IME input
 
-	// Ctrl+. passes through to open task options (used in new task window)
-	cmdTaskOpts := "send-keys C-."
+	// Alt+Tab: context-aware - pass through to TUI in new task window, cycle panes otherwise
+	// #{m:pattern,string} checks if string matches pattern (⭐️* = starts with ⭐️)
+	cmdAltTab := `if "#{m:⭐️*,#{window_name}}" "send-keys M-Tab" "select-pane -t :.+"`
 
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
-		{Key: "M-Tab", Command: "select-pane -t :.+", NoPrefix: true},
+		{Key: "M-Tab", Command: cmdAltTab, NoPrefix: true},
 		{Key: "M-Left", Command: "previous-window", NoPrefix: true},
 		{Key: "M-Right", Command: "next-window", NoPrefix: true},
 
@@ -55,8 +56,5 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 		{Key: "C-b", Command: cmdToggleBottom, NoPrefix: true},
 		{Key: "C-_", Command: cmdToggleHelp, NoPrefix: true}, // Ctrl+/ sends C-_
 
-		// Settings
-		// Note: C-, (Ctrl+,) removed - requires extended-keys which breaks IME input
-		{Key: "C-.", Command: cmdTaskOpts, NoPrefix: true}, // Ctrl+. for task options
 	}
 }

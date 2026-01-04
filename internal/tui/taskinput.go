@@ -175,8 +175,8 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		// Toggle panel: Ctrl+.
-		case "ctrl+.":
+		// Toggle panel: Alt+Tab (cycle between input box and options)
+		case "alt+tab":
 			m.applyOptionInputValues()
 			if m.focusPanel == FocusPanelLeft {
 				m.focusPanel = FocusPanelRight
@@ -411,9 +411,9 @@ func (m *TaskInput) View() tea.View {
 	sb.WriteString(combined)
 	sb.WriteString("\n")
 	if m.focusPanel == FocusPanelLeft {
-		sb.WriteString(helpStyle.Render("Alt+Enter/F5: Submit  |  ⌃.: Options  |  Esc: Cancel"))
+		sb.WriteString(helpStyle.Render("Alt+Enter/F5: Submit  |  ⌥Tab: Options  |  Esc: Cancel"))
 	} else {
-		sb.WriteString(helpStyle.Render("↑/↓: Navigate  |  ←/→: Change  |  ⌃.: Task  |  Alt+Enter: Submit"))
+		sb.WriteString(helpStyle.Render("↑/↓: Navigate  |  ←/→: Change  |  ⌥Tab: Task  |  Alt+Enter: Submit"))
 	}
 
 	v := tea.NewView(sb.String())
