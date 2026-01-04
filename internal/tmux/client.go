@@ -11,16 +11,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dongho-jung/taw/internal/constants"
-	"github.com/dongho-jung/taw/internal/embed"
-	"github.com/dongho-jung/taw/internal/logging"
+	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/embed"
+	"github.com/dongho-jung/paw/internal/logging"
 )
 
-// configPath holds the path to TAW's custom tmux configuration file.
+// configPath holds the path to PAW's custom tmux configuration file.
 var configPath string
 
 func init() {
-	// Write TAW-specific tmux config to temp directory
+	// Write PAW-specific tmux config to temp directory
 	content, err := embed.GetTmuxConfig()
 	if err != nil {
 		// Fallback: use /dev/null to ignore user's config
@@ -29,7 +29,7 @@ func init() {
 	}
 
 	tmpDir := os.TempDir()
-	configPath = filepath.Join(tmpDir, "taw-tmux.conf")
+	configPath = filepath.Join(tmpDir, "paw-tmux.conf")
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		// Fallback: use /dev/null to ignore user's config
 		configPath = "/dev/null"

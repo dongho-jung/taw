@@ -7,17 +7,17 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dongho-jung/taw/internal/config"
-	"github.com/dongho-jung/taw/internal/constants"
+	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/constants"
 )
 
 // App represents the main application context with all dependencies.
 type App struct {
 	// Paths
 	ProjectDir string // Root directory of the user's project
-	TawDir     string // .taw directory path
+	PawDir     string // .paw directory path
 	AgentsDir  string // agents directory path
-	TawHome    string // TAW installation directory
+	PawHome    string // PAW installation directory
 
 	// Session
 	SessionName string // tmux session name
@@ -37,18 +37,18 @@ func New(projectDir string) (*App, error) {
 		return nil, fmt.Errorf("failed to resolve project path: %w", err)
 	}
 
-	tawDir := filepath.Join(absPath, constants.TawDirName)
-	agentsDir := filepath.Join(tawDir, constants.AgentsDirName)
+	pawDir := filepath.Join(absPath, constants.PawDirName)
+	agentsDir := filepath.Join(pawDir, constants.AgentsDirName)
 
 	// Determine session name from project directory name
 	sessionName := filepath.Base(absPath)
 
 	// Check if debug mode is enabled
-	debug := os.Getenv("TAW_DEBUG") == "1"
+	debug := os.Getenv("PAW_DEBUG") == "1"
 
 	app := &App{
 		ProjectDir:  absPath,
-		TawDir:      tawDir,
+		PawDir:      pawDir,
 		AgentsDir:   agentsDir,
 		SessionName: sessionName,
 		Debug:       debug,
@@ -57,11 +57,11 @@ func New(projectDir string) (*App, error) {
 	return app, nil
 }
 
-// Initialize sets up the .taw directory structure.
+// Initialize sets up the .paw directory structure.
 func (a *App) Initialize() error {
 	// Create directories
 	dirs := []string{
-		a.TawDir,
+		a.PawDir,
 		a.AgentsDir,
 	}
 
@@ -71,7 +71,7 @@ func (a *App) Initialize() error {
 		}
 	}
 
-	if err := ensureMemoryFile(filepath.Join(a.TawDir, constants.MemoryFileName)); err != nil {
+	if err := ensureMemoryFile(filepath.Join(a.PawDir, constants.MemoryFileName)); err != nil {
 		return fmt.Errorf("failed to create memory file: %w", err)
 	}
 
@@ -80,7 +80,7 @@ func (a *App) Initialize() error {
 
 // LoadConfig loads the project configuration.
 func (a *App) LoadConfig() error {
-	cfg, err := config.Load(a.TawDir)
+	cfg, err := config.Load(a.PawDir)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -88,35 +88,35 @@ func (a *App) LoadConfig() error {
 	return nil
 }
 
-// IsInitialized checks if the .taw directory exists.
+// IsInitialized checks if the .paw directory exists.
 func (a *App) IsInitialized() bool {
-	_, err := os.Stat(a.TawDir)
+	_, err := os.Stat(a.PawDir)
 	return err == nil
 }
 
 // HasConfig checks if a configuration file exists.
 func (a *App) HasConfig() bool {
-	return config.Exists(a.TawDir)
+	return config.Exists(a.PawDir)
 }
 
 // GetLogPath returns the path to the unified log file.
 func (a *App) GetLogPath() string {
-	return filepath.Join(a.TawDir, constants.LogFileName)
+	return filepath.Join(a.PawDir, constants.LogFileName)
 }
 
 // GetHistoryDir returns the path to the history directory.
 func (a *App) GetHistoryDir() string {
-	return filepath.Join(a.TawDir, constants.HistoryDirName)
+	return filepath.Join(a.PawDir, constants.HistoryDirName)
 }
 
 // GetPromptPath returns the path to the project-specific prompt file.
 func (a *App) GetPromptPath() string {
-	return filepath.Join(a.TawDir, constants.PromptFileName)
+	return filepath.Join(a.PawDir, constants.PromptFileName)
 }
 
 // GetGlobalPromptPath returns the path to the global prompt symlink.
 func (a *App) GetGlobalPromptPath() string {
-	return filepath.Join(a.TawDir, constants.GlobalPromptLink)
+	return filepath.Join(a.PawDir, constants.GlobalPromptLink)
 }
 
 // GetAgentDir returns the path to a specific agent's directory.
@@ -124,9 +124,9 @@ func (a *App) GetAgentDir(taskName string) string {
 	return filepath.Join(a.AgentsDir, taskName)
 }
 
-// SetTawHome sets the TAW installation directory.
-func (a *App) SetTawHome(path string) {
-	a.TawHome = path
+// SetPawHome sets the PAW installation directory.
+func (a *App) SetPawHome(path string) {
+	a.PawHome = path
 }
 
 // SetGitRepo sets whether the project is a git repository.
@@ -157,14 +157,14 @@ func (a *App) UpdateSessionNameForGitRepo(repoRoot string) {
 	}
 }
 
-// tawEnvVars lists environment variables managed by TAW.
+// pawEnvVars lists environment variables managed by PAW.
 // These are filtered from os.Environ() before adding new values to prevent duplicates.
-var tawEnvVars = []string{
+var pawEnvVars = []string{
 	"TASK_NAME",
-	"TAW_DIR",
+	"PAW_DIR",
 	"PROJECT_DIR",
 	"WINDOW_ID",
-	"TAW_HOME",
+	"PAW_HOME",
 	"SESSION_NAME",
 	"ON_COMPLETE",
 	"WORKTREE_DIR",
@@ -172,15 +172,15 @@ var tawEnvVars = []string{
 
 // GetEnvVars returns environment variables to be passed to Claude.
 func (a *App) GetEnvVars(taskName, worktreeDir, windowID string) []string {
-	// Filter out existing TAW env vars to prevent duplicates
-	env := filterEnv(os.Environ(), tawEnvVars)
+	// Filter out existing PAW env vars to prevent duplicates
+	env := filterEnv(os.Environ(), pawEnvVars)
 
 	env = append(env,
 		"TASK_NAME="+taskName,
-		"TAW_DIR="+a.TawDir,
+		"PAW_DIR="+a.PawDir,
 		"PROJECT_DIR="+a.ProjectDir,
 		"WINDOW_ID="+windowID,
-		"TAW_HOME="+a.TawHome,
+		"PAW_HOME="+a.PawHome,
 		"SESSION_NAME="+a.SessionName,
 	)
 

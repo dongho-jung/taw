@@ -1,4 +1,4 @@
-module github.com/dongho-jung/taw
+module github.com/dongho-jung/paw
 
 go 1.24.0
 

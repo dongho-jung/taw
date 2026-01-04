@@ -11,12 +11,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 
-	"github.com/dongho-jung/taw/internal/embed"
-	"github.com/dongho-jung/taw/internal/git"
-	"github.com/dongho-jung/taw/internal/logging"
-	"github.com/dongho-jung/taw/internal/task"
-	"github.com/dongho-jung/taw/internal/tmux"
-	"github.com/dongho-jung/taw/internal/tui"
+	"github.com/dongho-jung/paw/internal/embed"
+	"github.com/dongho-jung/paw/internal/git"
+	"github.com/dongho-jung/paw/internal/logging"
+	"github.com/dongho-jung/paw/internal/task"
+	"github.com/dongho-jung/paw/internal/tmux"
+	"github.com/dongho-jung/paw/internal/tui"
 )
 
 var popupShellCmd = &cobra.Command{
@@ -28,10 +28,10 @@ var popupShellCmd = &cobra.Command{
 		tm := tmux.New(sessionName)
 
 		// Check if shell pane exists - if so, close it (toggle off)
-		paneID, _ := tm.GetOption("@taw_shell_pane_id")
+		paneID, _ := tm.GetOption("@paw_shell_pane_id")
 		if paneID != "" && tm.HasPane(paneID) {
 			_ = tm.KillPane(paneID)
-			_ = tm.SetOption("@taw_shell_pane_id", "", true)
+			_ = tm.SetOption("@paw_shell_pane_id", "", true)
 			return nil
 		}
 
@@ -58,7 +58,7 @@ var popupShellCmd = &cobra.Command{
 		}
 
 		// Store pane ID for toggle
-		_ = tm.SetOption("@taw_shell_pane_id", strings.TrimSpace(newPaneID), true)
+		_ = tm.SetOption("@paw_shell_pane_id", strings.TrimSpace(newPaneID), true)
 
 		return nil
 	},
@@ -79,13 +79,13 @@ var toggleLogCmd = &cobra.Command{
 
 		logPath := app.GetLogPath()
 
-		tawBin, err := os.Executable()
+		pawBin, err := os.Executable()
 		if err != nil {
-			tawBin = "taw"
+			pawBin = "paw"
 		}
 
 		// Run log viewer in popup (closes with q/Esc/Ctrl+L)
-		logCmd := fmt.Sprintf("%s internal log-viewer %s", tawBin, logPath)
+		logCmd := fmt.Sprintf("%s internal log-viewer %s", pawBin, logPath)
 
 		_ = tm.DisplayPopup(tmux.PopupOpts{
 			Width:  "90%",
@@ -124,7 +124,7 @@ var toggleHelpCmd = &cobra.Command{
 		}
 
 		// Write to temp file
-		tmpFile, err := os.CreateTemp("", "taw-help-*.md")
+		tmpFile, err := os.CreateTemp("", "paw-help-*.md")
 		if err != nil {
 			return fmt.Errorf("failed to create temp file: %w", err)
 		}
@@ -225,13 +225,13 @@ var toggleTaskListCmd = &cobra.Command{
 			return err
 		}
 
-		tawBin, err := os.Executable()
+		pawBin, err := os.Executable()
 		if err != nil {
-			tawBin = "taw"
+			pawBin = "paw"
 		}
 
 		// Run task list viewer in popup (closes with q/Esc/Ctrl+T)
-		listCmd := fmt.Sprintf("%s internal task-list-viewer %s", tawBin, sessionName)
+		listCmd := fmt.Sprintf("%s internal task-list-viewer %s", pawBin, sessionName)
 
 		_ = tm.DisplayPopup(tmux.PopupOpts{
 			Width:     "90%",
@@ -258,14 +258,14 @@ var toggleSetupCmd = &cobra.Command{
 			return err
 		}
 
-		tawBin, err := os.Executable()
+		pawBin, err := os.Executable()
 		if err != nil {
-			tawBin = "taw"
+			pawBin = "paw"
 		}
 
 		// Run setup wizard in popup (closes when done)
 		// After setup completes, reload-config is called to apply changes
-		setupCmd := fmt.Sprintf("%s internal setup-wizard %s", tawBin, sessionName)
+		setupCmd := fmt.Sprintf("%s internal setup-wizard %s", pawBin, sessionName)
 
 		_ = tm.DisplayPopup(tmux.PopupOpts{
 			Width:     "60%",
@@ -345,7 +345,7 @@ var taskListViewerCmd = &cobra.Command{
 			app.GetHistoryDir(),
 			app.ProjectDir,
 			sessionName,
-			app.TawDir,
+			app.PawDir,
 			app.IsGitRepo,
 		)
 		if err != nil {
@@ -358,7 +358,7 @@ var taskListViewerCmd = &cobra.Command{
 
 		tm := tmux.New(sessionName)
 		gitClient := git.New()
-		tawBin, _ := os.Executable()
+		pawBin, _ := os.Executable()
 
 		logging.Trace("taskListViewerCmd: action=%v item=%s", action, item.Name)
 
@@ -374,7 +374,7 @@ var taskListViewerCmd = &cobra.Command{
 			// Trigger cancel-task-ui for cancellation with revert if needed
 			logging.Trace("taskListViewerCmd: cancelling task=%s windowID=%s", item.Name, item.WindowID)
 			if item.WindowID != "" {
-				cancelCmd := exec.Command(tawBin, "internal", "cancel-task-ui", sessionName, item.WindowID)
+				cancelCmd := exec.Command(pawBin, "internal", "cancel-task-ui", sessionName, item.WindowID)
 				return cancelCmd.Start()
 			}
 
@@ -382,7 +382,7 @@ var taskListViewerCmd = &cobra.Command{
 			// Trigger end-task for merge
 			logging.Trace("taskListViewerCmd: merging task=%s windowID=%s", item.Name, item.WindowID)
 			if item.WindowID != "" {
-				endCmd := exec.Command(tawBin, "internal", "end-task", sessionName, item.WindowID)
+				endCmd := exec.Command(pawBin, "internal", "end-task", sessionName, item.WindowID)
 				return endCmd.Start()
 			}
 
@@ -406,14 +406,14 @@ var taskListViewerCmd = &cobra.Command{
 			logging.Trace("taskListViewerCmd: resuming task=%s", item.Name)
 			if item.HistoryFile != "" && item.Content != "" {
 				// Create a new task with the same content
-				mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+				mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
 				newTask, err := mgr.CreateTask(item.Content)
 				if err != nil {
 					return fmt.Errorf("failed to create task: %w", err)
 				}
 
 				// Handle the task
-				handleCmd := exec.Command(tawBin, "internal", "handle-task", sessionName, newTask.AgentDir)
+				handleCmd := exec.Command(pawBin, "internal", "handle-task", sessionName, newTask.AgentDir)
 				return handleCmd.Start()
 			}
 		}

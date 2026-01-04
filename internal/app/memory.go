@@ -2,7 +2,7 @@ package app
 
 import "os"
 
-const defaultMemoryTemplate = `# TAW Memory (project-wide)
+const defaultMemoryTemplate = `# PAW Memory (project-wide)
 # Update in place; keep entries concise and deduplicated.
 version: 1
 tests: {}

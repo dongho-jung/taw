@@ -1,4 +1,4 @@
-// Package config handles TAW configuration parsing and management.
+// Package config handles PAW configuration parsing and management.
 package config
 
 import (

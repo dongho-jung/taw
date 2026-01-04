@@ -99,8 +99,8 @@ func TestTaskEmojis(t *testing.T) {
 
 func TestConstants(t *testing.T) {
 	// Test that constants have expected values
-	if TawDirName != ".taw" {
-		t.Errorf("TawDirName = %q, want %q", TawDirName, ".taw")
+	if PawDirName != ".paw" {
+		t.Errorf("PawDirName = %q, want %q", PawDirName, ".paw")
 	}
 	if AgentsDirName != "agents" {
 		t.Errorf("AgentsDirName = %q, want %q", AgentsDirName, "agents")
@@ -197,7 +197,7 @@ func TestTimeoutConstants(t *testing.T) {
 func TestFileAndDirNames(t *testing.T) {
 	// Verify file/dir name constants are non-empty
 	names := map[string]string{
-		"TawDirName":       TawDirName,
+		"PawDirName":       PawDirName,
 		"AgentsDirName":    AgentsDirName,
 		"HistoryDirName":   HistoryDirName,
 		"ConfigFileName":   ConfigFileName,

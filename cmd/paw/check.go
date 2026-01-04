@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dongho-jung/taw/internal/notify"
+	"github.com/dongho-jung/paw/internal/notify"
 )
 
 var checkCmd = &cobra.Command{
@@ -30,7 +30,7 @@ type checkResult struct {
 
 // runCheck runs all dependency checks and prints the results.
 func runCheck(cmd *cobra.Command, args []string) error {
-	fmt.Println("TAW Dependency Check")
+	fmt.Println("PAW Dependency Check")
 	fmt.Println("====================")
 	fmt.Println()
 
@@ -59,7 +59,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	if hasErrors {
-		fmt.Println("❌ Some required dependencies are missing. Please install them before using TAW.")
+		fmt.Println("❌ Some required dependencies are missing. Please install them before using PAW.")
 		return fmt.Errorf("required dependencies missing")
 	}
 	fmt.Println("✅ All required dependencies are available.")
@@ -167,11 +167,11 @@ func checkGh() checkResult {
 	return result
 }
 
-// checkNotifyApp verifies the taw-notify.app is installed.
+// checkNotifyApp verifies the paw-notify.app is installed.
 func checkNotifyApp() checkResult {
-	result := checkResult{name: "taw-notify.app", required: false}
+	result := checkResult{name: "paw-notify.app", required: false}
 
-	// Check in ~/.local/share/taw/
+	// Check in ~/.local/share/paw/
 	home, err := os.UserHomeDir()
 	if err != nil {
 		result.ok = false
@@ -179,7 +179,7 @@ func checkNotifyApp() checkResult {
 		return result
 	}
 
-	appPath := filepath.Join(home, ".local", "share", "taw", notify.NotifyAppName)
+	appPath := filepath.Join(home, ".local", "share", "paw", notify.NotifyAppName)
 	binaryPath := filepath.Join(appPath, "Contents", "MacOS", notify.NotifyBinaryName)
 
 	if _, err := os.Stat(binaryPath); err != nil {
@@ -205,18 +205,18 @@ func checkNotificationPermission() checkResult {
 		return result
 	}
 
-	appPath := filepath.Join(home, ".local", "share", "taw", notify.NotifyAppName)
+	appPath := filepath.Join(home, ".local", "share", "paw", notify.NotifyAppName)
 	if _, err := os.Stat(appPath); err != nil {
 		result.ok = false
-		result.message = "taw-notify.app not installed (install it first)"
+		result.message = "paw-notify.app not installed (install it first)"
 		return result
 	}
 
 	// Since we can't directly query notification permissions without running the app,
 	// we provide guidance on how to check permissions.
-	// User should verify via System Settings > Notifications > TAW Notify
+	// User should verify via System Settings > Notifications > PAW Notify
 	result.ok = true
-	result.message = "verify in System Settings > Notifications > TAW Notify"
+	result.message = "verify in System Settings > Notifications > PAW Notify"
 	return result
 }
 

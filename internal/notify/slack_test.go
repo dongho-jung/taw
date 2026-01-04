@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dongho-jung/taw/internal/config"
+	"github.com/dongho-jung/paw/internal/config"
 )
 
 func TestSendSlack_NilConfig(t *testing.T) {
@@ -72,8 +72,8 @@ func TestSendSlack_Success(t *testing.T) {
 		t.Errorf("Expected text 'Test Message', got '%s'", receivedPayload.Attachments[0].Text)
 	}
 
-	if receivedPayload.Attachments[0].Footer != "TAW" {
-		t.Errorf("Expected footer 'TAW', got '%s'", receivedPayload.Attachments[0].Footer)
+	if receivedPayload.Attachments[0].Footer != "PAW" {
+		t.Errorf("Expected footer 'PAW', got '%s'", receivedPayload.Attachments[0].Footer)
 	}
 }
 

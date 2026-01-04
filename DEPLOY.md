@@ -41,11 +41,11 @@
 
 | OS | Arch | Filename |
 |----|------|----------|
-| linux | amd64 | `taw-linux-amd64` |
-| linux | arm64 | `taw-linux-arm64` |
-| darwin | amd64 | `taw-darwin-amd64` |
-| darwin | arm64 | `taw-darwin-arm64` |
-| windows | amd64 | `taw-windows-amd64.exe` |
+| linux | amd64 | `paw-linux-amd64` |
+| linux | arm64 | `paw-linux-arm64` |
+| darwin | amd64 | `paw-darwin-amd64` |
+| darwin | arm64 | `paw-darwin-arm64` |
+| windows | amd64 | `paw-windows-amd64.exe` |
 
 Build artifacts are retained for 7 days.
 
@@ -73,8 +73,8 @@ Build artifacts are retained for 7 days.
 **Archive Format**:
 | OS | Format | Example |
 |----|--------|---------|
-| linux/darwin | tar.gz | `taw_1.0.0_darwin_arm64.tar.gz` |
-| windows | zip | `taw_1.0.0_windows_amd64.zip` |
+| linux/darwin | tar.gz | `paw_1.0.0_darwin_arm64.tar.gz` |
+| windows | zip | `paw_1.0.0_windows_amd64.zip` |
 
 **Changelog**:
 - Auto-grouping based on Conventional Commits

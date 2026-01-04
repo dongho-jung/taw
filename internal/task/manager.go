@@ -1,4 +1,4 @@
-// Package task provides task management functionality for TAW.
+// Package task provides task management functionality for PAW.
 package task
 
 import (
@@ -8,20 +8,20 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dongho-jung/taw/internal/claude"
-	"github.com/dongho-jung/taw/internal/config"
-	"github.com/dongho-jung/taw/internal/constants"
-	"github.com/dongho-jung/taw/internal/git"
-	"github.com/dongho-jung/taw/internal/github"
-	"github.com/dongho-jung/taw/internal/logging"
-	"github.com/dongho-jung/taw/internal/tmux"
+	"github.com/dongho-jung/paw/internal/claude"
+	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/git"
+	"github.com/dongho-jung/paw/internal/github"
+	"github.com/dongho-jung/paw/internal/logging"
+	"github.com/dongho-jung/paw/internal/tmux"
 )
 
 // Manager handles task lifecycle operations.
 type Manager struct {
 	agentsDir   string
 	projectDir  string
-	tawDir      string
+	pawDir      string
 	isGitRepo   bool
 	config      *config.Config
 	tmuxClient  tmux.Client
@@ -31,11 +31,11 @@ type Manager struct {
 }
 
 // NewManager creates a new task manager.
-func NewManager(agentsDir, projectDir, tawDir string, isGitRepo bool, cfg *config.Config) *Manager {
+func NewManager(agentsDir, projectDir, pawDir string, isGitRepo bool, cfg *config.Config) *Manager {
 	return &Manager{
 		agentsDir:   agentsDir,
 		projectDir:  projectDir,
-		tawDir:      tawDir,
+		pawDir:      pawDir,
 		isGitRepo:   isGitRepo,
 		config:      cfg,
 		gitClient:   git.New(),
@@ -463,7 +463,7 @@ func (m *Manager) SetupWorktree(task *Task) error {
 
 	// Create .claude symlink in worktree (error is non-fatal)
 	claudeLink := filepath.Join(worktreeDir, constants.ClaudeLink)
-	claudeTarget := filepath.Join(m.tawDir, constants.ClaudeLink)
+	claudeTarget := filepath.Join(m.pawDir, constants.ClaudeLink)
 	_ = os.Symlink(claudeTarget, claudeLink)
 
 	// Execute worktree hook if configured (error is non-fatal)

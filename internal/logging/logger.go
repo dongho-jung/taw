@@ -1,8 +1,8 @@
-// Package logging provides unified logging functionality for TAW.
+// Package logging provides unified logging functionality for PAW.
 //
 // Log Levels (0-5):
 //   - L0 (Trace):   Most detailed internal state tracking, loop iterations, variable dumps
-//   - L1 (Debug):   Debugging info, retry attempts, state changes (only when TAW_DEBUG=1)
+//   - L1 (Debug):   Debugging info, retry attempts, state changes (only when PAW_DEBUG=1)
 //   - L2 (Info):    Normal operation flow, task lifecycle events
 //   - L3 (Warn):    Non-fatal issues requiring attention
 //   - L4 (Error):   Errors that may affect functionality
@@ -55,13 +55,13 @@ func (l Level) Name() string {
 	}
 }
 
-// Logger provides logging capabilities for TAW.
+// Logger provides logging capabilities for PAW.
 type Logger interface {
 	// Trace outputs the most detailed tracing information (L0)
 	// Use for: loop iterations, variable dumps, internal state tracking
 	Trace(format string, args ...interface{})
 
-	// Debug outputs debug information (L1, only when TAW_DEBUG=1)
+	// Debug outputs debug information (L1, only when PAW_DEBUG=1)
 	// Use for: retry attempts, state changes, conditional logic paths
 	Debug(format string, args ...interface{})
 
@@ -346,7 +346,7 @@ func (l *fileLogger) Close() error {
 }
 
 // Global logger instance
-var globalLogger Logger = NewStdout(os.Getenv("TAW_DEBUG") == "1")
+var globalLogger Logger = NewStdout(os.Getenv("PAW_DEBUG") == "1")
 
 // SetGlobal sets the global logger instance.
 func SetGlobal(l Logger) {

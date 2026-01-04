@@ -7,15 +7,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dongho-jung/taw/internal/config"
-	"github.com/dongho-jung/taw/internal/constants"
-	"github.com/dongho-jung/taw/internal/logging"
-	"github.com/dongho-jung/taw/internal/notify"
-	"github.com/dongho-jung/taw/internal/tmux"
+	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/logging"
+	"github.com/dongho-jung/paw/internal/notify"
+	"github.com/dongho-jung/paw/internal/tmux"
 )
 
 const (
-	waitMarker             = "TAW_WAITING"
+	waitMarker             = "PAW_WAITING"
 	waitCaptureLines       = 200
 	waitPollInterval       = 2 * time.Second
 	waitMarkerMaxDistance  = 8

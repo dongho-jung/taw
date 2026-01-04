@@ -1,4 +1,4 @@
-// Package tui provides terminal user interface components for TAW.
+// Package tui provides terminal user interface components for PAW.
 package tui
 
 import (
@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/dongho-jung/taw/internal/config"
+	"github.com/dongho-jung/paw/internal/config"
 )
 
 // TaskInput provides an inline text input for task content.

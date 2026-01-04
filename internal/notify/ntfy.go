@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dongho-jung/taw/internal/config"
-	"github.com/dongho-jung/taw/internal/logging"
+	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/logging"
 )
 
 const (
@@ -46,7 +46,7 @@ func SendNtfy(cfg *config.NtfyConfig, title, message string) error {
 	// Set headers for ntfy
 	req.Header.Set("Title", title)
 	req.Header.Set("Priority", "default")
-	req.Header.Set("Tags", "taw")
+	req.Header.Set("Tags", "paw")
 
 	client := &http.Client{Timeout: NtfyTimeout}
 	resp, err := client.Do(req)

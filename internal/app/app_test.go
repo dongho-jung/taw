@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dongho-jung/taw/internal/config"
-	"github.com/dongho-jung/taw/internal/constants"
+	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/constants"
 )
 
 func TestNew(t *testing.T) {
@@ -22,12 +22,12 @@ func TestNew(t *testing.T) {
 		t.Errorf("ProjectDir = %q, want %q", app.ProjectDir, tempDir)
 	}
 
-	expectedTawDir := filepath.Join(tempDir, constants.TawDirName)
-	if app.TawDir != expectedTawDir {
-		t.Errorf("TawDir = %q, want %q", app.TawDir, expectedTawDir)
+	expectedPawDir := filepath.Join(tempDir, constants.PawDirName)
+	if app.PawDir != expectedPawDir {
+		t.Errorf("PawDir = %q, want %q", app.PawDir, expectedPawDir)
 	}
 
-	expectedAgentsDir := filepath.Join(expectedTawDir, constants.AgentsDirName)
+	expectedAgentsDir := filepath.Join(expectedPawDir, constants.AgentsDirName)
 	if app.AgentsDir != expectedAgentsDir {
 		t.Errorf("AgentsDir = %q, want %q", app.AgentsDir, expectedAgentsDir)
 	}
@@ -51,7 +51,7 @@ func TestAppInitialize(t *testing.T) {
 	}
 
 	// Check directories were created
-	dirs := []string{app.TawDir, app.AgentsDir}
+	dirs := []string{app.PawDir, app.AgentsDir}
 	for _, dir := range dirs {
 		info, err := os.Stat(dir)
 		if err != nil {
@@ -62,7 +62,7 @@ func TestAppInitialize(t *testing.T) {
 	}
 
 	// Check memory file was created
-	memoryPath := filepath.Join(app.TawDir, constants.MemoryFileName)
+	memoryPath := filepath.Join(app.PawDir, constants.MemoryFileName)
 	if _, err := os.Stat(memoryPath); err != nil {
 		t.Errorf("Memory file was not created: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestAppHasConfig(t *testing.T) {
 	}
 
 	// Create config file
-	configPath := filepath.Join(app.TawDir, constants.ConfigFileName)
+	configPath := filepath.Join(app.PawDir, constants.ConfigFileName)
 	if err := os.WriteFile(configPath, []byte("work_mode: worktree\n"), 0644); err != nil {
 		t.Fatalf("Failed to create config file: %v", err)
 	}
@@ -130,25 +130,25 @@ func TestAppGetPaths(t *testing.T) {
 	}
 
 	// Test GetLogPath
-	expectedLogPath := filepath.Join(app.TawDir, constants.LogFileName)
+	expectedLogPath := filepath.Join(app.PawDir, constants.LogFileName)
 	if app.GetLogPath() != expectedLogPath {
 		t.Errorf("GetLogPath() = %q, want %q", app.GetLogPath(), expectedLogPath)
 	}
 
 	// Test GetHistoryDir
-	expectedHistoryDir := filepath.Join(app.TawDir, constants.HistoryDirName)
+	expectedHistoryDir := filepath.Join(app.PawDir, constants.HistoryDirName)
 	if app.GetHistoryDir() != expectedHistoryDir {
 		t.Errorf("GetHistoryDir() = %q, want %q", app.GetHistoryDir(), expectedHistoryDir)
 	}
 
 	// Test GetPromptPath
-	expectedPromptPath := filepath.Join(app.TawDir, constants.PromptFileName)
+	expectedPromptPath := filepath.Join(app.PawDir, constants.PromptFileName)
 	if app.GetPromptPath() != expectedPromptPath {
 		t.Errorf("GetPromptPath() = %q, want %q", app.GetPromptPath(), expectedPromptPath)
 	}
 
 	// Test GetGlobalPromptPath
-	expectedGlobalPromptPath := filepath.Join(app.TawDir, constants.GlobalPromptLink)
+	expectedGlobalPromptPath := filepath.Join(app.PawDir, constants.GlobalPromptLink)
 	if app.GetGlobalPromptPath() != expectedGlobalPromptPath {
 		t.Errorf("GetGlobalPromptPath() = %q, want %q", app.GetGlobalPromptPath(), expectedGlobalPromptPath)
 	}
@@ -169,11 +169,11 @@ func TestAppSetters(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	// Test SetTawHome
-	tawHome := "/usr/local/taw"
-	app.SetTawHome(tawHome)
-	if app.TawHome != tawHome {
-		t.Errorf("TawHome = %q, want %q", app.TawHome, tawHome)
+	// Test SetPawHome
+	pawHome := "/usr/local/paw"
+	app.SetPawHome(pawHome)
+	if app.PawHome != pawHome {
+		t.Errorf("PawHome = %q, want %q", app.PawHome, pawHome)
 	}
 
 	// Test SetGitRepo
@@ -233,7 +233,7 @@ func TestAppGetEnvVars(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	app.TawHome = "/usr/local/taw"
+	app.PawHome = "/usr/local/paw"
 
 	taskName := "my-task"
 	worktreeDir := "/path/to/worktree"
@@ -244,10 +244,10 @@ func TestAppGetEnvVars(t *testing.T) {
 	// Check required env vars are present
 	required := map[string]string{
 		"TASK_NAME":    taskName,
-		"TAW_DIR":      app.TawDir,
+		"PAW_DIR":      app.PawDir,
 		"PROJECT_DIR":  app.ProjectDir,
 		"WINDOW_ID":    windowID,
-		"TAW_HOME":     app.TawHome,
+		"PAW_HOME":     app.PawHome,
 		"SESSION_NAME": app.SessionName,
 		"WORKTREE_DIR": worktreeDir,
 	}
@@ -303,7 +303,7 @@ func TestEnsureMemoryFile(t *testing.T) {
 		t.Fatalf("Memory file not created: %v", err)
 	}
 
-	if !strings.Contains(string(data), "TAW Memory") {
+	if !strings.Contains(string(data), "PAW Memory") {
 		t.Errorf("Memory file should contain template content")
 	}
 

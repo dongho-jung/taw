@@ -14,7 +14,7 @@ Before analyzing, ask the user where they want to save the lessons using a quest
 
 **Options**:
 1. **Current directory** - Save to `./CLAUDE.md` (for project-specific learnings in this folder)
-2. **Project (.taw/)** - Save to `.taw/CLAUDE.md` (shared across all tasks in this project)
+2. **Project (.paw/)** - Save to `.paw/CLAUDE.md` (shared across all tasks in this project)
 3. **Global (~/.claude/)** - Save to `~/.claude/CLAUDE.md` (applies to all projects)
 
 Wait for user response before proceeding.
@@ -76,10 +76,10 @@ else
 fi
 ```
 
-### Option 2: Project (.taw/)
+### Option 2: Project (.paw/)
 ```bash
-TAW_DIR="${TAW_DIR:-.taw}"
-TARGET="$TAW_DIR/CLAUDE.md"
+PAW_DIR="${PAW_DIR:-.paw}"
+TARGET="$PAW_DIR/CLAUDE.md"
 
 if [ -f "$TARGET" ]; then
   echo "" >> "$TARGET"

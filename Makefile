@@ -1,7 +1,7 @@
-# TAW Makefile
+# PAW Makefile
 
-BINARY_NAME=taw
-NOTIFY_BINARY=taw-notify
+BINARY_NAME=paw
+NOTIFY_BINARY=paw-notify
 NOTIFY_APP=$(NOTIFY_BINARY).app
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -13,7 +13,7 @@ GO_PATH=$(shell which go 2>/dev/null || echo "/opt/homebrew/bin/go")
 
 # Installation paths
 LOCAL_BIN=~/.local/bin
-LOCAL_SHARE=~/.local/share/taw
+LOCAL_SHARE=~/.local/share/paw
 
 .PHONY: all build build-notify install clean test fmt lint run help
 
@@ -22,7 +22,7 @@ all: build
 ## Build the binary
 build:
 	@echo "Building $(BINARY_NAME)..."
-	$(GO_PATH) build $(BUILD_FLAGS) -o $(BINARY_NAME) ./cmd/taw
+	$(GO_PATH) build $(BUILD_FLAGS) -o $(BINARY_NAME) ./cmd/paw
 
 ## Build the notification helper app bundle (macOS only)
 build-notify:
@@ -30,7 +30,7 @@ build-notify:
 	@rm -rf $(NOTIFY_APP)
 	@mkdir -p $(NOTIFY_APP)/Contents/MacOS
 	@mkdir -p $(NOTIFY_APP)/Contents/Resources
-	@cp cmd/taw-notify/Info.plist $(NOTIFY_APP)/Contents/
+	@cp cmd/paw-notify/Info.plist $(NOTIFY_APP)/Contents/
 	@cp icon.png $(NOTIFY_APP)/Contents/Resources/ 2>/dev/null || true
 	@# Generate icon.icns from icon.png for app icon in notification settings
 	@if [ -f icon.png ]; then \
@@ -50,10 +50,10 @@ build-notify:
 		rm -rf icon.iconset && \
 		echo "Generated icon.icns"; \
 	fi
-	CGO_ENABLED=1 $(GO_PATH) build -o $(NOTIFY_APP)/Contents/MacOS/$(NOTIFY_BINARY) ./cmd/taw-notify
+	CGO_ENABLED=1 $(GO_PATH) build -o $(NOTIFY_APP)/Contents/MacOS/$(NOTIFY_BINARY) ./cmd/paw-notify
 	@echo "Built $(NOTIFY_APP)"
 
-## Install to ~/.local/bin and ~/.local/share/taw
+## Install to ~/.local/bin and ~/.local/share/paw
 install: build build-notify
 	@echo "Installing $(BINARY_NAME) to $(LOCAL_BIN)..."
 	@mkdir -p $(LOCAL_BIN)
@@ -132,7 +132,7 @@ mocks:
 
 ## Show help
 help:
-	@echo "TAW (Tmux + Agent + Worktree) - Build Commands"
+	@echo "PAW (Parallel AI Workers) - Build Commands"
 	@echo ""
 	@echo "Usage:"
 	@echo "  make [target]"

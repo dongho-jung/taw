@@ -12,15 +12,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dongho-jung/taw/internal/claude"
-	"github.com/dongho-jung/taw/internal/config"
-	"github.com/dongho-jung/taw/internal/constants"
-	"github.com/dongho-jung/taw/internal/embed"
-	"github.com/dongho-jung/taw/internal/logging"
-	"github.com/dongho-jung/taw/internal/notify"
-	"github.com/dongho-jung/taw/internal/task"
-	"github.com/dongho-jung/taw/internal/tmux"
-	"github.com/dongho-jung/taw/internal/tui"
+	"github.com/dongho-jung/paw/internal/claude"
+	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/embed"
+	"github.com/dongho-jung/paw/internal/logging"
+	"github.com/dongho-jung/paw/internal/notify"
+	"github.com/dongho-jung/paw/internal/task"
+	"github.com/dongho-jung/paw/internal/tmux"
+	"github.com/dongho-jung/paw/internal/tui"
 )
 
 var toggleNewCmd = &cobra.Command{
@@ -81,8 +81,8 @@ var toggleNewCmd = &cobra.Command{
 		}
 
 		// Send new-task command to the new window
-		tawBin, _ := os.Executable()
-		newTaskCmd := fmt.Sprintf("%s internal new-task %s", tawBin, sessionName)
+		pawBin, _ := os.Executable()
+		newTaskCmd := fmt.Sprintf("%s internal new-task %s", pawBin, sessionName)
 		if err := tm.SendKeysLiteral(windowID, newTaskCmd); err != nil {
 			return fmt.Errorf("failed to send keys: %w", err)
 		}
@@ -139,7 +139,7 @@ var newTaskCmd = &cobra.Command{
 			content := result.Content
 
 			// Save content to temp file for spawn-task to read
-			tmpFile, err := os.CreateTemp("", "taw-task-content-*.txt")
+			tmpFile, err := os.CreateTemp("", "paw-task-content-*.txt")
 			if err != nil {
 				fmt.Printf("Failed to create temp file: %v\n", err)
 				continue
@@ -155,7 +155,7 @@ var newTaskCmd = &cobra.Command{
 			// Save options to temp file
 			var optsTmpPath string
 			if result.Options != nil {
-				optsTmpFile, err := os.CreateTemp("", "taw-task-opts-*.json")
+				optsTmpFile, err := os.CreateTemp("", "paw-task-opts-*.json")
 				if err != nil {
 					_ = os.Remove(tmpFile.Name())
 					fmt.Printf("Failed to create options temp file: %v\n", err)
@@ -174,12 +174,12 @@ var newTaskCmd = &cobra.Command{
 			}
 
 			// Spawn task creation in a separate window (non-blocking)
-			tawBin, _ := os.Executable()
+			pawBin, _ := os.Executable()
 			spawnArgs := []string{"internal", "spawn-task", sessionName, tmpFile.Name()}
 			if optsTmpPath != "" {
 				spawnArgs = append(spawnArgs, optsTmpPath)
 			}
-			spawnCmd := exec.Command(tawBin, spawnArgs...)
+			spawnCmd := exec.Command(pawBin, spawnArgs...)
 			if err := spawnCmd.Start(); err != nil {
 				_ = os.Remove(tmpFile.Name())
 				if optsTmpPath != "" {
@@ -271,7 +271,7 @@ var spawnTaskCmd = &cobra.Command{
 		}
 
 		tm := tmux.New(sessionName)
-		tawBin, _ := os.Executable()
+		pawBin, _ := os.Executable()
 
 		// Create a temporary "⏳" window for progress display
 		progressWindowName := "⏳..."
@@ -297,13 +297,13 @@ var spawnTaskCmd = &cobra.Command{
 		}()
 
 		// Run loading screen inside the progress window
-		loadingCmd := fmt.Sprintf("sh -c %q", fmt.Sprintf("%s internal loading-screen 'Generating task name...'", tawBin))
+		loadingCmd := fmt.Sprintf("sh -c %q", fmt.Sprintf("%s internal loading-screen 'Generating task name...'", pawBin))
 		if err := tm.RespawnPane(progressWindowID+".0", app.ProjectDir, loadingCmd); err != nil {
 			logging.Warn("Failed to run loading screen: %v", err)
 		}
 
 		// Create task (loading screen shows while this runs)
-		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
 		newTask, err := mgr.CreateTask(content)
 		if err != nil {
 			logging.Error("Failed to create task: %v", err)
@@ -322,7 +322,7 @@ var spawnTaskCmd = &cobra.Command{
 		}
 
 		// Handle task (creates actual window, starts Claude)
-		handleCmd := exec.Command(tawBin, "internal", "handle-task", sessionName, newTask.AgentDir)
+		handleCmd := exec.Command(pawBin, "internal", "handle-task", sessionName, newTask.AgentDir)
 		if err := handleCmd.Start(); err != nil {
 			logging.Warn("Failed to start handle-task: %v", err)
 			return fmt.Errorf("failed to start task handler: %w", err)
@@ -373,7 +373,7 @@ var handleTaskCmd = &cobra.Command{
 		logging.Debug("New task detected: name=%s, agentDir=%s", taskName, agentDir)
 
 		// Get task
-		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
 		t, err := mgr.GetTask(taskName)
 		if err != nil {
 			logging.Error("Failed to get task: %v", err)
@@ -487,8 +487,8 @@ var handleTaskCmd = &cobra.Command{
 		projectPrompt, _ := os.ReadFile(app.GetPromptPath())
 		systemPrompt := claude.BuildSystemPrompt(globalPrompt, string(projectPrompt))
 
-		// Get taw binary path for end-task (needed for user prompt)
-		tawBin, _ := os.Executable()
+		// Get paw binary path for end-task (needed for user prompt)
+		pawBin, _ := os.Executable()
 
 		// Build user prompt with context
 		var userPrompt strings.Builder
@@ -546,7 +546,7 @@ var handleTaskCmd = &cobra.Command{
 # Auto-generated end-task script for this task
 # Claude can call this directly without environment variables
 exec "%s" internal end-task "%s" "%s"
-`, tawBin, sessionName, windowID)
+`, pawBin, sessionName, windowID)
 		if err := os.WriteFile(endTaskScriptPath, []byte(endTaskContent), 0755); err != nil {
 			logging.Warn("Failed to create end-task script: %v", err)
 		} else {
@@ -574,18 +574,18 @@ exec "%s" internal end-task "%s" "%s"
 			startAgentContent = fmt.Sprintf(`#!/bin/bash
 # Auto-generated start-agent script for this task (RESUME MODE)
 export TASK_NAME='%s'
-export TAW_DIR='%s'
+export PAW_DIR='%s'
 export PROJECT_DIR='%s'
 %sexport WINDOW_ID='%s'
 export ON_COMPLETE='%s'
-export TAW_HOME='%s'
-export TAW_BIN='%s'
+export PAW_HOME='%s'
+export PAW_BIN='%s'
 export SESSION_NAME='%s'
 
 # Continue the previous Claude session (--continue auto-selects last session)
 exec claude --continue --dangerously-skip-permissions%s
-`, taskName, app.TawDir, app.ProjectDir, worktreeDirExport, windowID,
-				app.Config.OnComplete, filepath.Dir(filepath.Dir(tawBin)), tawBin, sessionName, modelFlag)
+`, taskName, app.PawDir, app.ProjectDir, worktreeDirExport, windowID,
+				app.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBin, sessionName, modelFlag)
 			logging.Log("Session resume: using --continue flag for task %s", taskName)
 		} else {
 			// New session: start fresh with system prompt
@@ -593,12 +593,12 @@ exec claude --continue --dangerously-skip-permissions%s
 			startAgentContent = fmt.Sprintf(`#!/bin/bash
 # Auto-generated start-agent script for this task
 export TASK_NAME='%s'
-export TAW_DIR='%s'
+export PAW_DIR='%s'
 export PROJECT_DIR='%s'
 %sexport WINDOW_ID='%s'
 export ON_COMPLETE='%s'
-export TAW_HOME='%s'
-export TAW_BIN='%s'
+export PAW_HOME='%s'
+export PAW_BIN='%s'
 export SESSION_NAME='%s'
 
 # System prompt is base64 encoded to avoid shell escaping issues
@@ -607,8 +607,8 @@ exec claude --dangerously-skip-permissions%s --system-prompt "$(base64 -d <<'__P
 %s
 __PROMPT_END__
 )"
-`, taskName, app.TawDir, app.ProjectDir, worktreeDirExport, windowID,
-				app.Config.OnComplete, filepath.Dir(filepath.Dir(tawBin)), tawBin, sessionName,
+`, taskName, app.PawDir, app.ProjectDir, worktreeDirExport, windowID,
+				app.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBin, sessionName,
 				modelFlag, encodedPrompt)
 		}
 
@@ -701,7 +701,7 @@ __PROMPT_END__
 		}
 
 		// Start wait watcher to handle window status + notifications when user input is needed
-		watchCmd := exec.Command(tawBin, "internal", "watch-wait", sessionName, windowID, taskName)
+		watchCmd := exec.Command(pawBin, "internal", "watch-wait", sessionName, windowID, taskName)
 		watchCmd.Dir = app.ProjectDir
 		if err := watchCmd.Start(); err != nil {
 			logging.Warn("Failed to start wait watcher: %v", err)

@@ -3,7 +3,7 @@ package tmux
 import (
 	"testing"
 
-	"github.com/dongho-jung/taw/internal/constants"
+	"github.com/dongho-jung/paw/internal/constants"
 )
 
 func TestNew(t *testing.T) {

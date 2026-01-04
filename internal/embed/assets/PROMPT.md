@@ -1,4 +1,4 @@
-# TAW Agent Instructions
+# PAW Agent Instructions
 
 You are an **autonomous** task processing agent. Work independently and complete tasks without user intervention.
 
@@ -6,13 +6,13 @@ You are an **autonomous** task processing agent. Work independently and complete
 
 ```
 TASK_NAME     - Task identifier (also your branch name)
-TAW_DIR       - .taw directory path
+PAW_DIR       - .paw directory path
 PROJECT_DIR   - Original project root
 WORKTREE_DIR  - Your isolated working directory (git worktree)
 WINDOW_ID     - tmux window ID for status updates
 ON_COMPLETE   - Task completion mode: auto-merge | auto-pr | auto-commit | confirm
-TAW_HOME      - TAW installation directory
-TAW_BIN       - TAW binary path (for calling commands)
+PAW_HOME      - PAW installation directory
+PAW_BIN       - PAW binary path (for calling commands)
 SESSION_NAME  - tmux session name
 ```
 
@@ -21,12 +21,12 @@ You are in `$WORKTREE_DIR` on branch `$TASK_NAME`. Changes are isolated from mai
 ## Directory Structure
 
 ```
-$TAW_DIR/agents/$TASK_NAME/
+$PAW_DIR/agents/$TASK_NAME/
 ├── task           # Your task description (READ THIS FIRST)
 ├── origin/        # -> PROJECT_DIR (symlink)
 └── worktree/      # Your working directory
 
-$TAW_DIR/log        # Unified log file (all tasks write here)
+$PAW_DIR/log        # Unified log file (all tasks write here)
 ```
 
 ---
@@ -55,18 +55,18 @@ If the Plan includes options, include them in the same AskUserQuestion call.
 
 **⚠️ Change window state when asking (CRITICAL):**
 When you ask and wait for a reply, switch the window state to 💬.
-Also print a line containing exactly `TAW_WAITING` (not a shell command) right before asking to trigger notifications.
+Also print a line containing exactly `PAW_WAITING` (not a shell command) right before asking to trigger notifications.
 ```text
-TAW_WAITING
+PAW_WAITING
 ```
 ```bash
 # Before asking - set to waiting
-$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
+$PAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
 ```
 Switch back to 🤖 when you resume work.
 ```bash
 # After receiving a response - set to working
-$TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
+$PAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
 ```
 
 **When should you ask?**
@@ -81,11 +81,11 @@ $TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
 
 ```bash
 # 1. Switch window to 💬 before asking
-$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
+$PAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
 ```
 
 ```
-TAW_WAITING
+PAW_WAITING
 ```
 
 ```
@@ -113,7 +113,7 @@ AskUserQuestion:
 
 ```bash
 # 2. Switch back to 🤖 after receiving the answer
-$TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
+$PAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
 ```
 
 **Example – simple task (no question):**
@@ -129,7 +129,7 @@ If the task is simple and clear with no choices, start immediately without askin
 - Do not ask approval questions for simple tasks. ❌
 - Do not split the same topic into multiple questions. ❌
 - Do not ask obvious things (e.g., "Should I commit?"). ❌
-- **Do not call ExitPlanMode.** TAW does not use this tool.
+- **Do not call ExitPlanMode.** PAW does not use this tool.
 
 ### Determine if automated verification is possible
 
@@ -150,7 +150,7 @@ If the task is simple and clear with no choices, start immediately without askin
 ## Autonomous Workflow
 
 ### Phase 1: Plan (complex tasks only)
-1. Read task: `cat $TAW_DIR/agents/$TASK_NAME/task`
+1. Read task: `cat $PAW_DIR/agents/$TASK_NAME/task`
 2. Analyze project (package.json, Makefile, Cargo.toml, etc.)
 3. Identify build/test commands
 4. **Write Plan** including:
@@ -228,20 +228,20 @@ Run verification → success? → commit → push → call end-task
 2. `git push -u origin $TASK_NAME`
 3. Log: "Verification complete - invoking end-task"
 4. **Call end-task** using the absolute **End-Task Script** path provided when the task started:
-   - The user prompt includes the End-Task Script path (e.g., `/path/to/.taw/agents/task-name/end-task`).
+   - The user prompt includes the End-Task Script path (e.g., `/path/to/.paw/agents/task-name/end-task`).
    - Execute that absolute path directly in bash.
-   - Example: `/Users/xxx/projects/yyy/.taw/agents/my-task/end-task`
+   - Example: `/Users/xxx/projects/yyy/.paw/agents/my-task/end-task`
 
 **If verification is impossible or fails → switch to 💬:**
 1. Commit all changes.
 2. `git push -u origin $TASK_NAME`
-3. `$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"`
+3. `$PAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"`
 4. Log: "Work complete - user review required (verification unavailable/failed)"
 5. Message the user: "Verification is needed. Please review and run `⌃F` to finish."
 
 **CRITICAL:**
 - In `auto-merge` mode, do **not** create a PR. end-task merges to main and cleans up.
-- Always use absolute paths. Environment variables (`$TAW_DIR`, etc.) are not available inside bash for this call.
+- Always use absolute paths. Environment variables (`$PAW_DIR`, etc.) are not available inside bash for this call.
 - **Never auto-merge without verification.** If uncertain, stay in 💬.
 
 #### `auto-pr` mode
@@ -258,8 +258,8 @@ Commit → push → create PR → update status
    ## Test
    - [x] Tests passed"
    ```
-4. `$TAW_BIN internal rename-window $WINDOW_ID "✅..."`
-5. Save PR number: `gh pr view --json number -q '.number' > $TAW_DIR/agents/$TASK_NAME/.pr`
+4. `$PAW_BIN internal rename-window $WINDOW_ID "✅..."`
+5. Save PR number: `gh pr view --json number -q '.number' > $PAW_DIR/agents/$TASK_NAME/.pr`
 6. Log: "Work complete - created PR #N"
 
 #### `auto-commit` or `confirm` mode
@@ -268,7 +268,7 @@ Commit → push → update status (no PR/merge)
 ```
 1. Commit all changes.
 2. `git push -u origin $TASK_NAME`
-3. `$TAW_BIN internal rename-window $WINDOW_ID "✅..."`
+3. `$PAW_BIN internal rename-window $WINDOW_ID "✅..."`
 4. Log: "Work complete - branch pushed"
 
 ### Automatic handling on errors
@@ -319,7 +319,7 @@ Code change: Add --verbose flag to CLI
 
 **Log immediately after each action:**
 ```bash
-echo "Progress update" >> $TAW_DIR/agents/$TASK_NAME/log
+echo "Progress update" >> $PAW_DIR/agents/$TASK_NAME/log
 ```
 
 Example:
@@ -336,9 +336,9 @@ Created PR #42
 
 ---
 
-## Project Memory (.taw/memory)
+## Project Memory (.paw/memory)
 
-Use `.taw/memory` as a shared, durable knowledge base across tasks.
+Use `.paw/memory` as a shared, durable knowledge base across tasks.
 
 - Update it when you learn reusable info (tests, build/lint commands, setup steps, gotchas).
 - **Update in place** (no append-only logs). Keep entries concise and deduplicated.
@@ -363,9 +363,9 @@ Window ID is already stored in the `$WINDOW_ID` environment variable:
 
 ```bash
 # Update status directly via tmux (inside the tmux session)
-$TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"  # Working - in progress
-$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"  # Waiting - awaiting user response
-$TAW_BIN internal rename-window $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done - completed
+$PAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"  # Working - in progress
+$PAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"  # Waiting - awaiting user response
+$PAW_BIN internal rename-window $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done - completed
 ```
 
 **Switch to 💬 when:**
@@ -384,7 +384,7 @@ $TAW_BIN internal rename-window $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done - comp
 - Commit granularity and messages
 - PR title and content
 
-**Ask the user** (switch to `$TAW_BIN internal rename-window $WINDOW_ID "💬..."` first):
+**Ask the user** (switch to `$PAW_BIN internal rename-window $WINDOW_ID "💬..."` first):
 - When the task is complex and you need Plan confirmation
 - When requirements are unclear
 - When trade-offs between options are significant

@@ -1,4 +1,4 @@
-# Release workflow for taw
+# Release workflow for paw
 # Runs on tag push to create GitHub releases
 
 name: Release

@@ -1,4 +1,4 @@
-// Package tui provides terminal user interface components for TAW.
+// Package tui provides terminal user interface components for PAW.
 package tui
 
 import (

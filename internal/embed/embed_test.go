@@ -18,8 +18,8 @@ func TestGetHelp(t *testing.T) {
 	}
 
 	// Help file should contain some expected content
-	if !strings.Contains(content, "TAW") && !strings.Contains(content, "taw") {
-		t.Error("Help content should mention TAW/taw")
+	if !strings.Contains(content, "PAW") && !strings.Contains(content, "paw") {
+		t.Error("Help content should mention PAW/paw")
 	}
 }
 

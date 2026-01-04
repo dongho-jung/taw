@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dongho-jung/taw/internal/constants"
+	"github.com/dongho-jung/paw/internal/constants"
 )
 
 func TestParseConfig_SingleLineHook(t *testing.T) {

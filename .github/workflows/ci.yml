@@ -1,4 +1,4 @@
-# CI workflow for taw
+# CI workflow for paw
 # Runs on push to main and pull requests
 
 name: CI
@@ -79,11 +79,11 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          go build -ldflags="-s -w" -o taw-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/taw
+          go build -ldflags="-s -w" -o paw-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/paw
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: taw-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: taw-${{ matrix.goos }}-${{ matrix.goarch }}*
+          name: paw-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: paw-${{ matrix.goos }}-${{ matrix.goarch }}*
           retention-days: 7

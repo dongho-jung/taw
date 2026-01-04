@@ -23,11 +23,11 @@ func TestSoundTypeConstants(t *testing.T) {
 }
 
 func TestAppNameConstants(t *testing.T) {
-	if NotifyAppName != "taw-notify.app" {
-		t.Errorf("NotifyAppName = %q, want %q", NotifyAppName, "taw-notify.app")
+	if NotifyAppName != "paw-notify.app" {
+		t.Errorf("NotifyAppName = %q, want %q", NotifyAppName, "paw-notify.app")
 	}
-	if NotifyBinaryName != "taw-notify" {
-		t.Errorf("NotifyBinaryName = %q, want %q", NotifyBinaryName, "taw-notify")
+	if NotifyBinaryName != "paw-notify" {
+		t.Errorf("NotifyBinaryName = %q, want %q", NotifyBinaryName, "paw-notify")
 	}
 }
 

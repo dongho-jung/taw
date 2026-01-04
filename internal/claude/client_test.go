@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dongho-jung/taw/internal/tmux"
+	"github.com/dongho-jung/paw/internal/tmux"
 )
 
 func TestSanitizeTaskName(t *testing.T) {

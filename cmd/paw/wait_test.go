@@ -29,12 +29,12 @@ func TestDetectWaitInContentAskUserQuestionUI(t *testing.T) {
 func TestDetectWaitInContentMarkerWithoutPrompt(t *testing.T) {
 	content := strings.Join([]string{
 		"Working on it...",
-		"TAW_WAITING",
+		"PAW_WAITING",
 	}, "\n")
 
 	waitDetected, reason := detectWaitInContent(content)
 	if !waitDetected {
-		t.Fatalf("expected wait to be detected for TAW_WAITING marker")
+		t.Fatalf("expected wait to be detected for PAW_WAITING marker")
 	}
 	if reason != "marker" {
 		t.Fatalf("expected reason marker, got %q", reason)

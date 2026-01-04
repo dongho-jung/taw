@@ -1,4 +1,4 @@
-// Package service provides business logic services for TAW.
+// Package service provides business logic services for PAW.
 package service
 
 import (
@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dongho-jung/taw/internal/claude"
-	"github.com/dongho-jung/taw/internal/logging"
+	"github.com/dongho-jung/paw/internal/claude"
+	"github.com/dongho-jung/paw/internal/logging"
 )
 
 // HistoryService handles task history operations.

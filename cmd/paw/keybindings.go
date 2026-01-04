@@ -3,15 +3,15 @@ package main
 import (
 	"fmt"
 
-	"github.com/dongho-jung/taw/internal/tmux"
+	"github.com/dongho-jung/paw/internal/tmux"
 )
 
-// buildKeybindings creates tmux keybindings for TAW.
+// buildKeybindings creates tmux keybindings for PAW.
 // Keyboard shortcuts:
 //   - Ctrl+N: New task
 //   - Ctrl+K: Send Ctrl+C (double-press to cancel task)
 //   - Ctrl+F: Finish task
-//   - Ctrl+Q: Quit taw
+//   - Ctrl+Q: Quit paw
 //   - Ctrl+T: Toggle tasks
 //   - Ctrl+O: Toggle logs
 //   - Ctrl+G: Toggle git status
@@ -20,18 +20,18 @@ import (
 //   - Ctrl+,: Toggle setup (rerun setup wizard)
 //   - Alt+Left/Right: Move window
 //   - Alt+Tab: Cycle pane
-func buildKeybindings(tawBin, sessionName string) []tmux.BindOpts {
+func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	// Command shortcuts
-	cmdNewTask := fmt.Sprintf("run-shell '%s internal toggle-new %s'", tawBin, sessionName)
-	cmdCtrlC := fmt.Sprintf("run-shell '%s internal ctrl-c %s'", tawBin, sessionName)
-	cmdDoneTask := fmt.Sprintf("run-shell '%s internal done-task %s'", tawBin, sessionName)
+	cmdNewTask := fmt.Sprintf("run-shell '%s internal toggle-new %s'", pawBin, sessionName)
+	cmdCtrlC := fmt.Sprintf("run-shell '%s internal ctrl-c %s'", pawBin, sessionName)
+	cmdDoneTask := fmt.Sprintf("run-shell '%s internal done-task %s'", pawBin, sessionName)
 	cmdQuit := "detach-client"
-	cmdToggleTasks := fmt.Sprintf("run-shell '%s internal toggle-task-list %s'", tawBin, sessionName)
-	cmdToggleLogs := fmt.Sprintf("run-shell '%s internal toggle-log %s'", tawBin, sessionName)
-	cmdToggleGitStatus := fmt.Sprintf("run-shell '%s internal toggle-git-status %s'", tawBin, sessionName)
-	cmdToggleBottom := fmt.Sprintf("run-shell '%s internal popup-shell %s'", tawBin, sessionName)
-	cmdToggleHelp := fmt.Sprintf("run-shell '%s internal toggle-help %s'", tawBin, sessionName)
-	cmdToggleSetup := fmt.Sprintf("run-shell '%s internal toggle-setup %s'", tawBin, sessionName)
+	cmdToggleTasks := fmt.Sprintf("run-shell '%s internal toggle-task-list %s'", pawBin, sessionName)
+	cmdToggleLogs := fmt.Sprintf("run-shell '%s internal toggle-log %s'", pawBin, sessionName)
+	cmdToggleGitStatus := fmt.Sprintf("run-shell '%s internal toggle-git-status %s'", pawBin, sessionName)
+	cmdToggleBottom := fmt.Sprintf("run-shell '%s internal popup-shell %s'", pawBin, sessionName)
+	cmdToggleHelp := fmt.Sprintf("run-shell '%s internal toggle-help %s'", pawBin, sessionName)
+	cmdToggleSetup := fmt.Sprintf("run-shell '%s internal toggle-setup %s'", pawBin, sessionName)
 
 	// Ctrl+. sends F2 to open task options (used in new task window)
 	cmdTaskOpts := "send-keys F2"

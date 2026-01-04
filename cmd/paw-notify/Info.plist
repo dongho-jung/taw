@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.taw.notify</string>
+    <string>com.paw.notify</string>
     <key>CFBundleName</key>
-    <string>TAW Notify</string>
+    <string>PAW Notify</string>
     <key>CFBundleDisplayName</key>
-    <string>TAW Notify</string>
+    <string>PAW Notify</string>
     <key>CFBundleExecutable</key>
-    <string>taw-notify</string>
+    <string>paw-notify</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleIconFile</key>

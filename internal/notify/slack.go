@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dongho-jung/taw/internal/config"
-	"github.com/dongho-jung/taw/internal/logging"
+	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/logging"
 )
 
 const (
@@ -45,10 +45,10 @@ func SendSlack(cfg *config.SlackConfig, title, message string) error {
 	payload := slackMessage{
 		Attachments: []slackAttachment{
 			{
-				Color:  "#36a64f", // Green color for TAW notifications
+				Color:  "#36a64f", // Green color for PAW notifications
 				Title:  title,
 				Text:   message,
-				Footer: "TAW",
+				Footer: "PAW",
 			},
 		},
 	}

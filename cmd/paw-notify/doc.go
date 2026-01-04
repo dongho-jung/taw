@@ -10,6 +10,6 @@ import (
 )
 
 func main() {
-	fmt.Fprintln(os.Stderr, "taw-notify is only supported on macOS")
+	fmt.Fprintln(os.Stderr, "paw-notify is only supported on macOS")
 	os.Exit(1)
 }

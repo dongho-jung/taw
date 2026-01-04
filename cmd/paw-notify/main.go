@@ -1,11 +1,11 @@
 //go:build darwin
 
-// taw-notify is a helper binary for macOS notifications with action buttons.
+// paw-notify is a helper binary for macOS notifications with action buttons.
 // It runs as an app bundle to receive proper notification permissions.
 //
 // Usage:
 //
-//	taw-notify --title "Title" --body "Body" [--icon /path/to/icon.png] [--action "Accept"] [--action "Decline"]
+//	paw-notify --title "Title" --body "Body" [--icon /path/to/icon.png] [--action "Accept"] [--action "Decline"]
 //
 // Output:
 //
@@ -122,7 +122,7 @@ void setupNotificationCenter(int actionCount, const char** actionTitles) {
             [actions addObject:action];
         }
 
-        UNNotificationCategory *category = [UNNotificationCategory categoryWithIdentifier:@"TAW_PROMPT"
+        UNNotificationCategory *category = [UNNotificationCategory categoryWithIdentifier:@"PAW_PROMPT"
                                                                                    actions:actions
                                                                          intentIdentifiers:@[]
                                                                                    options:UNNotificationCategoryOptionCustomDismissAction];
@@ -140,7 +140,7 @@ void sendNotification(const char* title, const char* body, const char* iconPath,
     content.sound = [UNNotificationSound defaultSound];
 
     if (hasActions) {
-        content.categoryIdentifier = @"TAW_PROMPT";
+        content.categoryIdentifier = @"PAW_PROMPT";
     }
 
     // Add icon as attachment if provided

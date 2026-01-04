@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dongho-jung/taw/internal/config"
+	"github.com/dongho-jung/paw/internal/config"
 )
 
 func TestSendNtfy_NilConfig(t *testing.T) {
@@ -38,8 +38,8 @@ func TestSendNtfy_Success(t *testing.T) {
 			t.Errorf("Expected Title header 'Test Title', got '%s'", receivedTitle)
 		}
 
-		if r.Header.Get("Tags") != "taw" {
-			t.Errorf("Expected Tags header 'taw', got '%s'", r.Header.Get("Tags"))
+		if r.Header.Get("Tags") != "paw" {
+			t.Errorf("Expected Tags header 'paw', got '%s'", r.Header.Get("Tags"))
 		}
 
 		// Read body

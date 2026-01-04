@@ -1,4 +1,4 @@
-# TAW Agent Instructions (Non-Git Mode)
+# PAW Agent Instructions (Non-Git Mode)
 
 You are an **autonomous** task processing agent. Work independently and complete tasks without user intervention.
 
@@ -6,11 +6,11 @@ You are an **autonomous** task processing agent. Work independently and complete
 
 ```
 TASK_NAME     - Task identifier
-TAW_DIR       - .taw directory path
+PAW_DIR       - .paw directory path
 PROJECT_DIR   - Project root (your working directory)
 WINDOW_ID     - tmux window ID for status updates
 ON_COMPLETE   - Task completion mode (less relevant for non-git)
-TAW_HOME      - TAW installation directory
+PAW_HOME      - PAW installation directory
 SESSION_NAME  - tmux session name
 ```
 
@@ -19,10 +19,10 @@ You are in `$PROJECT_DIR`. Changes are made directly to project files.
 ## Directory Structure
 
 ```
-$TAW_DIR/agents/$TASK_NAME/
+$PAW_DIR/agents/$TASK_NAME/
 └── task           # Your task description (READ THIS FIRST)
 
-$TAW_DIR/log        # Unified log file (all tasks write here)
+$PAW_DIR/log        # Unified log file (all tasks write here)
 ```
 
 ---
@@ -49,18 +49,18 @@ If the Plan includes options, include them in the same AskUserQuestion call.
 
 **⚠️ Change window state when asking (CRITICAL):**
 When you ask and wait for a reply, switch the window state to 💬.
-Also print a line containing exactly `TAW_WAITING` (not a shell command) right before asking to trigger notifications.
+Also print a line containing exactly `PAW_WAITING` (not a shell command) right before asking to trigger notifications.
 ```text
-TAW_WAITING
+PAW_WAITING
 ```
 ```bash
 # Before asking - set to waiting
-$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
+$PAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
 ```
 Switch back to 🤖 when you resume work.
 ```bash
 # After receiving a response - set to working
-$TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
+$PAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
 ```
 
 ---
@@ -68,7 +68,7 @@ $TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
 ## Autonomous Workflow
 
 ### Phase 1: Plan (complex tasks only)
-1. Read task: `cat $TAW_DIR/agents/$TASK_NAME/task`
+1. Read task: `cat $PAW_DIR/agents/$TASK_NAME/task`
 2. Analyze project structure
 3. Identify test commands if available
 4. **Write Plan** including:
@@ -113,7 +113,7 @@ Final tests → update status → write completion log
 ```
 
 1. Verify all changes
-2. `$TAW_BIN internal rename-window $WINDOW_ID "✅..."`
+2. `$PAW_BIN internal rename-window $WINDOW_ID "✅..."`
 3. Write the completion log
 
 ### Automatic handling on errors
@@ -164,7 +164,7 @@ Code change: Add --verbose flag to CLI
 
 **Log immediately after each action:**
 ```bash
-echo "Progress update" >> $TAW_DIR/agents/$TASK_NAME/log
+echo "Progress update" >> $PAW_DIR/agents/$TASK_NAME/log
 ```
 
 Example:
@@ -181,9 +181,9 @@ Work complete
 
 ---
 
-## Project Memory (.taw/memory)
+## Project Memory (.paw/memory)
 
-Use `.taw/memory` as a shared, durable knowledge base across tasks.
+Use `.paw/memory` as a shared, durable knowledge base across tasks.
 
 - Update it when you learn reusable info (tests, build/lint commands, setup steps, gotchas).
 - **Update in place** (no append-only logs). Keep entries concise and deduplicated.
@@ -208,9 +208,9 @@ Window ID is already stored in the `$WINDOW_ID` environment variable:
 
 ```bash
 # Update status directly via tmux (inside the tmux session)
-$TAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"  # Working
-$TAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"  # Need help
-$TAW_BIN internal rename-window $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done
+$PAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"  # Working
+$PAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"  # Need help
+$PAW_BIN internal rename-window $WINDOW_ID "✅${TASK_NAME:0:12}"  # Done
 ```
 
 **Switch to 💬 when:**

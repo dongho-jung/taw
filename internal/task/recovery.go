@@ -1,4 +1,4 @@
-// Package task provides task management functionality for TAW.
+// Package task provides task management functionality for PAW.
 package task
 
 import (
@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dongho-jung/taw/internal/git"
+	"github.com/dongho-jung/paw/internal/git"
 )
 
 // RecoveryManager handles recovery of corrupted tasks.

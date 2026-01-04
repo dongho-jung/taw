@@ -1,9 +1,9 @@
-# GoReleaser configuration for taw
+# GoReleaser configuration for paw
 # Documentation: https://goreleaser.com
 
 version: 2
 
-project_name: taw
+project_name: paw
 
 before:
   hooks:
@@ -11,9 +11,9 @@ before:
     - go mod download
 
 builds:
-  - id: taw
-    main: ./cmd/taw
-    binary: taw
+  - id: paw
+    main: ./cmd/paw
+    binary: paw
     env:
       - CGO_ENABLED=0
     goos:
@@ -85,20 +85,20 @@ brews:
       owner: dongho-jung
       name: homebrew-tap
     directory: Formula
-    homepage: https://github.com/dongho-jung/taw
+    homepage: https://github.com/dongho-jung/paw
     description: A project management system built on Claude Code
     license: MIT
     dependencies:
       - name: tmux
     install: |
-      bin.install "taw"
+      bin.install "paw"
     test: |
-      system "#{bin}/taw", "version"
+      system "#{bin}/paw", "version"
 
 release:
   github:
     owner: dongho-jung
-    name: taw
+    name: paw
   draft: false
   prerelease: auto
   mode: replace
@@ -108,5 +108,5 @@ release:
 
     ### Homebrew (macOS/Linux)
     ```bash
-    brew install dongho-jung/tap/taw
+    brew install dongho-jung/tap/paw
     ```

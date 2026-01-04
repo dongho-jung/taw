@@ -1,4 +1,4 @@
-// Package embed provides embedded assets for TAW.
+// Package embed provides embedded assets for PAW.
 package embed
 
 import (
@@ -33,7 +33,7 @@ func GetPrompt(isGitRepo bool) (string, error) {
 	return string(data), nil
 }
 
-// GetTmuxConfig returns the TAW-specific tmux configuration content.
+// GetTmuxConfig returns the PAW-specific tmux configuration content.
 func GetTmuxConfig() (string, error) {
 	data, err := Assets.ReadFile("assets/tmux.conf")
 	if err != nil {
@@ -43,7 +43,7 @@ func GetTmuxConfig() (string, error) {
 }
 
 // WriteClaudeFiles writes the embedded claude directory to the target path.
-// This copies settings and slash commands to .taw/.claude/
+// This copies settings and slash commands to .paw/.claude/
 func WriteClaudeFiles(targetDir string) error {
 	// Create target directory
 	if err := os.MkdirAll(targetDir, 0755); err != nil {

@@ -5,19 +5,19 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dongho-jung/taw/internal/config"
+	"github.com/dongho-jung/paw/internal/config"
 )
 
 func TestFindMergedTasks_ExternallyCleanedUp(t *testing.T) {
 	// Create temp directory for test
-	tempDir, err := os.MkdirTemp("", "taw-test-*")
+	tempDir, err := os.MkdirTemp("", "paw-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	// Create .taw/agents directory
-	agentsDir := filepath.Join(tempDir, ".taw", "agents")
+	// Create .paw/agents directory
+	agentsDir := filepath.Join(tempDir, ".paw", "agents")
 	if err := os.MkdirAll(agentsDir, 0755); err != nil {
 		t.Fatalf("Failed to create agents dir: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestFindMergedTasks_ExternallyCleanedUp(t *testing.T) {
 	}
 
 	// Create manager (git repo = true, but we'll use a mock git client)
-	mgr := NewManager(agentsDir, tempDir, filepath.Join(tempDir, ".taw"), true, cfg)
+	mgr := NewManager(agentsDir, tempDir, filepath.Join(tempDir, ".paw"), true, cfg)
 
 	// Call FindMergedTasks
 	merged, err := mgr.FindMergedTasks()

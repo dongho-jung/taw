@@ -1,4 +1,4 @@
-// Package tui provides terminal user interface components for TAW.
+// Package tui provides terminal user interface components for PAW.
 package tui
 
 import (
@@ -12,8 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 
-	"github.com/dongho-jung/taw/internal/constants"
-	"github.com/dongho-jung/taw/internal/task"
+	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/task"
 )
 
 // TaskItemStatus represents the status of a task item.
@@ -65,19 +65,19 @@ type TaskListUI struct {
 	historyDir    string
 	projectDir    string
 	sessionName   string
-	tawDir        string
+	pawDir        string
 	isGitRepo     bool
 	previewScroll int
 }
 
 // NewTaskListUI creates a new task list UI.
-func NewTaskListUI(agentsDir, historyDir, projectDir, sessionName, tawDir string, isGitRepo bool) *TaskListUI {
+func NewTaskListUI(agentsDir, historyDir, projectDir, sessionName, pawDir string, isGitRepo bool) *TaskListUI {
 	return &TaskListUI{
 		agentsDir:   agentsDir,
 		historyDir:  historyDir,
 		projectDir:  projectDir,
 		sessionName: sessionName,
-		tawDir:      tawDir,
+		pawDir:      pawDir,
 		isGitRepo:   isGitRepo,
 	}
 }
@@ -619,8 +619,8 @@ func (m *TaskListUI) Result() (TaskListAction, *TaskItem) {
 }
 
 // RunTaskListUI runs the task list UI and returns the action and selected item.
-func RunTaskListUI(agentsDir, historyDir, projectDir, sessionName, tawDir string, isGitRepo bool) (TaskListAction, *TaskItem, error) {
-	m := NewTaskListUI(agentsDir, historyDir, projectDir, sessionName, tawDir, isGitRepo)
+func RunTaskListUI(agentsDir, historyDir, projectDir, sessionName, pawDir string, isGitRepo bool) (TaskListAction, *TaskItem, error) {
+	m := NewTaskListUI(agentsDir, historyDir, projectDir, sessionName, pawDir, isGitRepo)
 	p := tea.NewProgram(m)
 
 	finalModel, err := p.Run()

@@ -1,4 +1,4 @@
-// Package constants defines shared constants used throughout the TAW application.
+// Package constants defines shared constants used throughout the PAW application.
 package constants
 
 import (
@@ -82,7 +82,7 @@ const (
 
 // Directory and file names
 const (
-	TawDirName       = ".taw"
+	PawDirName       = ".paw"
 	AgentsDirName    = "agents"
 	HistoryDirName   = "history"
 	ConfigFileName   = "config"
@@ -100,7 +100,7 @@ const (
 
 // Tmux related constants
 const (
-	TmuxSocketPrefix = "taw-"
+	TmuxSocketPrefix = "paw-"
 	NewWindowName    = EmojiNew + "new"
 )
 

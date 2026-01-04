@@ -1,4 +1,4 @@
-// Package main provides the entry point for the TAW CLI.
+// Package main provides the entry point for the PAW CLI.
 package main
 
 import (
@@ -11,14 +11,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dongho-jung/taw/internal/app"
-	"github.com/dongho-jung/taw/internal/config"
-	"github.com/dongho-jung/taw/internal/constants"
-	"github.com/dongho-jung/taw/internal/embed"
-	"github.com/dongho-jung/taw/internal/git"
-	"github.com/dongho-jung/taw/internal/logging"
-	"github.com/dongho-jung/taw/internal/task"
-	"github.com/dongho-jung/taw/internal/tmux"
+	"github.com/dongho-jung/paw/internal/app"
+	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/embed"
+	"github.com/dongho-jung/paw/internal/git"
+	"github.com/dongho-jung/paw/internal/logging"
+	"github.com/dongho-jung/paw/internal/task"
+	"github.com/dongho-jung/paw/internal/tmux"
 )
 
 var (
@@ -36,9 +36,9 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "taw",
-	Short: "TAW - Tmux + Agent + Worktree",
-	Long: `TAW is a Claude Code-based autonomous task execution system.
+	Use:   "paw",
+	Short: "PAW - Parallel AI Workers",
+	Long: `PAW is a Claude Code-based autonomous task execution system.
 It manages tasks in tmux sessions with optional git worktree isolation.`,
 	RunE:         runMain,
 	SilenceUsage: true,
@@ -78,20 +78,20 @@ var versionCmd = &cobra.Command{
 
 // printVersion prints the version and commit information
 func printVersion() {
-	fmt.Printf("taw %s (%s)\n", Version, Commit)
+	fmt.Printf("paw %s (%s)\n", Version, Commit)
 }
 
 var cleanCmd = &cobra.Command{
 	Use:   "clean",
-	Short: "Clean up all TAW resources",
-	Long:  "Remove all worktrees, branches, tmux session, and .taw directory",
+	Short: "Clean up all PAW resources",
+	Long:  "Remove all worktrees, branches, tmux session, and .paw directory",
 	RunE:  runClean,
 }
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "Run the setup wizard",
-	Long:  "Configure TAW settings for the current project",
+	Long:  "Configure PAW settings for the current project",
 	RunE:  runSetup,
 }
 
@@ -114,12 +114,12 @@ func runMain(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create app: %w", err)
 	}
 
-	// Set TAW home
-	tawHome, err := getTawHome()
+	// Set PAW home
+	pawHome, err := getPawHome()
 	if err != nil {
-		return fmt.Errorf("failed to get TAW home: %w", err)
+		return fmt.Errorf("failed to get PAW home: %w", err)
 	}
-	application.SetTawHome(tawHome)
+	application.SetPawHome(pawHome)
 
 	// Detect git repo
 	gitClient := git.New()
@@ -133,7 +133,7 @@ func runMain(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Initialize .taw directory
+	// Initialize .paw directory
 	if err := application.Initialize(); err != nil {
 		return fmt.Errorf("failed to initialize: %w", err)
 	}
@@ -144,7 +144,7 @@ func runMain(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to setup logging: %w", err)
 	}
 	defer func() { _ = logger.Close() }()
-	logger.SetScript("taw")
+	logger.SetScript("paw")
 	logging.SetGlobal(logger)
 
 	// Check if config exists, run setup if not
@@ -185,7 +185,7 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 	logging.Debug("Starting new tmux session...")
 
 	// Clean up merged tasks before starting new session
-	mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+	mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
 
 	// Prune stale worktree entries first to prevent git errors
 	mgr.PruneWorktrees()
@@ -200,10 +200,10 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 		}
 	}
 
-	// Get taw binary path for initial command
-	tawBin, err := os.Executable()
+	// Get paw binary path for initial command
+	pawBin, err := os.Executable()
 	if err != nil {
-		tawBin = "taw"
+		pawBin = "paw"
 	}
 
 	// Create session with a shell (not the new-task command directly)
@@ -224,12 +224,12 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 
 	// Setup git repo marker if applicable
 	if app.IsGitRepo {
-		markerPath := filepath.Join(app.TawDir, constants.GitRepoMarker)
+		markerPath := filepath.Join(app.PawDir, constants.GitRepoMarker)
 		_ = os.WriteFile(markerPath, []byte{}, 0644)
 	}
 
-	// Write embedded claude files to .taw/.claude/
-	claudeDir := filepath.Join(app.TawDir, constants.ClaudeLink)
+	// Write embedded claude files to .paw/.claude/
+	claudeDir := filepath.Join(app.PawDir, constants.ClaudeLink)
 	if err := embed.WriteClaudeFiles(claudeDir); err != nil {
 		logging.Warn("Failed to write claude files: %v", err)
 	}
@@ -249,7 +249,7 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 			// Remove old tab-lock so handle-task can create a new one
 			_ = t.RemoveTabLock()
 			// Re-run handle-task to create window and restart Claude
-			handleCmd := exec.Command(tawBin, "internal", "handle-task", app.SessionName, t.AgentDir)
+			handleCmd := exec.Command(pawBin, "internal", "handle-task", app.SessionName, t.AgentDir)
 			if err := handleCmd.Start(); err != nil {
 				logging.Warn("Failed to reopen task %s: %v", t.Name, err)
 			} else {
@@ -267,7 +267,7 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 
 	// Send new-task command to the _ window
 	// Use SendKeysLiteral for the command and SendKeys for Enter
-	newTaskCmd := fmt.Sprintf("%s internal new-task %s", tawBin, app.SessionName)
+	newTaskCmd := fmt.Sprintf("%s internal new-task %s", pawBin, app.SessionName)
 	_ = tm.SendKeysLiteral(app.SessionName+":"+constants.NewWindowName, newTaskCmd)
 	_ = tm.SendKeys(app.SessionName+":"+constants.NewWindowName, "Enter")
 
@@ -280,7 +280,7 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 	logging.Debug("Running pre-attach cleanup and recovery...")
 
 	// Run cleanup and recovery before attaching
-	mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+	mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
 	mgr.SetTmuxClient(tm)
 
 	// Prune stale worktree entries first to prevent git errors
@@ -339,13 +339,13 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 	incomplete, err := mgr.FindIncompleteTasks(app.SessionName)
 	if err == nil && len(incomplete) > 0 {
 		logging.Log("Found %d incomplete tasks to reopen", len(incomplete))
-		tawBin, _ := os.Executable()
+		pawBin, _ := os.Executable()
 		for _, t := range incomplete {
 			logging.Log("Reopening incomplete task: %s (reason: window not found)", t.Name)
 			// Remove old tab-lock so handle-task can create a new one
 			_ = t.RemoveTabLock()
 			// Re-run handle-task to create window and restart Claude
-			handleCmd := exec.Command(tawBin, "internal", "handle-task", app.SessionName, t.AgentDir)
+			handleCmd := exec.Command(pawBin, "internal", "handle-task", app.SessionName, t.AgentDir)
 			if err := handleCmd.Start(); err != nil {
 				logging.Warn("Failed to reopen task %s: %v", t.Name, err)
 			} else {
@@ -358,11 +358,11 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 	stopped, err := mgr.FindStoppedTasks()
 	if err == nil && len(stopped) > 0 {
 		logging.Log("Found %d stopped agents to resume", len(stopped))
-		tawBin, _ := os.Executable()
+		pawBin, _ := os.Executable()
 		for _, info := range stopped {
 			logging.Log("Resuming stopped agent: %s (window=%s)", info.Task.Name, info.WindowID)
 			// Run resume-agent to restart Claude with --continue flag
-			resumeCmd := exec.Command(tawBin, "internal", "resume-agent", app.SessionName, info.WindowID, info.Task.AgentDir)
+			resumeCmd := exec.Command(pawBin, "internal", "resume-agent", app.SessionName, info.WindowID, info.Task.AgentDir)
 			if err := resumeCmd.Start(); err != nil {
 				logging.Warn("Failed to resume agent %s: %v", info.Task.Name, err)
 			} else {
@@ -379,14 +379,14 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 // reapplyTmuxConfig re-applies tmux configuration after config reload.
 // This is a subset of setupTmuxConfig that updates settings that depend on config.
 func reapplyTmuxConfig(app *app.App, tm tmux.Client) error {
-	// Get path to taw binary
-	tawBin, err := os.Executable()
+	// Get path to paw binary
+	pawBin, err := os.Executable()
 	if err != nil {
-		tawBin = "taw"
+		pawBin = "paw"
 	}
 
 	// Re-apply keybindings (in case session name changed or for consistency)
-	bindings := buildKeybindings(tawBin, app.SessionName)
+	bindings := buildKeybindings(pawBin, app.SessionName)
 	for _, b := range bindings {
 		if err := tm.Bind(b); err != nil {
 			logging.Debug("Failed to bind %s: %v", b.Key, err)
@@ -398,10 +398,10 @@ func reapplyTmuxConfig(app *app.App, tm tmux.Client) error {
 
 // setupTmuxConfig configures tmux keybindings and options
 func setupTmuxConfig(app *app.App, tm tmux.Client) error {
-	// Get path to taw binary
-	tawBin, err := os.Executable()
+	// Get path to paw binary
+	pawBin, err := os.Executable()
 	if err != nil {
-		tawBin = "taw"
+		pawBin = "paw"
 	}
 
 	// Change prefix to an unused key (M-F12) so C-b is available for toggle-bottom
@@ -451,7 +451,7 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	})
 
 	// Setup keybindings (English + Korean layouts)
-	bindings := buildKeybindings(tawBin, app.SessionName)
+	bindings := buildKeybindings(pawBin, app.SessionName)
 	for _, b := range bindings {
 		if err := tm.Bind(b); err != nil {
 			logging.Debug("Failed to bind %s: %v", b.Key, err)
@@ -462,8 +462,8 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 }
 
 
-// updateGitignore adds .taw gitignore rules if not already present
-// Rules: .taw/ (ignore all), !.taw/config (keep config), !.taw/memory (keep memory)
+// updateGitignore adds .paw gitignore rules if not already present
+// Rules: .paw/ (ignore all), !.paw/config (keep config), !.paw/memory (keep memory)
 func updateGitignore(projectDir string) {
 	gitignorePath := filepath.Join(projectDir, ".gitignore")
 
@@ -471,33 +471,33 @@ func updateGitignore(projectDir string) {
 	content, _ := os.ReadFile(gitignorePath)
 	contentStr := string(content)
 
-	// Check if proper .taw rules already exist
-	// Need: .taw/ + !.taw/config + !.taw/memory
+	// Check if proper .paw rules already exist
+	// Need: .paw/ + !.paw/config + !.paw/memory
 	lines := strings.Split(contentStr, "\n")
-	hasTawIgnore := false
+	hasPawIgnore := false
 	hasConfigException := false
 	hasMemoryException := false
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == ".taw" || line == ".taw/" {
-			hasTawIgnore = true
+		if line == ".paw" || line == ".paw/" {
+			hasPawIgnore = true
 		}
-		if line == "!.taw/config" {
+		if line == "!.paw/config" {
 			hasConfigException = true
 		}
-		if line == "!.taw/memory" {
+		if line == "!.paw/memory" {
 			hasMemoryException = true
 		}
 	}
 
 	// If all rules exist, nothing to do
-	if hasTawIgnore && hasConfigException && hasMemoryException {
+	if hasPawIgnore && hasConfigException && hasMemoryException {
 		return
 	}
 
 	// Prompt user to add rules (default Y)
-	fmt.Print("Add .taw/ gitignore rules (keeps config and memory tracked)? [Y/n]: ")
+	fmt.Print("Add .paw/ gitignore rules (keeps config and memory tracked)? [Y/n]: ")
 	var answer string
 	_, _ = fmt.Scanln(&answer)
 	answer = strings.TrimSpace(strings.ToLower(answer))
@@ -519,23 +519,23 @@ func updateGitignore(projectDir string) {
 		_, _ = f.WriteString("\n")
 	}
 
-	// Add header comment if adding .taw/ for the first time
-	if !hasTawIgnore {
-		_, _ = f.WriteString("\n# TAW\n")
-		_, _ = f.WriteString(".taw/\n")
+	// Add header comment if adding .paw/ for the first time
+	if !hasPawIgnore {
+		_, _ = f.WriteString("\n# PAW\n")
+		_, _ = f.WriteString(".paw/\n")
 	}
 	if !hasConfigException {
-		_, _ = f.WriteString("!.taw/config\n")
+		_, _ = f.WriteString("!.paw/config\n")
 	}
 	if !hasMemoryException {
-		_, _ = f.WriteString("!.taw/memory\n")
+		_, _ = f.WriteString("!.paw/memory\n")
 	}
 }
 
-// getTawHome returns the TAW installation directory
-func getTawHome() (string, error) {
-	// Check TAW_HOME env var
-	if home := os.Getenv("TAW_HOME"); home != "" {
+// getPawHome returns the PAW installation directory
+func getPawHome() (string, error) {
+	// Check PAW_HOME env var
+	if home := os.Getenv("PAW_HOME"); home != "" {
 		return home, nil
 	}
 
@@ -551,11 +551,11 @@ func getTawHome() (string, error) {
 		return "", err
 	}
 
-	// TAW home is the directory containing the binary
+	// PAW home is the directory containing the binary
 	return filepath.Dir(exe), nil
 }
 
-// runClean removes all TAW resources
+// runClean removes all PAW resources
 func runClean(cmd *cobra.Command, args []string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -577,7 +577,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 
 	tm := tmux.New(application.SessionName)
 
-	fmt.Println("Cleaning up TAW resources...")
+	fmt.Println("Cleaning up PAW resources...")
 
 	// Kill tmux session if exists
 	if tm.HasSession(application.SessionName) {
@@ -587,7 +587,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 
 	// Clean up tasks
 	if application.IsGitRepo {
-		mgr := task.NewManager(application.AgentsDir, application.ProjectDir, application.TawDir, application.IsGitRepo, application.Config)
+		mgr := task.NewManager(application.AgentsDir, application.ProjectDir, application.PawDir, application.IsGitRepo, application.Config)
 
 		// Prune stale worktree entries first to prevent git errors
 		mgr.PruneWorktrees()
@@ -599,9 +599,9 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Remove .taw directory
-	fmt.Println("Removing .taw directory...")
-	_ = os.RemoveAll(application.TawDir)
+	// Remove .paw directory
+	fmt.Println("Removing .paw directory...")
+	_ = os.RemoveAll(application.PawDir)
 
 	fmt.Println("Done!")
 	return nil
@@ -622,7 +622,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	gitClient := git.New()
 	application.SetGitRepo(gitClient.IsGitRepo(cwd))
 
-	// Initialize .taw directory
+	// Initialize .paw directory
 	if err := application.Initialize(); err != nil {
 		return err
 	}
@@ -634,7 +634,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 func runSetupWizard(app *app.App) error {
 	cfg := config.DefaultConfig()
 
-	fmt.Println("\n🚀 TAW Setup Wizard")
+	fmt.Println("\n🚀 PAW Setup Wizard")
 
 	// Work mode (only for git repos)
 	if app.IsGitRepo {
@@ -691,7 +691,7 @@ func runSetupWizard(app *app.App) error {
 	}
 
 	// Save configuration
-	if err := cfg.Save(app.TawDir); err != nil {
+	if err := cfg.Save(app.PawDir); err != nil {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 

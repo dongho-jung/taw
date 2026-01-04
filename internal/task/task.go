@@ -1,4 +1,4 @@
-// Package task provides task management functionality for TAW.
+// Package task provides task management functionality for PAW.
 package task
 
 import (
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dongho-jung/taw/internal/constants"
+	"github.com/dongho-jung/paw/internal/constants"
 )
 
 // Status represents the status of a task.
@@ -32,7 +32,7 @@ const (
 	CorruptMissingBranch   CorruptedReason = "missing_branch"   // Branch doesn't exist
 )
 
-// Task represents a TAW task.
+// Task represents a PAW task.
 type Task struct {
 	Name        string
 	AgentDir    string

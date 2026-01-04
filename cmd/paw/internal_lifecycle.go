@@ -11,15 +11,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dongho-jung/taw/internal/config"
-	"github.com/dongho-jung/taw/internal/constants"
-	"github.com/dongho-jung/taw/internal/git"
-	"github.com/dongho-jung/taw/internal/logging"
-	"github.com/dongho-jung/taw/internal/notify"
-	"github.com/dongho-jung/taw/internal/service"
-	"github.com/dongho-jung/taw/internal/task"
-	"github.com/dongho-jung/taw/internal/tmux"
-	"github.com/dongho-jung/taw/internal/tui"
+	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/git"
+	"github.com/dongho-jung/paw/internal/logging"
+	"github.com/dongho-jung/paw/internal/notify"
+	"github.com/dongho-jung/paw/internal/service"
+	"github.com/dongho-jung/paw/internal/task"
+	"github.com/dongho-jung/paw/internal/tmux"
+	"github.com/dongho-jung/paw/internal/tui"
 )
 
 var paneCaptureFile string
@@ -41,7 +41,7 @@ var endTaskCmd = &cobra.Command{
 		}
 
 		// Find task by window ID
-		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
 		tasks, err := mgr.ListTasks()
 		if err != nil {
 			return fmt.Errorf("failed to list tasks: %w", err)
@@ -137,7 +137,7 @@ var endTaskCmd = &cobra.Command{
 				lockSpinner := tui.NewSimpleSpinner("Acquiring merge lock")
 				lockSpinner.Start()
 
-				lockFile := filepath.Join(app.TawDir, "merge.lock")
+				lockFile := filepath.Join(app.PawDir, "merge.lock")
 				lockAcquired := false
 				for retries := 0; retries < constants.MergeLockMaxRetries; retries++ {
 					f, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
@@ -183,7 +183,7 @@ var endTaskCmd = &cobra.Command{
 					hasLocalChanges := gitClient.HasChanges(app.ProjectDir)
 					if hasLocalChanges {
 						logging.Debug("Stashing local changes...")
-						if err := gitClient.StashPush(app.ProjectDir, "taw-merge-temp"); err != nil {
+						if err := gitClient.StashPush(app.ProjectDir, "paw-merge-temp"); err != nil {
 							logging.Warn("Failed to stash changes: %v", err)
 						}
 					}
@@ -407,7 +407,7 @@ var endTaskUICmd = &cobra.Command{
 		// Save captured content to temp file if we got it
 		var capturePath string
 		if paneContent != "" {
-			tmpFile, err := os.CreateTemp("", "taw-pane-capture-*.txt")
+			tmpFile, err := os.CreateTemp("", "paw-pane-capture-*.txt")
 			if err != nil {
 				logging.Warn("Failed to create temp file for pane capture: %v", err)
 			} else {
@@ -423,10 +423,10 @@ var endTaskUICmd = &cobra.Command{
 			}
 		}
 
-		// Get the taw binary path
-		tawBin, err := os.Executable()
+		// Get the paw binary path
+		pawBin, err := os.Executable()
 		if err != nil {
-			tawBin = "taw"
+			pawBin = "paw"
 		}
 
 		// Get working directory from pane
@@ -444,10 +444,10 @@ var endTaskUICmd = &cobra.Command{
 		var endTaskCmdStr string
 		if capturePath != "" {
 			endTaskCmdStr = fmt.Sprintf("%s internal end-task --pane-capture-file=%q %s %s; echo; echo 'Press Enter to close...'; read",
-				tawBin, capturePath, sessionName, windowID)
+				pawBin, capturePath, sessionName, windowID)
 		} else {
 			endTaskCmdStr = fmt.Sprintf("%s internal end-task %s %s; echo; echo 'Press Enter to close...'; read",
-				tawBin, sessionName, windowID)
+				pawBin, sessionName, windowID)
 		}
 
 		// Create a top pane (40% height) spanning full window width
@@ -507,7 +507,7 @@ var cancelTaskCmd = &cobra.Command{
 		findSpinner := tui.NewSimpleSpinner("Finding task")
 		findSpinner.Start()
 
-		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
 		tasks, err := mgr.ListTasks()
 		if err != nil {
 			findSpinner.Stop(false, "Failed")
@@ -694,10 +694,10 @@ var cancelTaskUICmd = &cobra.Command{
 
 		tm := tmux.New(sessionName)
 
-		// Get the taw binary path
-		tawBin, err := os.Executable()
+		// Get the paw binary path
+		pawBin, err := os.Executable()
 		if err != nil {
-			tawBin = "taw"
+			pawBin = "paw"
 		}
 
 		// Get working directory from pane
@@ -708,7 +708,7 @@ var cancelTaskUICmd = &cobra.Command{
 
 		// Build cancel-task command
 		cancelTaskCmdStr := fmt.Sprintf("%s internal cancel-task %s %s; echo; echo 'Press Enter to close...'; read",
-			tawBin, sessionName, windowID)
+			pawBin, sessionName, windowID)
 
 		// Create a top pane (40% height) spanning full window width
 		_, err = tm.SplitWindowPane(tmux.SplitOpts{
@@ -773,8 +773,8 @@ var doneTaskCmd = &cobra.Command{
 		}
 
 		// Delegate to end-task-ui
-		tawBin, _ := os.Executable()
-		endCmd := exec.Command(tawBin, "internal", "end-task-ui", sessionName, windowID)
+		pawBin, _ := os.Executable()
+		endCmd := exec.Command(pawBin, "internal", "end-task-ui", sessionName, windowID)
 		return endCmd.Run()
 	},
 }
@@ -792,7 +792,7 @@ var recoverTaskCmd = &cobra.Command{
 			return err
 		}
 
-		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
 		t, err := mgr.GetTask(taskName)
 		if err != nil {
 			return err
@@ -881,7 +881,7 @@ var resumeAgentCmd = &cobra.Command{
 		tm := tmux.New(sessionName)
 
 		// Get task
-		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.TawDir, app.IsGitRepo, app.Config)
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
 		t, err := mgr.GetTask(taskName)
 		if err != nil {
 			return fmt.Errorf("failed to get task: %w", err)
@@ -890,8 +890,8 @@ var resumeAgentCmd = &cobra.Command{
 		// Determine work directory
 		workDir := mgr.GetWorkingDirectory(t)
 
-		// Get taw binary path
-		tawBin, _ := os.Executable()
+		// Get paw binary path
+		pawBin, _ := os.Executable()
 
 		// Build start-agent script with --continue flag
 		worktreeDirExport := ""
@@ -902,18 +902,18 @@ var resumeAgentCmd = &cobra.Command{
 		startAgentContent := fmt.Sprintf(`#!/bin/bash
 # Auto-generated start-agent script for this task (RESUME MODE)
 export TASK_NAME='%s'
-export TAW_DIR='%s'
+export PAW_DIR='%s'
 export PROJECT_DIR='%s'
 %sexport WINDOW_ID='%s'
 export ON_COMPLETE='%s'
-export TAW_HOME='%s'
-export TAW_BIN='%s'
+export PAW_HOME='%s'
+export PAW_BIN='%s'
 export SESSION_NAME='%s'
 
 # Continue the previous Claude session (--continue auto-selects last session)
 exec claude --continue --dangerously-skip-permissions
-`, taskName, app.TawDir, app.ProjectDir, worktreeDirExport, windowID,
-			app.Config.OnComplete, filepath.Dir(filepath.Dir(tawBin)), tawBin, sessionName)
+`, taskName, app.PawDir, app.ProjectDir, worktreeDirExport, windowID,
+			app.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBin, sessionName)
 
 		startAgentScriptPath := filepath.Join(t.AgentDir, "start-agent")
 		if err := os.WriteFile(startAgentScriptPath, []byte(startAgentContent), 0755); err != nil {
@@ -930,7 +930,7 @@ exec claude --continue --dangerously-skip-permissions
 		logging.Log("Agent resumed: task=%s, windowID=%s", taskName, windowID)
 
 		// Start wait watcher
-		watchCmd := exec.Command(tawBin, "internal", "watch-wait", sessionName, windowID, taskName)
+		watchCmd := exec.Command(pawBin, "internal", "watch-wait", sessionName, windowID, taskName)
 		watchCmd.Dir = app.ProjectDir
 		if err := watchCmd.Start(); err != nil {
 			logging.Warn("Failed to start wait watcher: %v", err)

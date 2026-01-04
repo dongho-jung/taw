@@ -1,4 +1,4 @@
-// Package tui provides terminal user interface components for TAW.
+// Package tui provides terminal user interface components for PAW.
 package tui
 
 import (
@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 
-	"github.com/dongho-jung/taw/internal/task"
+	"github.com/dongho-jung/paw/internal/task"
 )
 
 // RecoverUI provides UI for recovering corrupted tasks.

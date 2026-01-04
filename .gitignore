@@ -1,9 +1,9 @@
 .claude/
-.taw/
-/taw
-!.taw/config
-!.taw/memory
+.paw/
+/paw
+!.paw/config
+!.paw/memory
 problems-to-solve.history
-taw-notify.app/Contents/MacOS/taw-notify
-/taw-notify
+paw-notify.app/Contents/MacOS/paw-notify
+/paw-notify
 coverage.out

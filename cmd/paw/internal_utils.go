@@ -10,14 +10,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dongho-jung/taw/internal/app"
-	"github.com/dongho-jung/taw/internal/config"
-	"github.com/dongho-jung/taw/internal/constants"
-	"github.com/dongho-jung/taw/internal/git"
-	"github.com/dongho-jung/taw/internal/logging"
-	"github.com/dongho-jung/taw/internal/notify"
-	"github.com/dongho-jung/taw/internal/task"
-	"github.com/dongho-jung/taw/internal/tmux"
+	"github.com/dongho-jung/paw/internal/app"
+	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/git"
+	"github.com/dongho-jung/paw/internal/logging"
+	"github.com/dongho-jung/paw/internal/notify"
+	"github.com/dongho-jung/paw/internal/task"
+	"github.com/dongho-jung/paw/internal/tmux"
 )
 
 var ctrlCCmd = &cobra.Command{
@@ -58,7 +58,7 @@ var ctrlCCmd = &cobra.Command{
 		}
 
 		// Get pending cancel timestamp from tmux option
-		pendingTimeStr, _ := tm.GetOption("@taw_cancel_pending")
+		pendingTimeStr, _ := tm.GetOption("@paw_cancel_pending")
 		now := time.Now().Unix()
 
 		// Check if there's a pending cancel within 2 seconds
@@ -66,7 +66,7 @@ var ctrlCCmd = &cobra.Command{
 			pendingTime, err := parseUnixTime(pendingTimeStr)
 			if err == nil && now-pendingTime <= constants.DoublePressIntervalSec {
 				// Double-press detected, cancel the task
-				_ = tm.SetOption("@taw_cancel_pending", "", true) // Clear pending state
+				_ = tm.SetOption("@paw_cancel_pending", "", true) // Clear pending state
 
 				// Get current window ID
 				windowID, err := tm.Display("#{window_id}")
@@ -76,8 +76,8 @@ var ctrlCCmd = &cobra.Command{
 				windowID = strings.TrimSpace(windowID)
 
 				// Delegate to cancel-task-ui (shows progress in top pane)
-				tawBin, _ := os.Executable()
-				cancelCmd := exec.Command(tawBin, "internal", "cancel-task-ui", sessionName, windowID)
+				pawBin, _ := os.Executable()
+				cancelCmd := exec.Command(pawBin, "internal", "cancel-task-ui", sessionName, windowID)
 				return cancelCmd.Run()
 			}
 		}
@@ -86,7 +86,7 @@ var ctrlCCmd = &cobra.Command{
 		// (sending Ctrl+C would cause Claude to exit immediately)
 
 		// Store current timestamp
-		_ = tm.SetOption("@taw_cancel_pending", fmt.Sprintf("%d", now), true)
+		_ = tm.SetOption("@paw_cancel_pending", fmt.Sprintf("%d", now), true)
 
 		// Play sound to indicate pending cancel state
 		logging.Trace("ctrlCCmd: playing SoundCancelPending (first press, waiting for second)")
@@ -113,12 +113,12 @@ var renameWindowCmd = &cobra.Command{
 		windowID := args[0]
 		name := args[1]
 
-		// Try to get app for logging (use TAW_DIR or SESSION_NAME env)
+		// Try to get app for logging (use PAW_DIR or SESSION_NAME env)
 		var logPath string
 		var debug bool
-		if tawDir := os.Getenv("TAW_DIR"); tawDir != "" {
-			logPath = filepath.Join(tawDir, "log")
-			debug = os.Getenv("TAW_DEBUG") == "1"
+		if pawDir := os.Getenv("PAW_DIR"); pawDir != "" {
+			logPath = filepath.Join(pawDir, "log")
+			debug = os.Getenv("PAW_DEBUG") == "1"
 		}
 
 		if logPath != "" {
@@ -139,7 +139,7 @@ var renameWindowCmd = &cobra.Command{
 		// Get session name from environment or use default
 		sessionName := os.Getenv("SESSION_NAME")
 		if sessionName == "" {
-			sessionName = "taw" // fallback
+			sessionName = "paw" // fallback
 		}
 
 		tm := tmux.New(sessionName)
@@ -170,10 +170,10 @@ var renameWindowCmd = &cobra.Command{
 
 		// Save status to disk for resume
 		if newStatus != "" {
-			tawDir := os.Getenv("TAW_DIR")
+			pawDir := os.Getenv("PAW_DIR")
 			taskName := os.Getenv("TASK_NAME")
-			if tawDir != "" && taskName != "" {
-				agentDir := filepath.Join(tawDir, "agents", taskName)
+			if pawDir != "" && taskName != "" {
+				agentDir := filepath.Join(pawDir, "agents", taskName)
 				t := task.New(taskName, agentDir)
 				if err := t.SaveStatus(newStatus); err != nil {
 					logging.Trace("Failed to save status: %v", err)
@@ -193,8 +193,8 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 	// We need to find the project directory
 
 	// First, try to get it from environment
-	if tawDir := os.Getenv("TAW_DIR"); tawDir != "" {
-		projectDir := filepath.Dir(tawDir)
+	if pawDir := os.Getenv("PAW_DIR"); pawDir != "" {
+		projectDir := filepath.Dir(pawDir)
 		application, err := app.New(projectDir)
 		if err != nil {
 			return nil, err
@@ -208,11 +208,11 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 		return nil, err
 	}
 
-	// Walk up to find .taw directory
+	// Walk up to find .paw directory
 	dir := cwd
 	for {
-		tawDir := filepath.Join(dir, ".taw")
-		if _, err := os.Stat(tawDir); err == nil {
+		pawDir := filepath.Join(dir, ".paw")
+		if _, err := os.Stat(pawDir); err == nil {
 			application, err := app.New(dir)
 			if err != nil {
 				return nil, err
@@ -231,8 +231,8 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 }
 
 func loadAppConfig(application *app.App) (*app.App, error) {
-	tawHome, _ := getTawHome()
-	application.SetTawHome(tawHome)
+	pawHome, _ := getPawHome()
+	application.SetPawHome(pawHome)
 
 	gitClient := git.New()
 	application.SetGitRepo(gitClient.IsGitRepo(application.ProjectDir))

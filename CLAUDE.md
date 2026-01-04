@@ -10,17 +10,17 @@ make build
 make install
 
 # Or install directly with go install
-go install github.com/dongho-jung/taw@latest
+go install github.com/dongho-jung/paw@latest
 ```
 
 > **Note (macOS)**: `make install` automatically runs `xattr -cr` and `codesign -fs -` to prevent the `zsh: killed` error.
 
 ## Dependency check
 
-Run `taw check` to verify all dependencies are installed:
+Run `paw check` to verify all dependencies are installed:
 
 ```bash
-taw check
+paw check
 ```
 
 This checks:
@@ -31,7 +31,7 @@ This checks:
 | claude | ✅ | Claude Code CLI for AI-powered task execution |
 | git | ❌ | Git for worktree mode (optional, but recommended) |
 | gh | ❌ | GitHub CLI for PR creation (optional) |
-| taw-notify.app | ❌ | macOS notification helper (optional) |
+| paw-notify.app | ❌ | macOS notification helper (optional) |
 | notifications | ❌ | macOS notification permissions (optional) |
 | sounds | ❌ | macOS system sounds for alerts (optional) |
 
@@ -75,16 +75,16 @@ go tool cover -html=coverage.out -o coverage.html
 | internal/tmux | 0% | Requires tmux server |
 | internal/notify | 0% | Platform-specific (macOS) |
 | internal/tui | 0% | Interactive UI components |
-| cmd/taw | ~4% | Cobra command handlers |
-| cmd/taw-notify | 0% | macOS-only CGO binary |
+| cmd/paw | ~4% | Cobra command handlers |
+| cmd/paw-notify | 0% | macOS-only CGO binary |
 
 ## Directory structure
 
 ```
-taw/                           # This repository
-├── cmd/taw/                   # Go main package
+paw/                           # This repository
+├── cmd/paw/                   # Go main package
 │   ├── main.go                # Entry point and root command
-│   ├── check.go               # Dependency check command (taw check)
+│   ├── check.go               # Dependency check command (paw check)
 │   ├── internal.go            # Internal command registration
 │   ├── internal_create.go     # Task creation commands (toggleNew, newTask, spawnTask, handleTask)
 │   ├── internal_lifecycle.go  # Task lifecycle commands (endTask, cancelTask, doneTask)
@@ -92,7 +92,7 @@ taw/                           # This repository
 │   ├── internal_utils.go      # Utility commands and helpers (ctrlC, renameWindow)
 │   ├── keybindings.go         # Tmux keybinding definitions
 │   └── wait.go                # Wait detection for user input prompts
-├── cmd/taw-notify/            # Notification helper (macOS app bundle)
+├── cmd/paw-notify/            # Notification helper (macOS app bundle)
 │   ├── main.go                # CGO code for UserNotifications (darwin only)
 │   ├── doc.go                 # Stub for non-darwin platforms
 │   └── Info.plist             # App bundle configuration
@@ -120,7 +120,7 @@ taw/                           # This repository
 └── go.mod                     # Go module file
 
 {any-project}/                 # User project (git repo or plain directory)
-└── .taw/                      # Created by taw
+└── .paw/                      # Created by paw
     ├── config                 # Project config (YAML, created during setup)
     ├── log                    # Consolidated logs (all scripts write here)
     ├── memory                 # Project memory (YAML, shared across tasks)
@@ -146,7 +146,7 @@ taw/                           # This repository
 
 ## Logging levels
 
-TAW uses a 6-level logging system (L0-L5):
+PAW uses a 6-level logging system (L0-L5):
 
 | Level | Name  | Description                                      | Output          |
 |-------|-------|--------------------------------------------------|-----------------|
@@ -157,14 +157,14 @@ TAW uses a 6-level logging system (L0-L5):
 | L4    | Error | Errors that affect functionality                 | Stderr + file   |
 | L5    | Fatal | Critical errors requiring immediate attention    | Stderr + file   |
 
-- Enable debug mode: `TAW_DEBUG=1 taw`
-- Log file location: `.taw/log`
+- Enable debug mode: `PAW_DEBUG=1 paw`
+- Log file location: `.paw/log`
 - View logs: Press `⌃O` to open the log viewer
 - Filter levels in log viewer: Press `l` to cycle through L0+ → L1+ → ... → L5 only
 
 ## Notifications
 
-TAW uses multiple notification channels to alert users:
+PAW uses multiple notification channels to alert users:
 
 | Event                    | Sound       | Desktop Notification | Slack/ntfy | Statusline Message |
 |--------------------------|-------------|----------------------|------------|-------------------|
@@ -179,7 +179,7 @@ TAW uses multiple notification channels to alert users:
 
 ### External Notification Channels
 
-TAW supports sending notifications to external services in addition to macOS desktop notifications. Configure these in `.taw/config`:
+PAW supports sending notifications to external services in addition to macOS desktop notifications. Configure these in `.paw/config`:
 
 ```yaml
 # Slack notifications via incoming webhook
@@ -196,17 +196,17 @@ notifications:
 
 **Slack setup**:
 1. Create an [Incoming Webhook](https://api.slack.com/messaging/webhooks) in your Slack workspace
-2. Copy the webhook URL to `.taw/config`
+2. Copy the webhook URL to `.paw/config`
 
 **ntfy setup**:
-1. Choose a topic name (e.g., `taw-notifications`)
+1. Choose a topic name (e.g., `paw-notifications`)
 2. Subscribe to the topic in the [ntfy app](https://ntfy.sh/) or web interface
-3. Add the topic to `.taw/config`
+3. Add the topic to `.paw/config`
 4. (Optional) For self-hosted ntfy, specify the `server` URL
 
 ### Notification Action Buttons
 
-When user input is needed and the prompt has 2-5 simple choices, TAW shows a banner notification with action buttons:
+When user input is needed and the prompt has 2-5 simple choices, PAW shows a banner notification with action buttons:
 
 - **Title**: The task name
 - **Body**: The question from the prompt
@@ -217,8 +217,8 @@ If the user clicks an action button, the response is sent directly to the agent 
 
 **Requirements** (macOS desktop notifications):
 - macOS 10.15+
-- Notification permissions granted for `TAW Notify` app
-- `taw-notify.app` installed to `~/.local/share/taw/`
+- Notification permissions granted for `PAW Notify` app
+- `paw-notify.app` installed to `~/.local/share/paw/`
 
 ## Working rules
 

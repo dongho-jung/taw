@@ -1,4 +1,4 @@
-# TAW (Tmux + Agent + Worktree)
+# PAW (Parallel AI Workers)
 
 Claude Code-based autonomous agent work environment
 
@@ -19,7 +19,7 @@ Claude Code-based autonomous agent work environment
   ⌃.          Task options (in new task window)
   ⌃K          Cancel task (double-press within 2s)
   ⌃F          Finish task (complete and cleanup)
-  ⌃Q          Quit taw
+  ⌃Q          Quit paw
 
 ### Toggle Panels
   ⌃T          Toggle tasks (show task list)
@@ -39,7 +39,7 @@ Claude Code-based autonomous agent work environment
 
 ## Directory Structure
 
-  .taw/
+  .paw/
   ├── config                 Project configuration file
   ├── PROMPT.md              Project-specific agent instructions
   ├── memory                 Shared project memory (YAML)
@@ -107,13 +107,13 @@ Configure per-task settings before submission:
 ## Environment Variables (for agents)
 
   TASK_NAME     Task identifier (branch name)
-  TAW_DIR       .taw directory path
+  PAW_DIR       .paw directory path
   PROJECT_DIR   Project root path
   WORKTREE_DIR  Worktree path (git mode only)
   WINDOW_ID     tmux window ID
   ON_COMPLETE   Completion mode (confirm/auto-commit/auto-merge/auto-pr)
-  TAW_HOME      TAW installation directory
-  TAW_BIN       TAW binary path
+  PAW_HOME      PAW installation directory
+  PAW_BIN       PAW binary path
   SESSION_NAME  tmux session name
 
 ---

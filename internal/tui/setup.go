@@ -1,4 +1,4 @@
-// Package tui provides terminal user interface components for TAW.
+// Package tui provides terminal user interface components for PAW.
 package tui
 
 import (
@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 
-	"github.com/dongho-jung/taw/internal/config"
+	"github.com/dongho-jung/paw/internal/config"
 )
 
 // SetupWizard provides an interactive setup wizard.
@@ -92,7 +92,7 @@ func (m *SetupWizard) View() tea.View {
 		Foreground(lipgloss.Color("240"))
 
 	sb.WriteString("\n")
-	sb.WriteString(titleStyle.Render("🚀 TAW Setup Wizard"))
+	sb.WriteString(titleStyle.Render("🚀 PAW Setup Wizard"))
 	sb.WriteString("\n\n")
 
 	switch m.step {

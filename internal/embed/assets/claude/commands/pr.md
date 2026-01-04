@@ -9,7 +9,7 @@ description: Auto-generate PR with title/body and open in browser
 **You MUST run this first and save the values:**
 
 ```bash
-printenv | grep -E '^(TASK_NAME|TAW_DIR|WORKTREE_DIR)='
+printenv | grep -E '^(TASK_NAME|PAW_DIR|WORKTREE_DIR)='
 ```
 
 If any variable is empty, stop and inform the user.
@@ -70,7 +70,7 @@ git diff --stat main..HEAD 2>/dev/null || git diff --stat master..HEAD 2>/dev/nu
 
 6. **IMPORTANT**: After PR is created, save the PR number using environment variables:
    ```bash
-   gh pr view --json number -q '.number' | tee "$TAW_DIR/agents/$TASK_NAME/.pr"
+   gh pr view --json number -q '.number' | tee "$PAW_DIR/agents/$TASK_NAME/.pr"
    ```
 
 7. Open the created PR URL in browser:

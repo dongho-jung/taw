@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dongho-jung/taw/internal/tmux"
+	"github.com/dongho-jung/paw/internal/tmux"
 )
 
 // mockClaudeClient is a mock implementation of claude.Client for testing.
@@ -53,7 +53,7 @@ func (m *mockClaudeClient) IsClaudeRunning(tm tmux.Client, target string) bool {
 
 func TestHistoryService_SaveCompleted(t *testing.T) {
 	// Create temp directory
-	tmpDir, err := os.MkdirTemp("", "taw-history-test-*")
+	tmpDir, err := os.MkdirTemp("", "paw-history-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestHistoryService_SaveCompleted(t *testing.T) {
 
 func TestHistoryService_SaveCancelled(t *testing.T) {
 	// Create temp directory
-	tmpDir, err := os.MkdirTemp("", "taw-history-test-*")
+	tmpDir, err := os.MkdirTemp("", "paw-history-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestHistoryService_SaveCancelled(t *testing.T) {
 
 func TestHistoryService_LoadTaskContent(t *testing.T) {
 	// Create temp directory
-	tmpDir, err := os.MkdirTemp("", "taw-history-test-*")
+	tmpDir, err := os.MkdirTemp("", "paw-history-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestIsCancelled(t *testing.T) {
 
 func TestHistoryService_EmptyPaneContent(t *testing.T) {
 	// Create temp directory
-	tmpDir, err := os.MkdirTemp("", "taw-history-test-*")
+	tmpDir, err := os.MkdirTemp("", "paw-history-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
