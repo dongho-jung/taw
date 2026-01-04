@@ -127,8 +127,13 @@ install-brew: build build-notify
 	@cd $(LOCAL_TAP_DIR) && git init -q && git add -A && git commit -q -m "Add paw formula"
 	@brew tap paw/local $(LOCAL_TAP_DIR)
 	@echo "Installing via brew..."
-	@brew uninstall paw 2>/dev/null || true
-	HOMEBREW_NO_AUTO_UPDATE=1 brew install paw/local/paw || true
+	@HOMEBREW_NO_AUTO_UPDATE=1; \
+	if brew list paw/local/paw &>/dev/null; then \
+		echo "Reinstalling existing installation..."; \
+		brew reinstall paw/local/paw; \
+	else \
+		brew install paw/local/paw; \
+	fi
 	@echo "Setting up paw-notify.app..."
 	@mkdir -p ~/.local/share/paw
 	@rm -rf ~/.local/share/paw/paw-notify.app
