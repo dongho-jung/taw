@@ -15,7 +15,7 @@ GO_PATH=$(shell which go 2>/dev/null || echo "/opt/homebrew/bin/go")
 LOCAL_BIN=~/.local/bin
 LOCAL_SHARE=~/.local/share/paw
 
-.PHONY: all build build-notify install uninstall install-global uninstall-global clean test fmt lint run help
+.PHONY: all build build-notify install uninstall install-global uninstall-global install-brew uninstall-brew clean test fmt lint run help
 
 all: build
 
@@ -91,6 +91,64 @@ uninstall-global:
 	sudo rm -f /usr/local/bin/$(BINARY_NAME)
 	@echo "Done!"
 
+## Install via Homebrew from local build (for testing)
+## Uses a local tap at ~/.local/share/paw/homebrew-local
+LOCAL_TAP_DIR=$(HOME)/.local/share/paw/homebrew-local
+BREW_TAP_DIR=$(shell brew --prefix)/Library/Taps/paw/homebrew-local
+install-brew: build build-notify
+	@echo "Creating local brew package..."
+	@rm -rf /tmp/paw-brew-local
+	@mkdir -p /tmp/paw-brew-local
+	@cp $(BINARY_NAME) /tmp/paw-brew-local/
+	@cp -R $(NOTIFY_APP) /tmp/paw-brew-local/
+	@cp icon.png /tmp/paw-brew-local/ 2>/dev/null || true
+	@cd /tmp/paw-brew-local && tar -czf ../paw-local.tar.gz .
+	@echo "Setting up local tap..."
+	@brew untap paw/local 2>/dev/null || true
+	@rm -rf $(LOCAL_TAP_DIR)
+	@mkdir -p $(LOCAL_TAP_DIR)/Formula
+	@SHA=$$(shasum -a 256 /tmp/paw-local.tar.gz | cut -d' ' -f1) && \
+	echo "class Paw < Formula" > $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '  desc "Parallel AI Workers - local build"' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '  homepage "https://github.com/dongho-jung/paw"' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '  url "file:///tmp/paw-local.tar.gz"' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo "  sha256 \"$$SHA\"" >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '  version "local-$(VERSION)"' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '  depends_on "tmux"' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '  def install' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '    bin.install "paw"' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '    prefix.install "paw-notify.app"' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '    prefix.install "icon.png"' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '  end' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '  test do' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '    system "#{bin}/paw", "--version"' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo '  end' >> $(LOCAL_TAP_DIR)/Formula/paw.rb && \
+	echo 'end' >> $(LOCAL_TAP_DIR)/Formula/paw.rb
+	@cd $(LOCAL_TAP_DIR) && git init -q && git add -A && git commit -q -m "Add paw formula"
+	@brew tap paw/local $(LOCAL_TAP_DIR)
+	@echo "Installing via brew..."
+	@brew uninstall paw 2>/dev/null || true
+	HOMEBREW_NO_AUTO_UPDATE=1 brew install paw/local/paw || true
+	@echo "Setting up paw-notify.app..."
+	@mkdir -p ~/.local/share/paw
+	@rm -rf ~/.local/share/paw/paw-notify.app
+	@cp -R $$(brew --prefix)/Cellar/paw/*/paw-notify.app ~/.local/share/paw/
+	@cp $$(brew --prefix)/Cellar/paw/*/icon.png ~/.local/share/paw/ 2>/dev/null || true
+	@xattr -cr ~/.local/share/paw/paw-notify.app
+	@codesign -fs - ~/.local/share/paw/paw-notify.app 2>/dev/null || true
+	@rm -rf /tmp/paw-brew-local
+	@echo "Done! Installed paw ($(VERSION)) from local tap"
+	@echo "Run 'paw --version' to verify"
+
+## Uninstall local brew package and tap
+uninstall-brew:
+	@echo "Uninstalling paw from local tap..."
+	@brew uninstall paw/local/paw 2>/dev/null || true
+	@brew untap paw/local 2>/dev/null || true
+	@rm -rf $(LOCAL_TAP_DIR)
+	@rm -f /tmp/paw-local.tar.gz
+	@echo "Done!"
+
 ## Clean build artifacts
 clean:
 	@echo "Cleaning..."
@@ -157,6 +215,8 @@ help:
 	@echo "  uninstall        Uninstall from ~/.local/bin"
 	@echo "  install-global   Install to /usr/local/bin (requires sudo)"
 	@echo "  uninstall-global Uninstall from /usr/local/bin (requires sudo)"
+	@echo "  install-brew     Install via Homebrew from local build (for testing)"
+	@echo "  uninstall-brew   Uninstall local brew package"
 	@echo "  clean            Remove build artifacts"
 	@echo "  test             Run tests"
 	@echo "  test-coverage    Run tests with coverage report"
