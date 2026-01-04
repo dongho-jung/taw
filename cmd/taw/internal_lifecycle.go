@@ -288,6 +288,8 @@ var endTaskCmd = &cobra.Command{
 					// Notify user of merge failure
 					logging.Trace("endTaskCmd: playing SoundError for merge failure task=%s", targetTask.Name)
 					notify.PlaySound(notify.SoundError)
+					// Send to all configured notification channels (macOS, Slack, ntfy)
+					notify.SendAll(app.Config.Notifications, "Merge failed", fmt.Sprintf("⚠️ %s - manual resolution needed", targetTask.Name))
 					logging.Trace("endTaskCmd: displaying merge failure message for task=%s", targetTask.Name)
 					if err := tm.DisplayMessage(fmt.Sprintf("⚠️ Merge failed: %s - manual resolution needed", targetTask.Name), 3000); err != nil {
 						logging.Trace("Failed to display message: %v", err)
@@ -335,6 +337,8 @@ var endTaskCmd = &cobra.Command{
 		// Notify user that task completed successfully
 		logging.Trace("endTaskCmd: playing SoundTaskCompleted for task=%s", targetTask.Name)
 		notify.PlaySound(notify.SoundTaskCompleted)
+		// Send to all configured notification channels (macOS, Slack, ntfy)
+		notify.SendAll(app.Config.Notifications, "Task completed", fmt.Sprintf("✅ %s completed successfully", targetTask.Name))
 		logging.Trace("endTaskCmd: displaying completion message for task=%s", targetTask.Name)
 		if err := tm.DisplayMessage(fmt.Sprintf("✅ Task completed: %s", targetTask.Name), 2000); err != nil {
 			logging.Trace("Failed to display message: %v", err)
@@ -936,6 +940,8 @@ exec claude --continue --dangerously-skip-permissions
 
 		// Notify user
 		notify.PlaySound(notify.SoundTaskCreated)
+		// Send to all configured notification channels (macOS, Slack, ntfy)
+		notify.SendAll(app.Config.Notifications, "Session resumed", fmt.Sprintf("🔄 %s resumed", taskName))
 		if err := tm.DisplayMessage(fmt.Sprintf("🔄 Session resumed: %s", taskName), 2000); err != nil {
 			logging.Trace("Failed to display message: %v", err)
 		}

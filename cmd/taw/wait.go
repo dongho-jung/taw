@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/dongho-jung/taw/internal/config"
 	"github.com/dongho-jung/taw/internal/constants"
 	"github.com/dongho-jung/taw/internal/logging"
 	"github.com/dongho-jung/taw/internal/notify"
@@ -97,7 +98,7 @@ var watchWaitCmd = &cobra.Command{
 			isFinal = isFinalWindow(windowName)
 			if isWaitingWindow(windowName) {
 				if !notified {
-					notifyWaitingWithDisplay(tm, taskName, "window")
+					notifyWaitingWithDisplay(tm, app.Config.Notifications, taskName, "window")
 					notified = true
 				}
 			} else {
@@ -151,7 +152,7 @@ var watchWaitCmd = &cobra.Command{
 						}
 					} else if !notified {
 						logging.Debug("Wait detected: %s", reason)
-						notifyWaitingWithDisplay(tm, taskName, reason)
+						notifyWaitingWithDisplay(tm, app.Config.Notifications, taskName, reason)
 						notified = true
 					}
 				}
@@ -297,26 +298,25 @@ func findAskUserQuestionUIIndex(lines []string) int {
 	return -1
 }
 
-func notifyWaiting(taskName, reason string) {
+func notifyWaiting(notifications *config.NotificationsConfig, taskName, reason string) {
 	logging.Trace("notifyWaiting: start task=%s reason=%s", taskName, reason)
 	defer logging.Trace("notifyWaiting: end")
 
 	title := taskName
 	message := "Waiting for your response"
-	logging.Trace("notifyWaiting: sending desktop notification title=%s", title)
-	if err := notify.Send(title, message); err != nil {
-		logging.Trace("Failed to send notification: %v", err)
-	}
+	logging.Trace("notifyWaiting: sending notifications title=%s", title)
+	// Send to all configured channels (macOS, Slack, ntfy)
+	notify.SendAll(notifications, title, message)
 	// Play sound to alert user
 	logging.Trace("notifyWaiting: playing SoundNeedInput")
 	notify.PlaySound(notify.SoundNeedInput)
 }
 
-func notifyWaitingWithDisplay(tm tmux.Client, taskName, reason string) {
+func notifyWaitingWithDisplay(tm tmux.Client, notifications *config.NotificationsConfig, taskName, reason string) {
 	logging.Trace("notifyWaitingWithDisplay: start task=%s reason=%s", taskName, reason)
 	defer logging.Trace("notifyWaitingWithDisplay: end")
 
-	notifyWaiting(taskName, reason)
+	notifyWaiting(notifications, taskName, reason)
 	// Show message in tmux status bar
 	displayMsg := fmt.Sprintf("💬 %s needs input", taskName)
 	if reason != "" && reason != "window" && reason != "marker" {

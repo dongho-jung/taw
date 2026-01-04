@@ -28,11 +28,29 @@ const (
 	OnCompleteAutoPR     OnComplete = "auto-pr"     // Auto commit + create PR
 )
 
+// SlackConfig holds Slack notification settings.
+type SlackConfig struct {
+	Webhook string `yaml:"webhook"` // Slack incoming webhook URL
+}
+
+// NtfyConfig holds ntfy.sh notification settings.
+type NtfyConfig struct {
+	Topic  string `yaml:"topic"`  // ntfy topic name
+	Server string `yaml:"server"` // ntfy server URL (default: https://ntfy.sh)
+}
+
+// NotificationsConfig holds all notification channel settings.
+type NotificationsConfig struct {
+	Slack *SlackConfig `yaml:"slack"`
+	Ntfy  *NtfyConfig  `yaml:"ntfy"`
+}
+
 // Config represents the TAW project configuration.
 type Config struct {
-	WorkMode     WorkMode   `yaml:"work_mode"`
-	OnComplete   OnComplete `yaml:"on_complete"`
-	WorktreeHook string     `yaml:"worktree_hook"`
+	WorkMode      WorkMode             `yaml:"work_mode"`
+	OnComplete    OnComplete           `yaml:"on_complete"`
+	WorktreeHook  string               `yaml:"worktree_hook"`
+	Notifications *NotificationsConfig `yaml:"notifications"`
 }
 
 // DefaultConfig returns the default configuration.
@@ -61,6 +79,7 @@ func Load(tawDir string) (*Config, error) {
 
 // parseConfig parses the configuration from a string.
 // Supports multi-line values using YAML-like '|' syntax.
+// Supports nested configuration blocks for notifications.
 func parseConfig(content string) (*Config, error) {
 	cfg := DefaultConfig()
 	lines := strings.Split(content, "\n")
@@ -84,6 +103,12 @@ func parseConfig(content string) (*Config, error) {
 
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
+
+		// Check for nested block (notifications:)
+		if key == "notifications" && value == "" {
+			cfg.Notifications = parseNotificationsBlock(lines, &i)
+			continue
+		}
 
 		// Check for multi-line value (starts with '|')
 		if value == "|" {
@@ -132,6 +157,182 @@ func parseConfig(content string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// parseNotificationsBlock parses the notifications configuration block.
+func parseNotificationsBlock(lines []string, i *int) *NotificationsConfig {
+	*i++ // Move past "notifications:" line
+	notifications := &NotificationsConfig{}
+
+	for *i < len(lines) {
+		line := lines[*i]
+
+		// Check if we're still in the notifications block (indented)
+		if len(line) == 0 {
+			*i++
+			continue
+		}
+		if line[0] != ' ' && line[0] != '\t' {
+			// Non-indented line, end of notifications block
+			break
+		}
+
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			*i++
+			continue
+		}
+
+		parts := strings.SplitN(trimmed, ":", 2)
+		if len(parts) != 2 {
+			*i++
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		switch key {
+		case "slack":
+			if value == "" {
+				notifications.Slack = parseSlackBlock(lines, i)
+			}
+		case "ntfy":
+			if value == "" {
+				notifications.Ntfy = parseNtfyBlock(lines, i)
+			}
+		default:
+			*i++
+		}
+	}
+
+	return notifications
+}
+
+// parseSlackBlock parses the slack configuration block.
+func parseSlackBlock(lines []string, i *int) *SlackConfig {
+	*i++ // Move past "slack:" line
+	slack := &SlackConfig{}
+	baseIndent := getIndentLevel(lines, *i-1)
+
+	for *i < len(lines) {
+		line := lines[*i]
+
+		// Check if we're still in the slack block (more indented than parent)
+		if len(line) == 0 {
+			*i++
+			continue
+		}
+
+		currentIndent := countLeadingSpaces(line)
+		if currentIndent <= baseIndent && strings.TrimSpace(line) != "" {
+			// Less or equal indent, end of slack block
+			break
+		}
+
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			*i++
+			continue
+		}
+
+		parts := strings.SplitN(trimmed, ":", 2)
+		if len(parts) != 2 {
+			*i++
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		switch key {
+		case "webhook":
+			slack.Webhook = value
+		}
+
+		*i++
+	}
+
+	return slack
+}
+
+// parseNtfyBlock parses the ntfy configuration block.
+func parseNtfyBlock(lines []string, i *int) *NtfyConfig {
+	*i++ // Move past "ntfy:" line
+	ntfy := &NtfyConfig{}
+	baseIndent := getIndentLevel(lines, *i-1)
+
+	for *i < len(lines) {
+		line := lines[*i]
+
+		// Check if we're still in the ntfy block (more indented than parent)
+		if len(line) == 0 {
+			*i++
+			continue
+		}
+
+		currentIndent := countLeadingSpaces(line)
+		if currentIndent <= baseIndent && strings.TrimSpace(line) != "" {
+			// Less or equal indent, end of ntfy block
+			break
+		}
+
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			*i++
+			continue
+		}
+
+		parts := strings.SplitN(trimmed, ":", 2)
+		if len(parts) != 2 {
+			*i++
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		switch key {
+		case "topic":
+			ntfy.Topic = value
+		case "server":
+			ntfy.Server = value
+		}
+
+		*i++
+	}
+
+	return ntfy
+}
+
+// getIndentLevel returns the indentation level of a line at the given index.
+func getIndentLevel(lines []string, index int) int {
+	if index < 0 || index >= len(lines) {
+		return 0
+	}
+	return countLeadingSpaces(lines[index])
+}
+
+// countLeadingSpaces counts the number of leading spaces/tabs in a string.
+// Tabs are counted as 2 spaces.
+func countLeadingSpaces(s string) int {
+	count := 0
+	for _, ch := range s {
+		if ch == ' ' {
+			count++
+		} else if ch == '\t' {
+			count += 2
+		} else {
+			break
+		}
+	}
+	return count
 }
 
 // Save writes the configuration to the given taw directory.

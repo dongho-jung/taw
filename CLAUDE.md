@@ -163,18 +163,45 @@ TAW uses a 6-level logging system (L0-L5):
 
 ## Notifications
 
-TAW uses multiple notification channels to alert users (macOS only):
+TAW uses multiple notification channels to alert users:
 
-| Event                    | Sound       | Desktop Notification | Statusline Message |
-|--------------------------|-------------|----------------------|-------------------|
-| Task created             | Glass       | -                    | `🤖 Task started: {name}` |
-| Task completed           | Hero        | -                    | `✅ Task completed: {name}` |
-| User input needed        | Funk        | Yes (with actions)   | `💬 {name} needs input` |
-| Cancel pending (⌃K)      | Tink        | -                    | -                 |
-| Error (merge failed etc) | Basso       | -                    | `⚠️ Merge failed: {name} - manual resolution needed` |
+| Event                    | Sound       | Desktop Notification | Slack/ntfy | Statusline Message |
+|--------------------------|-------------|----------------------|------------|-------------------|
+| Task created             | Glass       | Yes                  | Yes        | `🤖 Task started: {name}` |
+| Task completed           | Hero        | Yes                  | Yes        | `✅ Task completed: {name}` |
+| User input needed        | Funk        | Yes (with actions)   | Yes        | `💬 {name} needs input` |
+| Cancel pending (⌃K)      | Tink        | -                    | -          | -                 |
+| Error (merge failed etc) | Basso       | Yes                  | Yes        | `⚠️ Merge failed: {name} - manual resolution needed` |
 
 - Sounds use macOS system sounds (`/System/Library/Sounds/`)
 - Statusline messages display via `tmux display-message -d 2000`
+
+### External Notification Channels
+
+TAW supports sending notifications to external services in addition to macOS desktop notifications. Configure these in `.taw/config`:
+
+```yaml
+# Slack notifications via incoming webhook
+notifications:
+  slack:
+    webhook: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+
+# ntfy.sh notifications (or self-hosted ntfy server)
+notifications:
+  ntfy:
+    topic: your-topic-name
+    server: https://ntfy.sh  # Optional, defaults to https://ntfy.sh
+```
+
+**Slack setup**:
+1. Create an [Incoming Webhook](https://api.slack.com/messaging/webhooks) in your Slack workspace
+2. Copy the webhook URL to `.taw/config`
+
+**ntfy setup**:
+1. Choose a topic name (e.g., `taw-notifications`)
+2. Subscribe to the topic in the [ntfy app](https://ntfy.sh/) or web interface
+3. Add the topic to `.taw/config`
+4. (Optional) For self-hosted ntfy, specify the `server` URL
 
 ### Notification Action Buttons
 
@@ -187,7 +214,7 @@ When user input is needed and the prompt has 2-5 simple choices, TAW shows a ban
 
 If the user clicks an action button, the response is sent directly to the agent without opening a popup. If the notification times out (30s) or is dismissed, the fallback popup is shown.
 
-**Requirements**:
+**Requirements** (macOS desktop notifications):
 - macOS 10.15+
 - Notification permissions granted for `TAW Notify` app
 - `taw-notify.app` installed to `~/.local/share/taw/`

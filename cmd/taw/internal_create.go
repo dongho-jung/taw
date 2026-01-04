@@ -607,11 +607,15 @@ __PROMPT_END__
 		logging.Trace("handleTaskCmd: playing SoundTaskCreated for task=%s", taskName)
 		notify.PlaySound(notify.SoundTaskCreated)
 		if isReopen {
+			// Send to all configured notification channels (macOS, Slack, ntfy)
+			notify.SendAll(app.Config.Notifications, "Session resumed", fmt.Sprintf("🔄 %s resumed", taskName))
 			logging.Trace("handleTaskCmd: displaying session resumed message for task=%s", taskName)
 			if err := tm.DisplayMessage(fmt.Sprintf("🔄 Session resumed: %s", taskName), 2000); err != nil {
 				logging.Trace("Failed to display message: %v", err)
 			}
 		} else {
+			// Send to all configured notification channels (macOS, Slack, ntfy)
+			notify.SendAll(app.Config.Notifications, "Task started", fmt.Sprintf("🤖 %s started", taskName))
 			logging.Trace("handleTaskCmd: displaying task started message for task=%s", taskName)
 			if err := tm.DisplayMessage(fmt.Sprintf("🤖 Task started: %s", taskName), 2000); err != nil {
 				logging.Trace("Failed to display message: %v", err)
