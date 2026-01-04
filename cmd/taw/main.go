@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -255,6 +256,13 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 				fmt.Printf("🔄 Reopening task: %s\n", t.Name)
 			}
 		}
+	}
+
+	// Wait for shell to be ready before sending keys
+	// This prevents the race condition where keys are lost if sent before shell initializes
+	paneTarget := app.SessionName + ":" + constants.NewWindowName + ".0"
+	if err := tm.WaitForPane(paneTarget, 5*time.Second, 1); err != nil {
+		logging.Warn("WaitForPane timed out, continuing anyway: %v", err)
 	}
 
 	// Send new-task command to the _ window

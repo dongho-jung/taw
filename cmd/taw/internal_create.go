@@ -72,6 +72,13 @@ var toggleNewCmd = &cobra.Command{
 		}
 		logging.Trace("toggleNewCmd: new task window created windowID=%s", windowID)
 
+		// Wait for shell to be ready before sending keys
+		// This prevents the race condition where keys are lost if sent before shell initializes
+		paneID := windowID + ".0"
+		if err := tm.WaitForPane(paneID, 5*time.Second, 1); err != nil {
+			logging.Warn("toggleNewCmd: WaitForPane timed out, continuing anyway: %v", err)
+		}
+
 		// Send new-task command to the new window
 		tawBin, _ := os.Executable()
 		newTaskCmd := fmt.Sprintf("%s internal new-task %s", tawBin, sessionName)
