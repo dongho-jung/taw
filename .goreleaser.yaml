@@ -33,13 +33,12 @@ builds:
       - -X main.Date={{.Date}}
 
 archives:
-  - id: default
+  # Darwin archives include paw-notify.app
+  - id: darwin
     formats:
       - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
+    builds:
+      - paw
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
@@ -48,6 +47,33 @@ archives:
     files:
       - README.md
       - LICENSE*
+      - src: paw-notify.app
+        dst: .
+        strip_parent: true
+    filter:
+      - goos: darwin
+
+  # Non-darwin archives (linux, windows)
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    builds:
+      - paw
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    files:
+      - README.md
+      - LICENSE*
+    filter:
+      - goos: linux
+      - goos: windows
 
 checksum:
   name_template: 'checksums.txt'
@@ -92,6 +118,27 @@ brews:
       - name: tmux
     install: |
       bin.install "paw"
+      # Install paw-notify.app for macOS desktop notifications
+      if File.exist?("paw-notify.app")
+        (share/"paw").install "paw-notify.app"
+      end
+    post_install: |
+      # Copy paw-notify.app to user's local share directory
+      if File.exist?("#{share}/paw/paw-notify.app")
+        user_share = "#{ENV["HOME"]}/.local/share/paw"
+        mkdir_p user_share unless File.directory?(user_share)
+        system "rm", "-rf", "#{user_share}/paw-notify.app"
+        system "cp", "-R", "#{share}/paw/paw-notify.app", user_share
+        # Remove quarantine attribute and sign
+        system "xattr", "-cr", "#{user_share}/paw-notify.app"
+        system "codesign", "-fs", "-", "#{user_share}/paw-notify.app"
+      end
+    caveats: |
+      paw-notify.app has been installed to ~/.local/share/paw/
+
+      To enable desktop notifications, you may need to:
+      1. Run: paw check
+      2. Grant notification permissions when prompted
     test: |
       system "#{bin}/paw", "version"
 

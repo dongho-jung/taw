@@ -14,7 +14,7 @@ permissions:
 jobs:
   release:
     name: Release
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,11 +27,29 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Build paw-notify.app (macOS notification helper)
+        run: make build-notify
+
+      - name: Prepare paw-notify.app for distribution
+        run: |
+          # Create a zip of paw-notify.app for inclusion in darwin archives
+          zip -r paw-notify.app.zip paw-notify.app
+          # Also create individual arch directories for GoReleaser
+          mkdir -p dist/darwin-extras
+          cp -R paw-notify.app dist/darwin-extras/
+          cp -R paw-notify.app.zip dist/darwin-extras/
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: '~> v2'
           args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Upload paw-notify.app as separate release asset
+        run: |
+          gh release upload ${{ github.ref_name }} paw-notify.app.zip --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
