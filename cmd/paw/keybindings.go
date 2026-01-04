@@ -33,8 +33,8 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	cmdToggleHelp := fmt.Sprintf("run-shell '%s internal toggle-help %s'", pawBin, sessionName)
 	// Note: cmdToggleSetup removed - Ctrl+, requires extended-keys which breaks IME input
 
-	// Ctrl+. sends F2 to open task options (used in new task window)
-	cmdTaskOpts := "send-keys F2"
+	// Ctrl+. passes through to open task options (used in new task window)
+	cmdTaskOpts := "send-keys C-."
 
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
@@ -57,6 +57,6 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 
 		// Settings
 		// Note: C-, (Ctrl+,) removed - requires extended-keys which breaks IME input
-		{Key: "C-.", Command: cmdTaskOpts, NoPrefix: true}, // Ctrl+. for task options (sends F2)
+		{Key: "C-.", Command: cmdTaskOpts, NoPrefix: true}, // Ctrl+. for task options
 	}
 }
