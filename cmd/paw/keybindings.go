@@ -53,7 +53,7 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 		{Key: "C-o", Command: cmdToggleLogs, NoPrefix: true},
 		{Key: "C-g", Command: cmdToggleGitStatus, NoPrefix: true},
 		{Key: "C-b", Command: cmdToggleBottom, NoPrefix: true},
-		{Key: "C-_", Command: cmdToggleHelp, NoPrefix: true}, // Ctrl+/ sends C-_
+		{Key: "C-/", Command: cmdToggleHelp, NoPrefix: true}, // Ctrl+/ (extended-keys mode)
 
 		// Settings
 		{Key: "C-,", Command: cmdToggleSetup, NoPrefix: true}, // Ctrl+, for setup
