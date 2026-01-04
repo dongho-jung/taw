@@ -357,47 +357,6 @@ func (m *TaskInput) renderOptionsPanel() string {
 	return panelStyle.Render(content.String())
 }
 
-// formatOptionsIndicator returns a compact representation of current options.
-func (m *TaskInput) formatOptionsIndicator() string {
-	if m.options == nil {
-		return ""
-	}
-
-	var parts []string
-
-	// Model (only show if not default)
-	if m.options.Model != config.DefaultModel {
-		parts = append(parts, string(m.options.Model))
-	}
-
-	// Ultrathink (show if disabled, since it's on by default)
-	if !m.options.Ultrathink {
-		parts = append(parts, "no-ultrathink")
-	}
-
-	// Dependency
-	if m.options.DependsOn != nil && m.options.DependsOn.TaskName != "" {
-		parts = append(parts, fmt.Sprintf("after:%s(%s)",
-			m.options.DependsOn.TaskName,
-			m.options.DependsOn.Condition))
-	}
-
-	// Worktree hook
-	if m.options.WorktreeHook != "" {
-		hookPreview := m.options.WorktreeHook
-		if len(hookPreview) > 20 {
-			hookPreview = hookPreview[:17] + "..."
-		}
-		parts = append(parts, fmt.Sprintf("hook:%s", hookPreview))
-	}
-
-	if len(parts) == 0 {
-		return ""
-	}
-
-	return strings.Join(parts, ", ")
-}
-
 func (m *TaskInput) moveCursorToVisualColumn(targetCol int) {
 	lines := strings.Split(m.textarea.Value(), "\n")
 	row := m.textarea.Line()
