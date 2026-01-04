@@ -47,7 +47,7 @@ func TestTaskOptionsSaveLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create task options with custom values
 	opts := &TaskOptions{
@@ -108,7 +108,7 @@ func TestLoadTaskOptionsNotExist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Load options from non-existent file (should return defaults)
 	opts, err := LoadTaskOptions(tmpDir)
@@ -126,7 +126,7 @@ func TestLoadTaskOptionsInvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Write invalid JSON
 	optionsPath := filepath.Join(tmpDir, ".options.json")

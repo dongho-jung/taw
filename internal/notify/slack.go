@@ -64,11 +64,11 @@ func SendSlack(cfg *config.SlackConfig, title, message string) error {
 		logging.Warn("SendSlack: failed to send webhook: %v", err)
 		return fmt.Errorf("failed to send Slack webhook: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		logging.Warn("SendSlack: webhook returned status %d", resp.StatusCode)
-		return fmt.Errorf("Slack webhook returned status %d", resp.StatusCode)
+		return fmt.Errorf("slack webhook returned status %d", resp.StatusCode)
 	}
 
 	logging.Debug("SendSlack: notification sent successfully")

@@ -167,10 +167,11 @@ func (m *TaskOptsUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update focused text input
 	var cmd tea.Cmd
-	if m.field == TaskOptsFieldDependsOnTask {
+	switch m.field {
+	case TaskOptsFieldDependsOnTask:
 		m.taskInput, cmd = m.taskInput.Update(msg)
 		cmds = append(cmds, cmd)
-	} else if m.field == TaskOptsFieldWorktreeHook {
+	case TaskOptsFieldWorktreeHook:
 		m.hookInput, cmd = m.hookInput.Update(msg)
 		cmds = append(cmds, cmd)
 	}
@@ -325,8 +326,7 @@ func (m *TaskOptsUI) View() tea.View {
 		}
 		sb.WriteString(label)
 
-		onText := "on"
-		offText := "off"
+		var onText, offText string
 		if m.options.Ultrathink {
 			if m.field == TaskOptsFieldUltrathink {
 				onText = selectedValueStyle.Render("[on]")

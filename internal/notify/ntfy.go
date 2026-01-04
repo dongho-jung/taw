@@ -54,7 +54,7 @@ func SendNtfy(cfg *config.NtfyConfig, title, message string) error {
 		logging.Warn("SendNtfy: failed to send notification: %v", err)
 		return fmt.Errorf("failed to send ntfy notification: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		logging.Warn("SendNtfy: server returned status %d", resp.StatusCode)

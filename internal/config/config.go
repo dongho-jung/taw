@@ -324,12 +324,13 @@ func getIndentLevel(lines []string, index int) int {
 func countLeadingSpaces(s string) int {
 	count := 0
 	for _, ch := range s {
-		if ch == ' ' {
+		switch ch {
+		case ' ':
 			count++
-		} else if ch == '\t' {
+		case '\t':
 			count += 2
-		} else {
-			break
+		default:
+			return count
 		}
 	}
 	return count
