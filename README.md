@@ -182,6 +182,7 @@ brew install tmux gh
 | New task | `⌃N` |
 | Cancel task | `⌃K` |
 | Finish task | `⌃F` |
+| Sync with main | `⌃U` |
 | Quit paw | `⌃Q` |
 
 ### Toggle Panels

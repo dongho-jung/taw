@@ -27,6 +27,11 @@ func init() {
 	internalCmd.AddCommand(recoverTaskCmd)
 	internalCmd.AddCommand(resumeAgentCmd)
 
+	// Sync commands
+	internalCmd.AddCommand(syncWithMainCmd)
+	internalCmd.AddCommand(syncWithMainUICmd)
+	internalCmd.AddCommand(syncTaskCmd)
+
 	// Popup/UI commands
 	internalCmd.AddCommand(popupShellCmd)
 	internalCmd.AddCommand(toggleLogCmd)

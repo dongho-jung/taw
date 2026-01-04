@@ -66,6 +66,11 @@ type Client interface {
 	FindMergeCommit(dir, branch, into string) (string, error)
 	RevertCommit(dir, commitHash, message string) error
 
+	// Rebase
+	Rebase(dir, onto string) error
+	RebaseAbort(dir string) error
+	HasOngoingRebase(dir string) bool
+
 	// Status
 	Status(dir string) (string, error)
 	Checkout(dir, target string) error
@@ -461,6 +466,46 @@ func (c *gitClient) RevertCommit(dir, commitHash, message string) error {
 		args = []string{"revert", "-m", "1", "--no-edit", commitHash}
 	}
 	return c.run(dir, args...)
+}
+
+// Rebase
+
+// Rebase rebases the current branch onto the given target.
+func (c *gitClient) Rebase(dir, onto string) error {
+	return c.run(dir, "rebase", onto)
+}
+
+// RebaseAbort aborts an ongoing rebase operation.
+func (c *gitClient) RebaseAbort(dir string) error {
+	return c.run(dir, "rebase", "--abort")
+}
+
+// HasOngoingRebase checks if there's an ongoing rebase operation.
+// This is indicated by the presence of rebase-merge or rebase-apply directory.
+func (c *gitClient) HasOngoingRebase(dir string) bool {
+	gitDir, err := c.runOutput(dir, "rev-parse", "--git-dir")
+	if err != nil {
+		return false
+	}
+
+	// Make gitDir absolute if it's relative
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(dir, gitDir)
+	}
+
+	// Check for interactive rebase
+	rebaseMergePath := filepath.Join(gitDir, "rebase-merge")
+	if _, err := os.Stat(rebaseMergePath); err == nil {
+		return true
+	}
+
+	// Check for non-interactive rebase
+	rebaseApplyPath := filepath.Join(gitDir, "rebase-apply")
+	if _, err := os.Stat(rebaseApplyPath); err == nil {
+		return true
+	}
+
+	return false
 }
 
 // Status
