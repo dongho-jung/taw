@@ -4,7 +4,7 @@
 !.paw/config
 !.paw/memory
 problems-to-solve.history
-paw-notify.app/Contents/MacOS/paw-notify
+/paw-notify.app/
 /paw-notify
 coverage.out
 paw-notify.app.zip
