@@ -92,7 +92,7 @@ func (c *claudeClient) GenerateSummary(paneContent string) (string, error) {
 Terminal output:
 %s
 
-Write a concise summary only.`, paneContent)
+Write a concise summary only. Do NOT include any header like "Summary:" or "**Summary:**" - just the content.`, paneContent)
 
 	logging.Trace("GenerateSummary: starting with content length=%d", len(paneContent))
 
