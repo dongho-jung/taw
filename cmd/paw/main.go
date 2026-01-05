@@ -108,8 +108,21 @@ func runMain(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// Create app context
-	application, err := app.New(cwd)
+	// Detect git repo first - if in a git repo, use repo root as project dir
+	// This prevents issues with:
+	// 1. Session names containing colons (e.g., "project:src") conflicting with tmux target syntax
+	// 2. .paw directory being created in subdirectory instead of repo root
+	gitClient := git.New()
+	isGitRepo := gitClient.IsGitRepo(cwd)
+	projectDir := cwd
+	if isGitRepo {
+		if repoRoot, err := gitClient.GetRepoRoot(cwd); err == nil {
+			projectDir = repoRoot
+		}
+	}
+
+	// Create app context with appropriate project directory
+	application, err := app.New(projectDir)
 	if err != nil {
 		return fmt.Errorf("failed to create app: %w", err)
 	}
@@ -121,17 +134,8 @@ func runMain(cmd *cobra.Command, args []string) error {
 	}
 	application.SetPawHome(pawHome)
 
-	// Detect git repo
-	gitClient := git.New()
-	isGitRepo := gitClient.IsGitRepo(cwd)
+	// Set git repo state
 	application.SetGitRepo(isGitRepo)
-
-	// Update session name to show repo name when in a git repo
-	if isGitRepo {
-		if repoRoot, err := gitClient.GetRepoRoot(cwd); err == nil {
-			application.UpdateSessionNameForGitRepo(repoRoot)
-		}
-	}
 
 	// Initialize .paw directory
 	if err := application.Initialize(); err != nil {
@@ -567,13 +571,22 @@ func runClean(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	application, err := app.New(cwd)
+	// If in git repo, use repo root as project directory
+	gitClient := git.New()
+	isGitRepo := gitClient.IsGitRepo(cwd)
+	projectDir := cwd
+	if isGitRepo {
+		if repoRoot, err := gitClient.GetRepoRoot(cwd); err == nil {
+			projectDir = repoRoot
+		}
+	}
+
+	application, err := app.New(projectDir)
 	if err != nil {
 		return err
 	}
 
-	gitClient := git.New()
-	application.SetGitRepo(gitClient.IsGitRepo(cwd))
+	application.SetGitRepo(isGitRepo)
 
 	if err := application.LoadConfig(); err != nil {
 		// Config might not exist, continue anyway
@@ -619,13 +632,22 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	application, err := app.New(cwd)
+	// If in git repo, use repo root as project directory
+	gitClient := git.New()
+	isGitRepo := gitClient.IsGitRepo(cwd)
+	projectDir := cwd
+	if isGitRepo {
+		if repoRoot, err := gitClient.GetRepoRoot(cwd); err == nil {
+			projectDir = repoRoot
+		}
+	}
+
+	application, err := app.New(projectDir)
 	if err != nil {
 		return err
 	}
 
-	gitClient := git.New()
-	application.SetGitRepo(gitClient.IsGitRepo(cwd))
+	application.SetGitRepo(isGitRepo)
 
 	// Initialize .paw directory
 	if err := application.Initialize(); err != nil {
