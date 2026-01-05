@@ -57,9 +57,10 @@ const (
 const (
 	ClaudeReadyMaxAttempts  = 60
 	ClaudeReadyPollInterval = 500 * time.Millisecond
-	ClaudeNameGenTimeout1   = 3 * time.Second
-	ClaudeNameGenTimeout2   = 5 * time.Second
-	ClaudeNameGenTimeout3   = 10 * time.Second
+	ClaudeNameGenTimeout1   = 1 * time.Minute  // haiku
+	ClaudeNameGenTimeout2   = 2 * time.Minute  // sonnet
+	ClaudeNameGenTimeout3   = 3 * time.Minute  // opus
+	ClaudeNameGenTimeout4   = 4 * time.Minute  // opus with thinking
 )
 
 // Git/Worktree timeouts

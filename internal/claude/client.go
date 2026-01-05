@@ -106,26 +106,39 @@ Write a concise summary only. Do NOT include any header like "Summary:" or "**Su
 	return summary, nil
 }
 
-// GenerateTaskName generates a task name using Claude CLI (Haiku model).
+// modelAttempt defines a model escalation attempt configuration.
+type modelAttempt struct {
+	model    string
+	thinking bool
+	timeout  time.Duration
+}
+
+// GenerateTaskName generates a task name using Claude CLI with progressive model escalation.
+// Starts with haiku and escalates to sonnet, opus, then opus with thinking on failure.
 func (c *claudeClient) GenerateTaskName(content string) (string, error) {
 	prompt := fmt.Sprintf(`Create a short task name for this task (8-32 lowercase chars, hyphens only, verb-noun format like "add-login-feature"):
 %s
 
 Respond with ONLY the task name, nothing else.`, content)
 
-	// Try with increasing timeouts
-	timeouts := []time.Duration{
-		constants.ClaudeNameGenTimeout1,
-		constants.ClaudeNameGenTimeout2,
-		constants.ClaudeNameGenTimeout3,
+	// Progressive model escalation: haiku -> sonnet -> opus -> opus with thinking
+	attempts := []modelAttempt{
+		{model: "haiku", thinking: false, timeout: constants.ClaudeNameGenTimeout1},
+		{model: "sonnet", thinking: false, timeout: constants.ClaudeNameGenTimeout2},
+		{model: "opus", thinking: false, timeout: constants.ClaudeNameGenTimeout3},
+		{model: "opus", thinking: true, timeout: constants.ClaudeNameGenTimeout4},
 	}
 
-	logging.Trace("GenerateTaskName: starting with %d timeout attempts", len(timeouts))
+	logging.Trace("GenerateTaskName: starting with %d model attempts", len(attempts))
 
 	var lastErr error
-	for i, timeout := range timeouts {
-		logging.Debug("GenerateTaskName: attempt %d/%d with timeout=%v", i+1, len(timeouts), timeout)
-		name, err := c.runClaude(prompt, timeout)
+	for i, attempt := range attempts {
+		modelDesc := attempt.model
+		if attempt.thinking {
+			modelDesc = attempt.model + " (thinking)"
+		}
+		logging.Debug("GenerateTaskName: attempt %d/%d with model=%s, timeout=%v", i+1, len(attempts), modelDesc, attempt.timeout)
+		name, err := c.runClaudeWithModel(prompt, attempt.model, attempt.thinking, attempt.timeout)
 		if err != nil {
 			logging.Debug("GenerateTaskName: attempt %d failed: %v", i+1, err)
 			lastErr = err
@@ -153,12 +166,25 @@ Respond with ONLY the task name, nothing else.`, content)
 }
 
 func (c *claudeClient) runClaude(prompt string, timeout time.Duration) (string, error) {
+	return c.runClaudeWithModel(prompt, "haiku", false, timeout)
+}
+
+func (c *claudeClient) runClaudeWithModel(prompt, model string, thinking bool, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	logging.Trace("runClaude: executing claude -p --model haiku with timeout=%v", timeout)
+	args := []string{"-p", "--model", model}
+	if thinking {
+		args = append(args, "--think")
+	}
 
-	cmd := exec.CommandContext(ctx, "claude", "-p", "--model", "haiku")
+	modelDesc := model
+	if thinking {
+		modelDesc = model + " (thinking)"
+	}
+	logging.Trace("runClaudeWithModel: executing claude %v with timeout=%v", args, timeout)
+
+	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Stdin = strings.NewReader(prompt)
 
 	var stdout, stderr bytes.Buffer
@@ -167,12 +193,12 @@ func (c *claudeClient) runClaude(prompt string, timeout time.Duration) (string, 
 
 	if err := cmd.Run(); err != nil {
 		errMsg := stderr.String()
-		logging.Trace("runClaude: command failed: err=%v, stderr=%q", err, errMsg)
+		logging.Trace("runClaudeWithModel: command failed (model=%s): err=%v, stderr=%q", modelDesc, err, errMsg)
 		return "", fmt.Errorf("claude command failed: %w: %s", err, errMsg)
 	}
 
 	result := strings.TrimSpace(stdout.String())
-	logging.Trace("runClaude: success, output=%q", result)
+	logging.Trace("runClaudeWithModel: success (model=%s), output=%q", modelDesc, result)
 	return result, nil
 }
 
