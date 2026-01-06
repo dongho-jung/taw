@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/v2/textarea"
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/dongho-jung/paw/internal/tui/textarea"
 	"github.com/mattn/go-runewidth"
 
 	"github.com/dongho-jung/paw/internal/config"
@@ -50,6 +50,10 @@ type TaskInput struct {
 	modelIdx   int
 	condIdx    int
 	depTaskIdx int // Index into activeTasks (0 = none, 1+ = task index)
+
+	mouseSelecting  bool
+	selectAnchorRow int
+	selectAnchorCol int
 }
 
 // TaskInputResult contains the result of the task input.
@@ -156,6 +160,11 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		keyStr := msg.String()
 
+		if keyStr == "ctrl+c" && m.focusPanel == FocusPanelLeft && m.textarea.HasSelection() {
+			_ = m.textarea.CopySelection()
+			return m, nil
+		}
+
 		// Global keys (work in both panels)
 		switch keyStr {
 		case "esc", "ctrl+c":
@@ -193,49 +202,27 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Left panel (textarea) - handle mouse clicks below
 
 	case tea.MouseClickMsg:
-		// Handle mouse click to position cursor in textarea
-		if msg.Button == tea.MouseLeft && m.focusPanel == FocusPanelLeft {
-			m.textarea.Focus()
+		if msg.Button == tea.MouseLeft {
+			if row, col, ok := m.handleTextareaMouse(msg.X, msg.Y); ok {
+				m.mouseSelecting = true
+				m.selectAnchorRow = row
+				m.selectAnchorCol = col
+				m.textarea.SetSelection(row, col, row, col)
+			}
+		}
 
-			textareaStartY := 1
-			textareaStartX := 2
+	case tea.MouseMotionMsg:
+		if msg.Button == tea.MouseLeft && m.mouseSelecting {
+			if row, col, ok := m.handleTextareaMouse(msg.X, msg.Y); ok {
+				m.textarea.SetSelection(m.selectAnchorRow, m.selectAnchorCol, row, col)
+			}
+		}
 
-			targetRow := msg.Y - textareaStartY
-			targetCol := msg.X - textareaStartX
-
-			if targetRow >= 0 {
-				if targetCol < 0 {
-					targetCol = 0
-				}
-
-				if cursor := m.textarea.Cursor(); cursor != nil {
-					currentRow := cursor.Y
-
-					switch {
-					case targetRow > currentRow:
-						steps := targetRow - currentRow
-						for i := 0; i < steps; i++ {
-							prev := m.textarea.Cursor()
-							m.textarea.CursorDown()
-							next := m.textarea.Cursor()
-							if next == nil || (prev != nil && next.Y == prev.Y) {
-								break
-							}
-						}
-					case targetRow < currentRow:
-						steps := currentRow - targetRow
-						for i := 0; i < steps; i++ {
-							prev := m.textarea.Cursor()
-							m.textarea.CursorUp()
-							next := m.textarea.Cursor()
-							if next == nil || (prev != nil && next.Y == prev.Y) {
-								break
-							}
-						}
-					}
-				}
-
-				m.moveCursorToVisualColumn(targetCol)
+	case tea.MouseReleaseMsg:
+		if msg.Button == tea.MouseLeft && m.mouseSelecting {
+			m.mouseSelecting = false
+			if !m.textarea.HasSelection() {
+				m.textarea.ClearSelection()
 			}
 		}
 	}
@@ -473,8 +460,8 @@ func (m *TaskInput) renderOptionsPanel(panelHeight int) string {
 	panelStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Padding(0, 2). // No vertical padding - Options title provides spacing
-		Width(41).     // Wider to accommodate content
+		Padding(0, 2).      // No vertical padding - Options title provides spacing
+		Width(41).          // Wider to accommodate content
 		Height(panelHeight) // Match textarea height
 
 	var content strings.Builder
@@ -620,6 +607,60 @@ func (m *TaskInput) renderOptionsPanel(panelHeight int) string {
 	}
 
 	return panelStyle.Render(content.String())
+}
+
+func (m *TaskInput) handleTextareaMouse(x, y int) (int, int, bool) {
+	if m.focusPanel != FocusPanelLeft {
+		return 0, 0, false
+	}
+
+	m.textarea.Focus()
+
+	textareaStartY := 1
+	textareaStartX := 2
+
+	targetRow := y - textareaStartY
+	targetCol := x - textareaStartX
+
+	if targetRow < 0 {
+		return 0, 0, false
+	}
+
+	if targetCol < 0 {
+		targetCol = 0
+	}
+
+	if cursor := m.textarea.Cursor(); cursor != nil {
+		currentRow := cursor.Y
+
+		switch {
+		case targetRow > currentRow:
+			steps := targetRow - currentRow
+			for i := 0; i < steps; i++ {
+				prev := m.textarea.Cursor()
+				m.textarea.CursorDown()
+				next := m.textarea.Cursor()
+				if next == nil || (prev != nil && next.Y == prev.Y) {
+					break
+				}
+			}
+		case targetRow < currentRow:
+			steps := currentRow - targetRow
+			for i := 0; i < steps; i++ {
+				prev := m.textarea.Cursor()
+				m.textarea.CursorUp()
+				next := m.textarea.Cursor()
+				if next == nil || (prev != nil && next.Y == prev.Y) {
+					break
+				}
+			}
+		}
+	}
+
+	m.moveCursorToVisualColumn(targetCol)
+
+	row, col := m.textarea.CursorPosition()
+	return row, col, true
 }
 
 func (m *TaskInput) moveCursorToVisualColumn(targetCol int) {
