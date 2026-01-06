@@ -40,21 +40,9 @@ var syncWithMainCmd = &cobra.Command{
 
 		// Find task by window ID
 		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
-		tasks, err := mgr.ListTasks()
+		targetTask, err := mgr.FindTaskByWindowID(windowID)
 		if err != nil {
-			return fmt.Errorf("failed to list tasks: %w", err)
-		}
-
-		var targetTask *task.Task
-		for _, t := range tasks {
-			if id, _ := t.LoadWindowID(); id == windowID {
-				targetTask = t
-				break
-			}
-		}
-
-		if targetTask == nil {
-			return fmt.Errorf("task not found for window %s", windowID)
+			return err
 		}
 
 		// Setup logging

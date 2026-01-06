@@ -1,6 +1,7 @@
 package task
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,4 +56,67 @@ func TestFindMergedTasks_ExternallyCleanedUp(t *testing.T) {
 	} else if merged[0].Name != taskName {
 		t.Errorf("Expected task name %s, got %s", taskName, merged[0].Name)
 	}
+}
+
+func TestFindTaskByWindowID(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "paw-task-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	agentsDir := filepath.Join(tempDir, ".paw", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("Failed to create agents dir: %v", err)
+	}
+
+	pawDir := filepath.Join(tempDir, ".paw")
+	mgr := NewManager(agentsDir, tempDir, pawDir, false, config.DefaultConfig())
+
+	// Create first task
+	taskOne := New("task-one", filepath.Join(agentsDir, "task-one"))
+	if err := os.MkdirAll(taskOne.AgentDir, 0755); err != nil {
+		t.Fatalf("Failed to create task directory: %v", err)
+	}
+	if _, err := taskOne.CreateTabLock(); err != nil {
+		t.Fatalf("Failed to create tab-lock: %v", err)
+	}
+	if err := taskOne.SaveWindowID("1"); err != nil {
+		t.Fatalf("Failed to save window ID: %v", err)
+	}
+	if err := taskOne.SaveContent("first task"); err != nil {
+		t.Fatalf("Failed to save task content: %v", err)
+	}
+
+	// Create second task
+	taskTwo := New("task-two", filepath.Join(agentsDir, "task-two"))
+	if err := os.MkdirAll(taskTwo.AgentDir, 0755); err != nil {
+		t.Fatalf("Failed to create task directory: %v", err)
+	}
+	if _, err := taskTwo.CreateTabLock(); err != nil {
+		t.Fatalf("Failed to create tab-lock: %v", err)
+	}
+	if err := taskTwo.SaveWindowID("2"); err != nil {
+		t.Fatalf("Failed to save window ID: %v", err)
+	}
+	if err := taskTwo.SaveContent("second task"); err != nil {
+		t.Fatalf("Failed to save task content: %v", err)
+	}
+
+	t.Run("found", func(t *testing.T) {
+		task, err := mgr.FindTaskByWindowID("2")
+		if err != nil {
+			t.Fatalf("FindTaskByWindowID returned error: %v", err)
+		}
+		if task.Name != taskTwo.Name {
+			t.Fatalf("Expected task name %s, got %s", taskTwo.Name, task.Name)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		_, err := mgr.FindTaskByWindowID("missing")
+		if !errors.Is(err, ErrTaskNotFound) {
+			t.Fatalf("Expected ErrTaskNotFound, got %v", err)
+		}
+	})
 }

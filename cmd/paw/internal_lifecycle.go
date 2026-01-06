@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -42,21 +43,9 @@ var endTaskCmd = &cobra.Command{
 
 		// Find task by window ID
 		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
-		tasks, err := mgr.ListTasks()
+		targetTask, err := mgr.FindTaskByWindowID(windowID)
 		if err != nil {
-			return fmt.Errorf("failed to list tasks: %w", err)
-		}
-
-		var targetTask *task.Task
-		for _, t := range tasks {
-			if id, _ := t.LoadWindowID(); id == windowID {
-				targetTask = t
-				break
-			}
-		}
-
-		if targetTask == nil {
-			return fmt.Errorf("task not found for window %s", windowID)
+			return err
 		}
 
 		// Setup logging
@@ -539,24 +528,15 @@ var cancelTaskCmd = &cobra.Command{
 		findSpinner.Start()
 
 		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
-		tasks, err := mgr.ListTasks()
+		targetTask, err := mgr.FindTaskByWindowID(windowID)
 		if err != nil {
-			findSpinner.Stop(false, "Failed")
-			return fmt.Errorf("failed to list tasks: %w", err)
-		}
-
-		var targetTask *task.Task
-		for _, t := range tasks {
-			if id, _ := t.LoadWindowID(); id == windowID {
-				targetTask = t
-				break
+			if errors.Is(err, task.ErrTaskNotFound) {
+				findSpinner.Stop(false, "Not found")
+				fmt.Println("  ✗ Task not found")
+				return nil
 			}
-		}
-
-		if targetTask == nil {
-			findSpinner.Stop(false, "Not found")
-			fmt.Println("  ✗ Task not found")
-			return nil
+			findSpinner.Stop(false, "Failed")
+			return fmt.Errorf("failed to find task: %w", err)
 		}
 		findSpinner.Stop(true, "Found")
 		fmt.Printf("  Task: %s\n\n", targetTask.Name)
@@ -795,24 +775,15 @@ var mergeTaskCmd = &cobra.Command{
 		findSpinner.Start()
 
 		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
-		tasks, err := mgr.ListTasks()
+		targetTask, err := mgr.FindTaskByWindowID(windowID)
 		if err != nil {
-			findSpinner.Stop(false, "Failed")
-			return fmt.Errorf("failed to list tasks: %w", err)
-		}
-
-		var targetTask *task.Task
-		for _, t := range tasks {
-			if id, _ := t.LoadWindowID(); id == windowID {
-				targetTask = t
-				break
+			if errors.Is(err, task.ErrTaskNotFound) {
+				findSpinner.Stop(false, "Not found")
+				fmt.Println("  ✗ Task not found")
+				return nil
 			}
-		}
-
-		if targetTask == nil {
-			findSpinner.Stop(false, "Not found")
-			fmt.Println("  ✗ Task not found")
-			return nil
+			findSpinner.Stop(false, "Failed")
+			return fmt.Errorf("failed to find task: %w", err)
 		}
 		findSpinner.Stop(true, "Found")
 		fmt.Printf("  Task: %s\n\n", targetTask.Name)

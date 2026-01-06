@@ -2,6 +2,7 @@
 package task
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,29 +18,32 @@ import (
 	"github.com/dongho-jung/paw/internal/tmux"
 )
 
+// ErrTaskNotFound indicates that a task could not be found for the given lookup criteria.
+var ErrTaskNotFound = errors.New("task not found")
+
 // Manager handles task lifecycle operations.
 type Manager struct {
-	agentsDir   string
-	projectDir  string
-	pawDir      string
-	isGitRepo   bool
-	config      *config.Config
-	tmuxClient  tmux.Client
-	gitClient   git.Client
-	ghClient    github.Client
+	agentsDir    string
+	projectDir   string
+	pawDir       string
+	isGitRepo    bool
+	config       *config.Config
+	tmuxClient   tmux.Client
+	gitClient    git.Client
+	ghClient     github.Client
 	claudeClient claude.Client
 }
 
 // NewManager creates a new task manager.
 func NewManager(agentsDir, projectDir, pawDir string, isGitRepo bool, cfg *config.Config) *Manager {
 	return &Manager{
-		agentsDir:   agentsDir,
-		projectDir:  projectDir,
-		pawDir:      pawDir,
-		isGitRepo:   isGitRepo,
-		config:      cfg,
-		gitClient:   git.New(),
-		ghClient:    github.New(),
+		agentsDir:    agentsDir,
+		projectDir:   projectDir,
+		pawDir:       pawDir,
+		isGitRepo:    isGitRepo,
+		config:       cfg,
+		gitClient:    git.New(),
+		ghClient:     github.New(),
 		claudeClient: claude.New(),
 	}
 }
@@ -171,6 +175,29 @@ func (m *Manager) ListTasks() ([]*Task, error) {
 	}
 
 	return tasks, nil
+}
+
+// FindTaskByWindowID returns the task associated with the given tmux window ID.
+func (m *Manager) FindTaskByWindowID(windowID string) (*Task, error) {
+	tasks, err := m.ListTasks()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tasks: %w", err)
+	}
+
+	for _, t := range tasks {
+		id, loadErr := t.LoadWindowID()
+		if loadErr != nil {
+			if !errors.Is(loadErr, os.ErrNotExist) {
+				logging.Trace("FindTaskByWindowID: failed to load window ID for %s: %v", t.Name, loadErr)
+			}
+			continue
+		}
+		if id == windowID {
+			return t, nil
+		}
+	}
+
+	return nil, fmt.Errorf("%w: window %s", ErrTaskNotFound, windowID)
 }
 
 // FindIncompleteTasks finds tasks that should have a window but don't.
