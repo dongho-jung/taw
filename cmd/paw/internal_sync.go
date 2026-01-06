@@ -279,10 +279,118 @@ var syncTaskCmd = &cobra.Command{
 	},
 }
 
-// Extend gitClient with runOutput method access for behind count check
-// We need to access the runOutput method, but since it's private, we'll use exec directly
-func init() {
-	// Add runOutput-like functionality to the sync command by using git directly
+var toggleBranchCmd = &cobra.Command{
+	Use:   "toggle-branch [session]",
+	Short: "Toggle between task branch and main branch",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer func() { _ = logger.Close() }()
+			logger.SetScript("toggle-branch")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Trace("toggleBranchCmd: start session=%s", sessionName)
+		defer logging.Trace("toggleBranchCmd: end")
+
+		tm := tmux.New(sessionName)
+
+		// Check if git mode
+		if !app.IsGitRepo {
+			_ = tm.DisplayMessage("Not a git repository", 1500)
+			return nil
+		}
+
+		// Get current window name
+		windowName, _ := tm.Display("#{window_name}")
+		windowName = strings.TrimSpace(windowName)
+
+		// Check if this is a task window (has emoji prefix)
+		if !strings.HasPrefix(windowName, constants.EmojiWorking) &&
+			!strings.HasPrefix(windowName, constants.EmojiWaiting) &&
+			!strings.HasPrefix(windowName, constants.EmojiDone) &&
+			!strings.HasPrefix(windowName, constants.EmojiWarning) {
+			_ = tm.DisplayMessage("Not a task window", 1500)
+			return nil
+		}
+
+		// Get current window ID
+		windowID, err := tm.Display("#{window_id}")
+		if err != nil {
+			return fmt.Errorf("failed to get window ID: %w", err)
+		}
+		windowID = strings.TrimSpace(windowID)
+
+		// Find task by window ID
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
+		tasks, err := mgr.ListTasks()
+		if err != nil {
+			return fmt.Errorf("failed to list tasks: %w", err)
+		}
+
+		var targetTask *task.Task
+		for _, t := range tasks {
+			if id, _ := t.LoadWindowID(); id == windowID {
+				targetTask = t
+				break
+			}
+		}
+
+		if targetTask == nil {
+			_ = tm.DisplayMessage("Task not found", 1500)
+			return nil
+		}
+
+		gitClient := git.New()
+		workDir := mgr.GetWorkingDirectory(targetTask)
+
+		// Get current branch
+		currentBranch, err := gitClient.GetCurrentBranch(workDir)
+		if err != nil {
+			return fmt.Errorf("failed to get current branch: %w", err)
+		}
+
+		// Get main branch name
+		mainBranch := gitClient.GetMainBranch(app.ProjectDir)
+
+		logging.Debug("Current branch: %s, Main branch: %s, Task: %s", currentBranch, mainBranch, targetTask.Name)
+
+		// Toggle between task branch and main branch
+		var targetBranch string
+		if currentBranch == mainBranch {
+			// Currently on main, switch to task branch
+			targetBranch = targetTask.Name
+		} else {
+			// Currently on task branch (or other), switch to main
+			targetBranch = mainBranch
+		}
+
+		// Check for uncommitted changes
+		if gitClient.HasChanges(workDir) {
+			_ = tm.DisplayMessage("Uncommitted changes - commit or stash first", 2000)
+			return nil
+		}
+
+		// Checkout target branch
+		if err := gitClient.Checkout(workDir, targetBranch); err != nil {
+			_ = tm.DisplayMessage(fmt.Sprintf("Checkout failed: %v", err), 2000)
+			return fmt.Errorf("failed to checkout %s: %w", targetBranch, err)
+		}
+
+		_ = tm.DisplayMessage(fmt.Sprintf("Switched to %s", targetBranch), 1500)
+		logging.Info("Switched from %s to %s", currentBranch, targetBranch)
+
+		return nil
+	},
 }
 
 // getBehindCount returns how many commits the current branch is behind origin/main

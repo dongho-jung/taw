@@ -33,6 +33,7 @@ func init() {
 	internalCmd.AddCommand(syncWithMainCmd)
 	internalCmd.AddCommand(syncWithMainUICmd)
 	internalCmd.AddCommand(syncTaskCmd)
+	internalCmd.AddCommand(toggleBranchCmd)
 
 	// Popup/UI commands
 	internalCmd.AddCommand(popupShellCmd)
@@ -46,8 +47,9 @@ func init() {
 	internalCmd.AddCommand(loadingScreenCmd)
 	internalCmd.AddCommand(toggleSetupCmd)
 	internalCmd.AddCommand(setupWizardCmd)
-	internalCmd.AddCommand(branchMenuCmd)
-	internalCmd.AddCommand(branchMenuTUICmd)
+	internalCmd.AddCommand(toggleCmdPaletteCmd)
+	internalCmd.AddCommand(cmdPaletteTUICmd)
+	internalCmd.AddCommand(restorePanesCmd)
 
 	// Utility commands
 	internalCmd.AddCommand(ctrlCCmd)

@@ -425,9 +425,9 @@ var taskListViewerCmd = &cobra.Command{
 	},
 }
 
-var branchMenuCmd = &cobra.Command{
-	Use:   "branch-menu [session]",
-	Short: "Show branch action menu popup",
+var toggleCmdPaletteCmd = &cobra.Command{
+	Use:   "toggle-cmd-palette [session]",
+	Short: "Toggle command palette popup",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
@@ -438,47 +438,220 @@ var branchMenuCmd = &cobra.Command{
 			pawBin = "paw"
 		}
 
-		// Run branch menu in small popup
-		menuCmd := fmt.Sprintf("%s internal branch-menu-tui %s", pawBin, sessionName)
+		// Run command palette in popup
+		paletteCmd := fmt.Sprintf("%s internal cmd-palette-tui %s", pawBin, sessionName)
 
 		return tm.DisplayPopup(tmux.PopupOpts{
-			Width:  "42",
-			Height: "8",
+			Width:  "60",
+			Height: "20",
 			Title:  "",
 			Close:  true,
 			Style:  "fg=terminal,bg=terminal",
-		}, menuCmd)
+		}, paletteCmd)
 	},
 }
 
-var branchMenuTUICmd = &cobra.Command{
-	Use:   "branch-menu-tui [session]",
-	Short: "Run branch menu TUI (called from popup)",
-	Args:  cobra.ExactArgs(1),
+var cmdPaletteTUICmd = &cobra.Command{
+	Use:    "cmd-palette-tui [session]",
+	Short:  "Run command palette TUI (called from popup)",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
 
-		action, err := tui.RunBranchMenu()
+		// Define available commands
+		commands := []tui.Command{
+			{
+				Name:        "Restore Panes",
+				Description: "Restore missing panes in current task window",
+				ID:          "restore-panes",
+			},
+		}
+
+		action, selected, err := tui.RunCommandPalette(commands)
 		if err != nil {
 			return err
 		}
 
+		if action == tui.CommandPaletteCancel || selected == nil {
+			return nil
+		}
+
+		// Execute the selected command
 		pawBin, err := os.Executable()
 		if err != nil {
 			pawBin = "paw"
 		}
 
-		switch action {
-		case tui.BranchActionMerge:
-			// Run merge-task-ui
-			mergeCmd := exec.Command(pawBin, "internal", "merge-task-ui", sessionName)
-			return mergeCmd.Run()
-		case tui.BranchActionSync:
-			// Run sync-task
-			syncCmd := exec.Command(pawBin, "internal", "sync-task", sessionName)
-			return syncCmd.Run()
+		switch selected.ID {
+		case "restore-panes":
+			restoreCmd := exec.Command(pawBin, "internal", "restore-panes", sessionName)
+			return restoreCmd.Run()
 		}
-		// Cancel - do nothing
+
+		return nil
+	},
+}
+
+var restorePanesCmd = &cobra.Command{
+	Use:    "restore-panes [session]",
+	Short:  "Restore missing panes in current task window",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer func() { _ = logger.Close() }()
+			logger.SetScript("restore-panes")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Trace("restorePanesCmd: start session=%s", sessionName)
+		defer logging.Trace("restorePanesCmd: end")
+
+		tm := tmux.New(sessionName)
+
+		// Get current window info
+		windowName, err := tm.Display("#{window_name}")
+		if err != nil {
+			return fmt.Errorf("failed to get window name: %w", err)
+		}
+		windowName = strings.TrimSpace(windowName)
+
+		windowID, err := tm.Display("#{window_id}")
+		if err != nil {
+			return fmt.Errorf("failed to get window ID: %w", err)
+		}
+		windowID = strings.TrimSpace(windowID)
+
+		logging.Debug("Current window: name=%s, id=%s", windowName, windowID)
+
+		// Check if this is a task window (has task emoji prefix)
+		taskName := ""
+		for _, prefix := range []string{"🤖", "💬", "✅", "❌", "⏳"} {
+			if strings.HasPrefix(windowName, prefix) {
+				taskName = strings.TrimPrefix(windowName, prefix)
+				break
+			}
+		}
+
+		if taskName == "" {
+			_ = tm.DisplayMessage("Not a task window", 2000)
+			return nil
+		}
+
+		logging.Debug("Task name: %s", taskName)
+
+		// Find agent directory
+		agentDir := filepath.Join(app.AgentsDir, taskName)
+		if _, err := os.Stat(agentDir); os.IsNotExist(err) {
+			_ = tm.DisplayMessage(fmt.Sprintf("Agent directory not found: %s", taskName), 2000)
+			return nil
+		}
+
+		// Get current pane count
+		paneCount, err := tm.Display("#{window_panes}")
+		if err != nil {
+			return fmt.Errorf("failed to get pane count: %w", err)
+		}
+		paneCount = strings.TrimSpace(paneCount)
+
+		logging.Debug("Current pane count: %s", paneCount)
+
+		// Task window should have 2 panes: agent (0) and user (1)
+		if paneCount == "2" {
+			_ = tm.DisplayMessage("All panes are present", 2000)
+			return nil
+		}
+
+		// Get working directory
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
+		t, err := mgr.GetTask(taskName)
+		if err != nil {
+			return fmt.Errorf("failed to get task: %w", err)
+		}
+
+		workDir := mgr.GetWorkingDirectory(t)
+
+		// Check which pane is missing and restore
+		if paneCount == "0" {
+			// Both panes missing - respawn the window
+			logging.Info("Both panes missing, respawning agent pane")
+
+			// Start agent pane
+			startAgentScript := filepath.Join(agentDir, "start-agent")
+			if _, err := os.Stat(startAgentScript); os.IsNotExist(err) {
+				_ = tm.DisplayMessage("start-agent script not found", 2000)
+				return nil
+			}
+
+			if err := tm.RespawnPane(windowID+".0", workDir, startAgentScript); err != nil {
+				return fmt.Errorf("failed to respawn agent pane: %w", err)
+			}
+
+			// Create user pane
+			taskFilePath := t.GetTaskFilePath()
+			userPaneCmd := fmt.Sprintf("sh -c 'cat %s; echo; exec %s'", taskFilePath, getShell())
+			if err := tm.SplitWindow(windowID, true, workDir, userPaneCmd); err != nil {
+				logging.Warn("Failed to create user pane: %v", err)
+			}
+
+			_ = tm.DisplayMessage("Restored both panes", 2000)
+		} else if paneCount == "1" {
+			// One pane exists - need to determine which one is missing
+			// Check if the existing pane is running claude (agent) or shell (user)
+			paneCmd, err := tm.GetPaneCommand(windowID + ".0")
+			if err != nil {
+				paneCmd = ""
+			}
+			paneCmd = strings.TrimSpace(paneCmd)
+
+			logging.Debug("Existing pane command: %s", paneCmd)
+
+			if paneCmd == "claude" || strings.Contains(paneCmd, "start-agent") {
+				// Agent pane exists, user pane is missing
+				logging.Info("User pane missing, creating it")
+				taskFilePath := t.GetTaskFilePath()
+				userPaneCmd := fmt.Sprintf("sh -c 'cat %s; echo; exec %s'", taskFilePath, getShell())
+				if err := tm.SplitWindow(windowID, true, workDir, userPaneCmd); err != nil {
+					return fmt.Errorf("failed to create user pane: %w", err)
+				}
+				_ = tm.DisplayMessage("Restored user pane", 2000)
+			} else {
+				// User pane exists (or unknown), agent pane is missing
+				logging.Info("Agent pane missing, creating it")
+
+				// Need to create agent pane before the user pane
+				startAgentScript := filepath.Join(agentDir, "start-agent")
+				if _, err := os.Stat(startAgentScript); os.IsNotExist(err) {
+					_ = tm.DisplayMessage("start-agent script not found", 2000)
+					return nil
+				}
+
+				// Split before the current pane to create agent pane at position 0
+				_, err := tm.SplitWindowPane(tmux.SplitOpts{
+					Target:     windowID + ".0",
+					Horizontal: true,
+					Before:     true,
+					StartDir:   workDir,
+					Command:    startAgentScript,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to create agent pane: %w", err)
+				}
+				_ = tm.DisplayMessage("Restored agent pane", 2000)
+			}
+		}
+
+		logging.Info("Panes restored for task: %s", taskName)
 		return nil
 	},
 }

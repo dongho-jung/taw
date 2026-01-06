@@ -18,7 +18,9 @@ Claude Code-based autonomous agent work environment
   ⌃N          New task
   ⌃K          Cancel task (double-press within 2s)
   ⌃F          Finish task (complete and cleanup)
-  ⌃]          Branch menu (↑ merge, ↓ sync)
+  ⌃↑          Toggle branch (task ↔ main)
+  ⌃↓          Sync from main (rebase)
+  ⌃P          Command palette (fuzzy search commands)
   ⌃Q          Quit paw
 
 ### Toggle Panels
@@ -114,6 +116,18 @@ Configure per-task settings before submission:
   PAW_HOME      PAW installation directory
   PAW_BIN       PAW binary path
   SESSION_NAME  tmux session name
+
+## Command Palette (⌃P)
+
+Fuzzy-searchable command palette for quick access to commands.
+
+### Navigation
+  ↑/↓/⌃k/⌃j  Navigate commands
+  ⏎           Execute selected command
+  Esc/⌃P      Close palette
+
+### Available Commands
+  Restore Panes  Restore missing panes in current task window
 
 ## Help Viewer (⌃/)
 
