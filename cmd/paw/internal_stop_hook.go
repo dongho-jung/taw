@@ -20,12 +20,38 @@ import (
 
 const stopHookTimeout = 20 * time.Second
 const doneMarker = "PAW_DONE"
+const stopHookTraceFile = "/tmp/paw-stop-hook-trace.log"
+
+// stopHookTrace writes a debug trace to help diagnose stop hook issues.
+// This is written to a separate file for debugging since stop hook runs
+// outside the normal logging context and may fail before logging is initialized.
+func stopHookTrace(format string, args ...interface{}) {
+	f, err := os.OpenFile(stopHookTraceFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	msg := fmt.Sprintf(format, args...)
+	f.WriteString(fmt.Sprintf("[%s] %s\n", timestamp, msg))
+}
 
 var stopHookCmd = &cobra.Command{
 	Use:   "stop-hook",
 	Short: "Handle Claude stop hook for task status updates",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Trace hook invocation with environment variables for debugging
+		stopHookTrace("stop-hook called: PAW_STOP_HOOK=%q SESSION_NAME=%q WINDOW_ID=%q TASK_NAME=%q PAW_BIN=%q",
+			os.Getenv("PAW_STOP_HOOK"),
+			os.Getenv("SESSION_NAME"),
+			os.Getenv("WINDOW_ID"),
+			os.Getenv("TASK_NAME"),
+			os.Getenv("PAW_BIN"),
+		)
+
+		// Prevent recursive hook execution (when calling claude for classification)
 		if os.Getenv("PAW_STOP_HOOK") != "" {
+			stopHookTrace("Skipping: PAW_STOP_HOOK is set (recursive call)")
 			return nil
 		}
 
@@ -33,6 +59,7 @@ var stopHookCmd = &cobra.Command{
 		windowID := os.Getenv("WINDOW_ID")
 		taskName := os.Getenv("TASK_NAME")
 		if sessionName == "" || windowID == "" || taskName == "" {
+			stopHookTrace("Skipping: missing env vars (session=%q window=%q task=%q)", sessionName, windowID, taskName)
 			return nil
 		}
 
@@ -53,24 +80,28 @@ var stopHookCmd = &cobra.Command{
 		paneID := windowID + ".0"
 		if !tm.HasPane(paneID) {
 			logging.Debug("stopHookCmd: pane %s not found, skipping", paneID)
+			stopHookTrace("Skipping: pane %s not found", paneID)
 			return nil
 		}
 
 		windowName, err := getWindowName(tm, windowID)
 		if err == nil && isFinalWindow(windowName) {
 			logging.Debug("stopHookCmd: window already final (%s), skipping", windowName)
+			stopHookTrace("Skipping: window already final (%s)", windowName)
 			return nil
 		}
 
 		paneContent, err := tm.CapturePane(paneID, constants.PaneCaptureLines)
 		if err != nil {
 			logging.Warn("stopHookCmd: failed to capture pane: %v", err)
+			stopHookTrace("Error: failed to capture pane: %v", err)
 			return nil
 		}
 
 		paneContent = strings.TrimSpace(paneContent)
 		if paneContent == "" {
 			logging.Warn("stopHookCmd: empty pane capture, skipping")
+			stopHookTrace("Skipping: empty pane capture")
 			return nil
 		}
 
@@ -81,22 +112,32 @@ var stopHookCmd = &cobra.Command{
 		if hasDoneMarker(paneContent) {
 			logging.Debug("stopHookCmd: PAW_DONE marker detected")
 			status = task.StatusDone
+			stopHookTrace("PAW_DONE marker detected for task=%s", taskName)
 		} else {
 			// Fallback to Claude classification
+			stopHookTrace("Calling Claude haiku for classification task=%s content_len=%d", taskName, len(paneContent))
+
 			var err error
 			status, err = classifyStopStatus(taskName, paneContent)
 			if err != nil {
 				logging.Warn("stopHookCmd: classification failed: %v", err)
 				status = task.StatusWaiting
+				stopHookTrace("Classification FAILED task=%s error=%v (defaulting to WAITING)", taskName, err)
+			} else {
+				stopHookTrace("Classification SUCCESS task=%s status=%s", taskName, status)
 			}
 		}
 
 		newName := windowNameForStatus(taskName, status)
+		stopHookTrace("Renaming window task=%s windowID=%s to status=%s newName=%s", taskName, windowID, status, newName)
+
 		if err := renameWindowCmd.RunE(renameWindowCmd, []string{windowID, newName}); err != nil {
 			logging.Warn("stopHookCmd: failed to rename window: %v", err)
+			stopHookTrace("Rename FAILED task=%s error=%v", taskName, err)
 			return nil
 		}
 
+		stopHookTrace("STATUS UPDATE SUCCESS task=%s status=%s newName=%s", taskName, status, newName)
 		logging.Debug("stopHookCmd: status updated to %s", status)
 		return nil
 	},
