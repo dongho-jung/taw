@@ -2,8 +2,11 @@
 package tui
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
@@ -363,19 +366,15 @@ func (m *TaskInput) View() tea.View {
 		Foreground(dimColor).
 		MarginTop(1)
 
-	// Build left panel (task input) - no title, starts at same height as Options box
+	// Build left panel (task input)
 	var leftPanel strings.Builder
 	leftPanel.WriteString(m.textarea.View())
 
-	// Calculate panel height to match textarea
-	// Textarea rendered height: internal height + 2 (top/bottom borders)
-	// Options panel adds: 2 (borders) + 0 (no vertical padding with Padding(0, 2))
-	// To match: panelContentHeight + 2 = textareaRenderedHeight
-	textareaRenderedHeight := m.textarea.Height() + 2
-	panelHeight := max(textareaRenderedHeight-2, 1)
-
-	// Build right panel (options)
-	rightPanel := m.renderOptionsPanel(panelHeight)
+	// Build right panel (options + claude info)
+	// Options panel auto-sizes to fit content, Claude info below
+	rightPanel := m.renderOptionsPanel()
+	claudeInfo := m.renderClaudeInfo()
+	rightPanelWithInfo := lipgloss.JoinVertical(lipgloss.Left, rightPanel, claudeInfo)
 
 	// Join panels horizontally with gap
 	gapStyle := lipgloss.NewStyle().Width(4)
@@ -383,7 +382,7 @@ func (m *TaskInput) View() tea.View {
 		lipgloss.Top,
 		leftPanel.String(),
 		gapStyle.Render(""),
-		rightPanel,
+		rightPanelWithInfo,
 	)
 
 	// Add help text at bottom
@@ -413,8 +412,8 @@ func (m *TaskInput) View() tea.View {
 }
 
 // renderOptionsPanel renders the options panel for the right side.
-// The height parameter sets the panel height to match the textarea.
-func (m *TaskInput) renderOptionsPanel(panelHeight int) string {
+// The panel auto-sizes to fit its content.
+func (m *TaskInput) renderOptionsPanel() string {
 	isFocused := m.focusPanel == FocusPanelRight
 
 	// Adaptive colors for light/dark terminal themes (use cached isDark value)
@@ -460,9 +459,8 @@ func (m *TaskInput) renderOptionsPanel(panelHeight int) string {
 	panelStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Padding(0, 2).      // No vertical padding - Options title provides spacing
-		Width(41).          // Wider to accommodate content
-		Height(panelHeight) // Match textarea height
+		Padding(0, 2). // No vertical padding - Options title provides spacing
+		Width(41)      // Wider to accommodate content
 
 	var content strings.Builder
 
@@ -607,6 +605,153 @@ func (m *TaskInput) renderOptionsPanel(panelHeight int) string {
 	}
 
 	return panelStyle.Render(content.String())
+}
+
+// renderClaudeInfo renders the Claude information panel showing MCPs, usage, and limits.
+func (m *TaskInput) renderClaudeInfo() string {
+	// Adaptive colors for light/dark terminal themes (use cached isDark value)
+	lightDark := lipgloss.LightDark(m.isDark)
+	normalColor := lightDark(lipgloss.Color("236"), lipgloss.Color("252"))
+	dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("240"))
+
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(dimColor)
+
+	labelStyle := lipgloss.NewStyle().
+		Foreground(dimColor).
+		Width(12)
+
+	valueStyle := lipgloss.NewStyle().
+		Foreground(normalColor)
+
+	panelStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(dimColor).
+		Padding(0, 2).
+		Width(41).
+		MarginTop(1)
+
+	var content strings.Builder
+	content.WriteString(titleStyle.Render("Claude Info"))
+	content.WriteString("\n")
+
+	// Get Claude info
+	info := getClaudeInfo()
+
+	// MCPs
+	content.WriteString(labelStyle.Render("MCPs:"))
+	if len(info.MCPs) == 0 {
+		content.WriteString(valueStyle.Render("none"))
+	} else {
+		content.WriteString(valueStyle.Render(strings.Join(info.MCPs, ", ")))
+	}
+	content.WriteString("\n")
+
+	// Today's usage
+	content.WriteString(labelStyle.Render("Today:"))
+	content.WriteString(valueStyle.Render(info.TodayUsage))
+	content.WriteString("\n")
+
+	// Model info
+	content.WriteString(labelStyle.Render("Model:"))
+	content.WriteString(valueStyle.Render(info.Model))
+	content.WriteString("\n")
+
+	return panelStyle.Render(content.String())
+}
+
+// claudeInfo holds Claude status information.
+type claudeInfo struct {
+	MCPs       []string
+	TodayUsage string
+	Model      string
+}
+
+// getClaudeInfo retrieves Claude status information from config files.
+func getClaudeInfo() claudeInfo {
+	info := claudeInfo{
+		MCPs:       []string{},
+		TodayUsage: "N/A",
+		Model:      "sonnet",
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return info
+	}
+
+	// Read stats cache for usage
+	statsPath := homeDir + "/.claude/stats-cache.json"
+	if data, err := os.ReadFile(statsPath); err == nil {
+		info.TodayUsage = parseStatsUsage(data)
+	}
+
+	// Read settings for MCPs and plugins
+	settingsPath := homeDir + "/.claude/settings.json"
+	if data, err := os.ReadFile(settingsPath); err == nil {
+		info.MCPs = parseEnabledPlugins(data)
+	}
+
+	return info
+}
+
+// parseStatsUsage extracts today's usage from stats-cache.json.
+func parseStatsUsage(data []byte) string {
+	// Simple JSON parsing for stats
+	var stats struct {
+		DailyActivity []struct {
+			Date         string `json:"date"`
+			MessageCount int    `json:"messageCount"`
+			ToolCallCount int   `json:"toolCallCount"`
+		} `json:"dailyActivity"`
+	}
+
+	if err := parseJSON(data, &stats); err != nil {
+		return "N/A"
+	}
+
+	// Get today's date
+	today := time.Now().Format("2006-01-02")
+
+	// Find today's stats
+	for _, day := range stats.DailyActivity {
+		if day.Date == today {
+			return fmt.Sprintf("%d msgs, %d tools", day.MessageCount, day.ToolCallCount)
+		}
+	}
+
+	return "0 msgs"
+}
+
+// parseEnabledPlugins extracts enabled plugins from settings.json.
+func parseEnabledPlugins(data []byte) []string {
+	var settings struct {
+		EnabledPlugins map[string]bool `json:"enabledPlugins"`
+	}
+
+	if err := parseJSON(data, &settings); err != nil {
+		return nil
+	}
+
+	var plugins []string
+	for name, enabled := range settings.EnabledPlugins {
+		if enabled {
+			// Extract short name (before @)
+			shortName := name
+			if idx := strings.Index(name, "@"); idx > 0 {
+				shortName = name[:idx]
+			}
+			plugins = append(plugins, shortName)
+		}
+	}
+
+	return plugins
+}
+
+// parseJSON is a simple JSON parser wrapper.
+func parseJSON(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
 }
 
 func (m *TaskInput) handleTextareaMouse(x, y int) (int, int, bool) {
