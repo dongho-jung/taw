@@ -415,8 +415,7 @@ func (m *TaskInput) View() tea.View {
 	dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("240"))
 
 	helpStyle := lipgloss.NewStyle().
-		Foreground(dimColor).
-		MarginTop(1)
+		Foreground(dimColor)
 
 	// Build left panel (task input) with scrollbar if needed
 	textareaView := m.textarea.View()
@@ -445,8 +444,30 @@ func (m *TaskInput) View() tea.View {
 		rightPanel,
 	)
 
-	// Build content with Kanban below
+	// Determine help text based on focus panel
+	var helpText string
+	switch m.focusPanel {
+	case FocusPanelLeft:
+		helpText = "Alt+Enter/F5: Submit  |  ⌥Tab: Options  |  Esc: Cancel"
+	case FocusPanelRight:
+		helpText = "↑/↓: Navigate  |  ←/→: Change  |  ⌥Tab: Tasks  |  Alt+Enter: Submit"
+	case FocusPanelKanban:
+		helpText = "↑/↓: Scroll  |  ⌥Tab: Input  |  Alt+Enter: Submit  |  Esc: Cancel"
+	}
+
+	// Build content with help text at top-right
 	var sb strings.Builder
+
+	// Add help text at top-right (right-aligned)
+	helpRendered := helpStyle.Render(helpText)
+	helpWidth := lipgloss.Width(helpRendered)
+	if m.width > helpWidth {
+		padding := strings.Repeat(" ", m.width-helpWidth)
+		sb.WriteString(padding)
+	}
+	sb.WriteString(helpRendered)
+	sb.WriteString("\n")
+
 	sb.WriteString(topSection)
 	sb.WriteString("\n")
 
@@ -459,17 +480,6 @@ func (m *TaskInput) View() tea.View {
 		}
 	}
 
-	// Add help text at bottom
-	sb.WriteString("\n")
-	switch m.focusPanel {
-	case FocusPanelLeft:
-		sb.WriteString(helpStyle.Render("Alt+Enter/F5: Submit  |  ⌥Tab: Options  |  Esc: Cancel"))
-	case FocusPanelRight:
-		sb.WriteString(helpStyle.Render("↑/↓: Navigate  |  ←/→: Change  |  ⌥Tab: Tasks  |  Alt+Enter: Submit"))
-	case FocusPanelKanban:
-		sb.WriteString(helpStyle.Render("↑/↓: Scroll  |  ⌥Tab: Input  |  Alt+Enter: Submit  |  Esc: Cancel"))
-	}
-
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
@@ -477,7 +487,7 @@ func (m *TaskInput) View() tea.View {
 	// Set real cursor based on focus
 	if m.focusPanel == FocusPanelLeft {
 		if cursor := m.textarea.Cursor(); cursor != nil {
-			cursor.Y += 1 // Only account for top border (no title anymore)
+			cursor.Y += 2 // Account for help text line + top border
 			cursor.X += 1
 			v.Cursor = cursor
 		}

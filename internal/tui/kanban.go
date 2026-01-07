@@ -60,10 +60,6 @@ func (k *KanbanView) Render() string {
 	normalColor := lightDark(lipgloss.Color("236"), lipgloss.Color("252"))
 	dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("240"))
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("39"))
-
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(normalColor)
@@ -108,7 +104,7 @@ func (k *KanbanView) Render() string {
 	}
 
 	var columnViews []string
-	maxHeight := k.height - 4 // Reserve space for title and border
+	maxHeight := k.height - 2 // Reserve space for border only (no title)
 
 	for _, col := range columns {
 		var content strings.Builder
@@ -186,13 +182,7 @@ func (k *KanbanView) Render() string {
 		board = lipgloss.JoinHorizontal(lipgloss.Top, board, " ", scrollbar)
 	}
 
-	// Add title
-	var result strings.Builder
-	result.WriteString(titleStyle.Render("Tasks"))
-	result.WriteString("\n")
-	result.WriteString(board)
-
-	return result.String()
+	return board
 }
 
 // HasTasks returns true if there are any cached tasks to display.
@@ -240,7 +230,7 @@ func (k *KanbanView) ScrollOffset() int {
 // maxScrollOffset returns the maximum scroll offset.
 func (k *KanbanView) maxScrollOffset() int {
 	contentHeight := k.maxTaskLinesInAnyColumn()
-	visibleHeight := k.height - 4 // Reserve for title and borders
+	visibleHeight := k.height - 2 // Reserve for borders only (no title)
 	if contentHeight <= visibleHeight {
 		return 0
 	}
@@ -273,7 +263,7 @@ func (k *KanbanView) NeedsScrollbar() bool {
 
 // VisibleHeight returns the visible height of the kanban content area.
 func (k *KanbanView) VisibleHeight() int {
-	return k.height - 4
+	return k.height - 2
 }
 
 // ContentHeight returns the total content height (max lines across columns).
