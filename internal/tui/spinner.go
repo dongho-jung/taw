@@ -3,7 +3,6 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
@@ -111,13 +110,6 @@ func (m *Spinner) View() tea.View {
 		Padding(1, 3)
 
 	box := boxStyle.Render(innerContent)
-
-	// Calculate vertical padding to center
-	boxLines := strings.Count(box, "\n") + 1
-	topPadding := (height - boxLines) / 2
-	if topPadding < 0 {
-		topPadding = 0
-	}
 
 	// Center horizontally and vertically
 	centeredStyle := lipgloss.NewStyle().
