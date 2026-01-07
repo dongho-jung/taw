@@ -290,20 +290,27 @@ Code change: Add --verbose flag to CLI
 
 ## Progress Logging
 
-**Log immediately after each action:**
+**Log major milestones immediately (≤32 chars per line):**
 ```bash
-echo "Progress update" >> $PAW_DIR/agents/$TASK_NAME/log
+echo "Short progress summary" >> $PAW_DIR/agents/$TASK_NAME/log
 ```
 
-Example:
+**When to log:**
+- Project analysis complete
+- Major feature/change implemented
+- Tests added or fixed
+- Verification complete
+- Task finished
+
+**Examples (each ≤32 chars):**
 ```
-Project analysis: Next.js + Jest
+Analyzed: Next.js + Jest
 ------
-Added email validation to UserService
+Added email validation
 ------
-Added 3 tests, all passing
+Tests passing (3 added)
 ------
-Created PR #42
+PR #42 created
 ------
 ```
 
