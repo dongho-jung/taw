@@ -5,12 +5,14 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/logging"
+	"github.com/dongho-jung/paw/internal/notify"
 	"github.com/dongho-jung/paw/internal/task"
 	"github.com/dongho-jung/paw/internal/tmux"
 	"github.com/dongho-jung/paw/internal/tui"
@@ -223,7 +225,7 @@ var syncWithMainUICmd = &cobra.Command{
 
 var syncTaskCmd = &cobra.Command{
 	Use:   "sync-task [session]",
-	Short: "Sync current task with main branch",
+	Short: "Sync current task with main branch (double-press to confirm)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
@@ -272,10 +274,36 @@ var syncTaskCmd = &cobra.Command{
 			return nil
 		}
 
-		// Delegate to sync-with-main-ui
-		pawBin, _ := os.Executable()
-		syncCmd := exec.Command(pawBin, "internal", "sync-with-main-ui", sessionName, windowID)
-		return syncCmd.Run()
+		// Get pending sync timestamp from tmux option
+		pendingTimeStr, _ := tm.GetOption("@paw_sync_pending")
+		now := time.Now().Unix()
+
+		// Check if there's a pending sync within 2 seconds
+		if pendingTimeStr != "" {
+			pendingTime, err := parseUnixTime(pendingTimeStr)
+			if err == nil && now-pendingTime <= constants.DoublePressIntervalSec {
+				// Double-press detected, sync the task
+				_ = tm.SetOption("@paw_sync_pending", "", true) // Clear pending state
+
+				// Delegate to sync-with-main-ui
+				pawBin, _ := os.Executable()
+				syncCmd := exec.Command(pawBin, "internal", "sync-with-main-ui", sessionName, windowID)
+				return syncCmd.Run()
+			}
+		}
+
+		// First press: show warning
+		// Store current timestamp
+		_ = tm.SetOption("@paw_sync_pending", fmt.Sprintf("%d", now), true)
+
+		// Play sound to indicate pending state
+		logging.Trace("syncTaskCmd: playing SoundCancelPending (first press, waiting for second)")
+		notify.PlaySound(notify.SoundCancelPending)
+
+		// Show message to user
+		_ = tm.DisplayMessage("⌃↓ again to sync", 2000)
+
+		return nil
 	},
 }
 

@@ -16,7 +16,7 @@ Claude Code-based autonomous agent work environment
 
 ### Task Commands
   ⌃N          New task
-  ⌃K          Cancel task (double-press within 2s)
+  ⌃K          Cancel task
   ⌃F          Finish task (complete and cleanup)
   ⌃↑          Toggle branch (task ↔ main)
   ⌃↓          Sync from main (rebase)

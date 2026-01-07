@@ -1054,7 +1054,7 @@ var mergeTaskUICmd = &cobra.Command{
 
 var doneTaskCmd = &cobra.Command{
 	Use:   "done-task [session]",
-	Short: "Complete the current task",
+	Short: "Complete the current task (double-press to confirm)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
@@ -1097,10 +1097,36 @@ var doneTaskCmd = &cobra.Command{
 			return nil
 		}
 
-		// Delegate to end-task-ui
-		pawBin, _ := os.Executable()
-		endCmd := exec.Command(pawBin, "internal", "end-task-ui", sessionName, windowID)
-		return endCmd.Run()
+		// Get pending done timestamp from tmux option
+		pendingTimeStr, _ := tm.GetOption("@paw_done_pending")
+		now := time.Now().Unix()
+
+		// Check if there's a pending done within 2 seconds
+		if pendingTimeStr != "" {
+			pendingTime, err := parseUnixTime(pendingTimeStr)
+			if err == nil && now-pendingTime <= constants.DoublePressIntervalSec {
+				// Double-press detected, finish the task
+				_ = tm.SetOption("@paw_done_pending", "", true) // Clear pending state
+
+				// Delegate to end-task-ui
+				pawBin, _ := os.Executable()
+				endCmd := exec.Command(pawBin, "internal", "end-task-ui", sessionName, windowID)
+				return endCmd.Run()
+			}
+		}
+
+		// First press: show warning
+		// Store current timestamp
+		_ = tm.SetOption("@paw_done_pending", fmt.Sprintf("%d", now), true)
+
+		// Play sound to indicate pending state
+		logging.Trace("doneTaskCmd: playing SoundCancelPending (first press, waiting for second)")
+		notify.PlaySound(notify.SoundCancelPending)
+
+		// Show message to user
+		_ = tm.DisplayMessage("⌃F again to finish task", 2000)
+
+		return nil
 	},
 }
 
