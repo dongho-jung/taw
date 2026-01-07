@@ -613,6 +613,17 @@ func (m *Manager) FindStoppedTasks() ([]*StoppedTaskInfo, error) {
 	return stopped, nil
 }
 
+// FindTaskByTruncatedName finds a task whose name matches the truncated window name.
+// This is useful when looking up tasks from window names which are limited to
+// MaxWindowNameLen characters. Returns ErrTaskNotFound if no matching task is found.
+func (m *Manager) FindTaskByTruncatedName(truncatedName string) (*Task, error) {
+	task, _ := m.findTaskByTruncatedName(truncatedName)
+	if task == nil {
+		return nil, fmt.Errorf("%w: truncated name %s", ErrTaskNotFound, truncatedName)
+	}
+	return task, nil
+}
+
 // findTaskByTruncatedName finds a task whose name matches the truncated window name.
 // Returns the task and its full name, or nil if not found.
 func (m *Manager) findTaskByTruncatedName(truncatedName string) (*Task, string) {

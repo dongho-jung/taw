@@ -548,14 +548,18 @@ var restorePanesCmd = &cobra.Command{
 			return nil
 		}
 
-		logging.Debug("Task name: %s", taskName)
+		logging.Debug("Task name (may be truncated): %s", taskName)
 
-		// Find agent directory
-		agentDir := filepath.Join(app.AgentsDir, taskName)
-		if _, err := os.Stat(agentDir); os.IsNotExist(err) {
-			_ = tm.DisplayMessage(fmt.Sprintf("Agent directory not found: %s", taskName), 2000)
+		// Find task using truncated name (window names are limited to MaxWindowNameLen chars)
+		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
+		t, err := mgr.FindTaskByTruncatedName(taskName)
+		if err != nil {
+			_ = tm.DisplayMessage(fmt.Sprintf("Task not found: %s", taskName), 2000)
+			logging.Debug("Task not found for truncated name: %s", taskName)
 			return nil
 		}
+		agentDir := t.AgentDir
+		logging.Debug("Found task: name=%s, agentDir=%s", t.Name, agentDir)
 
 		// Get current pane count
 		paneCount, err := tm.Display("#{window_panes}")
@@ -572,13 +576,7 @@ var restorePanesCmd = &cobra.Command{
 			return nil
 		}
 
-		// Get working directory
-		mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
-		t, err := mgr.GetTask(taskName)
-		if err != nil {
-			return fmt.Errorf("failed to get task: %w", err)
-		}
-
+		// Get working directory (t and mgr already set above)
 		workDir := mgr.GetWorkingDirectory(t)
 
 		// Check which pane is missing and restore
@@ -651,7 +649,7 @@ var restorePanesCmd = &cobra.Command{
 			}
 		}
 
-		logging.Info("Panes restored for task: %s", taskName)
+		logging.Info("Panes restored for task: %s", t.Name)
 		return nil
 	},
 }
