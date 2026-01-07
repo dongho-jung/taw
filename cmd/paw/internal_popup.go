@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -63,6 +64,77 @@ var popupShellCmd = &cobra.Command{
 		// Store pane ID for toggle
 		_ = tm.SetOption("@paw_shell_pane_id", strings.TrimSpace(newPaneID), true)
 
+		return nil
+	},
+}
+
+var toggleIdeaCmd = &cobra.Command{
+	Use:   "toggle-idea [session]",
+	Short: "Toggle idea window (quick Claude for side thoughts)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer func() { _ = logger.Close() }()
+			logger.SetScript("toggle-idea")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Trace("toggleIdeaCmd: start session=%s", sessionName)
+		defer logging.Trace("toggleIdeaCmd: end")
+
+		tm := tmux.New(sessionName)
+
+		// Check if idea window exists
+		windows, err := tm.ListWindows()
+		if err != nil {
+			return err
+		}
+
+		for _, w := range windows {
+			if strings.HasPrefix(w.Name, constants.EmojiIdea) {
+				// Window exists, just select it (toggle behavior)
+				logging.Trace("toggleIdeaCmd: idea window already exists, selecting windowID=%s", w.ID)
+				return tm.SelectWindow(w.ID)
+			}
+		}
+
+		// Create new idea window
+		logging.Trace("toggleIdeaCmd: creating idea window name=%s", constants.IdeaWindowName)
+		windowID, err := tm.NewWindow(tmux.WindowOpts{
+			Name:     constants.IdeaWindowName,
+			StartDir: app.ProjectDir,
+		})
+		if err != nil {
+			return err
+		}
+		logging.Trace("toggleIdeaCmd: idea window created windowID=%s", windowID)
+
+		// Wait for shell to be ready
+		paneID := windowID + ".0"
+		if err := tm.WaitForPane(paneID, 5*time.Second, 1); err != nil {
+			logging.Warn("toggleIdeaCmd: WaitForPane timed out, continuing anyway: %v", err)
+		}
+
+		// Start Claude directly in the window
+		// Uses --dangerously-skip-permissions for quick interaction without approval prompts
+		claudeCmd := "claude --dangerously-skip-permissions"
+		if err := tm.SendKeysLiteral(windowID, claudeCmd); err != nil {
+			return fmt.Errorf("failed to send claude command: %w", err)
+		}
+		if err := tm.SendKeys(windowID, "Enter"); err != nil {
+			return fmt.Errorf("failed to send Enter: %w", err)
+		}
+
+		logging.Log("Idea window created: windowID=%s", windowID)
 		return nil
 	},
 }

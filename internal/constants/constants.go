@@ -13,6 +13,7 @@ const (
 	EmojiDone    = "✅"
 	EmojiWarning = "⚠️"
 	EmojiNew     = "⭐️"
+	EmojiIdea    = "💡"
 )
 
 // TaskEmojis contains all emojis used for task windows.
@@ -103,6 +104,7 @@ const (
 const (
 	TmuxSocketPrefix = "paw-"
 	NewWindowName    = EmojiNew + "main"
+	IdeaWindowName   = EmojiIdea + "idea"
 )
 
 // Pane capture settings
