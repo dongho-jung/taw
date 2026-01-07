@@ -54,13 +54,6 @@ func (k *KanbanView) Render() string {
 	taskNameStyle := lipgloss.NewStyle().
 		Foreground(normalColor)
 
-	sessionStyle := lipgloss.NewStyle().
-		Foreground(dimColor).
-		Italic(true)
-
-	previewStyle := lipgloss.NewStyle().
-		Foreground(dimColor)
-
 	borderColor := dimColor
 	panelStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
@@ -104,7 +97,7 @@ func (k *KanbanView) Render() string {
 		content.WriteString(strings.Repeat("─", columnWidth-4))
 		content.WriteString("\n")
 
-		// Tasks (limited by height)
+		// Tasks (limited by height) - show only task name
 		linesUsed := 2 // header + separator
 		for _, task := range col.tasks {
 			if linesUsed >= maxHeight {
@@ -119,37 +112,6 @@ func (k *KanbanView) Render() string {
 			content.WriteString(taskNameStyle.Render(name))
 			content.WriteString("\n")
 			linesUsed++
-
-			// Session name (truncated, shown smaller)
-			session := task.Session
-			if len(session) > columnWidth-6 {
-				session = session[:columnWidth-7] + "…"
-			}
-			content.WriteString(sessionStyle.Render("  @ " + session))
-			content.WriteString("\n")
-			linesUsed++
-
-			// Preview (last 3 lines, truncated)
-			if task.Preview != "" && linesUsed < maxHeight-1 {
-				previewLines := strings.Split(task.Preview, "\n")
-				for _, line := range previewLines {
-					if linesUsed >= maxHeight {
-						break
-					}
-					if len(line) > columnWidth-6 {
-						line = line[:columnWidth-7] + "…"
-					}
-					content.WriteString(previewStyle.Render("  " + line))
-					content.WriteString("\n")
-					linesUsed++
-				}
-			}
-
-			// Separator between tasks
-			if linesUsed < maxHeight {
-				content.WriteString("\n")
-				linesUsed++
-			}
 		}
 
 		// Pad to consistent height

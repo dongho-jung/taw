@@ -87,7 +87,7 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 	ta.ShowLineNumbers = false
 	ta.Prompt = "" // Clear prompt to avoid extra characters on the left
 	ta.SetWidth(80)
-	ta.SetHeight(10)
+	ta.SetHeight(7)
 
 	// Enable real cursor for proper IME support (Korean input)
 	ta.VirtualCursor = false
@@ -169,20 +169,18 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate Kanban height (about 1/3 of the screen, min 8 lines)
-		kanbanHeight := max(8, msg.Height/3)
+		// Input box is fixed at 7 rows, calculate Kanban height from remaining space
+		// Reserve: input box (7) + borders (4) + options panel overhead (2) + help text (2) = ~15 lines
+		kanbanHeight := max(8, msg.Height-15)
 		m.kanban.SetSize(msg.Width, kanbanHeight)
 
-		// Adjust textarea size (leave space for options panel and Kanban)
-		// No max height cap - allow flexible scaling with terminal size
+		// Adjust textarea width only (height is fixed at 7)
 		newWidth := min(msg.Width-50, 80) // Leave room for options panel
-		newHeight := msg.Height - kanbanHeight - 8 // Reserve space for Kanban, help text and borders
 		if newWidth > 40 {
 			m.textarea.SetWidth(newWidth)
 		}
-		if newHeight > 5 {
-			m.textarea.SetHeight(newHeight)
-		}
+		// Keep textarea height fixed at 7 rows
+		m.textarea.SetHeight(7)
 
 	case tea.KeyMsg:
 		keyStr := msg.String()
