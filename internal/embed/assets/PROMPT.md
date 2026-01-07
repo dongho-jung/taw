@@ -10,7 +10,7 @@ PAW_DIR       - .paw directory path
 PROJECT_DIR   - Original project root
 WORKTREE_DIR  - Your isolated working directory (git worktree)
 WINDOW_ID     - tmux window ID for status updates
-ON_COMPLETE   - Task completion mode: auto-merge | auto-pr | auto-commit | confirm
+ON_COMPLETE   - Task completion mode: auto-merge | auto-pr | confirm
 PAW_HOME      - PAW installation directory
 PAW_BIN       - PAW binary path (for calling commands)
 SESSION_NAME  - tmux session name
@@ -260,7 +260,7 @@ Commit → push → create PR → update status
 5. Save PR number: `gh pr view --json number -q '.number' > $PAW_DIR/agents/$TASK_NAME/.pr`
 6. Log: "Work complete - created PR #N"
 
-#### `auto-commit` or `confirm` mode
+#### `confirm` mode
 ```
 Commit → update status (no push/PR/merge)
 ```

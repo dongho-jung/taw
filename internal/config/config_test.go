@@ -244,15 +244,14 @@ func TestValidWorkModes(t *testing.T) {
 func TestValidOnCompletes(t *testing.T) {
 	completes := ValidOnCompletes()
 
-	if len(completes) != 4 {
-		t.Errorf("Expected 4 on_complete options, got %d", len(completes))
+	if len(completes) != 3 {
+		t.Errorf("Expected 3 on_complete options, got %d", len(completes))
 	}
 
 	expected := map[OnComplete]bool{
-		OnCompleteConfirm:    true,
-		OnCompleteAutoCommit: true,
-		OnCompleteAutoMerge:  true,
-		OnCompleteAutoPR:     true,
+		OnCompleteConfirm:   true,
+		OnCompleteAutoMerge: true,
+		OnCompleteAutoPR:    true,
 	}
 
 	for _, complete := range completes {
@@ -307,7 +306,6 @@ func TestParseConfig_AllOnCompleteValues(t *testing.T) {
 		expected OnComplete
 	}{
 		{"confirm", OnCompleteConfirm},
-		{"auto-commit", OnCompleteAutoCommit},
 		{"auto-merge", OnCompleteAutoMerge},
 		{"auto-pr", OnCompleteAutoPR},
 	}

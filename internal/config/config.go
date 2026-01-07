@@ -22,10 +22,9 @@ const (
 type OnComplete string
 
 const (
-	OnCompleteConfirm    OnComplete = "confirm"     // Ask before each action
-	OnCompleteAutoCommit OnComplete = "auto-commit" // Auto commit, manual merge/PR
-	OnCompleteAutoMerge  OnComplete = "auto-merge"  // Auto commit + merge + cleanup
-	OnCompleteAutoPR     OnComplete = "auto-pr"     // Auto commit + create PR
+	OnCompleteConfirm   OnComplete = "confirm"    // Ask before each action
+	OnCompleteAutoMerge OnComplete = "auto-merge" // Auto commit + merge + cleanup
+	OnCompleteAutoPR    OnComplete = "auto-pr"    // Auto commit + create PR
 )
 
 // SlackConfig holds Slack notification settings.
@@ -348,9 +347,8 @@ func (c *Config) Save(pawDir string) error {
 # - main: All tasks work on the current branch
 work_mode: %s
 
-# On complete action: confirm, auto-commit, auto-merge, or auto-pr
+# When task completes: confirm, auto-merge, or auto-pr
 # - confirm: Ask before each action (recommended)
-# - auto-commit: Automatically commit changes
 # - auto-merge: Auto commit + merge + cleanup + close window
 # - auto-pr: Auto commit + create pull request
 on_complete: %s
@@ -406,7 +404,6 @@ func ValidWorkModes() []WorkMode {
 func ValidOnCompletes() []OnComplete {
 	return []OnComplete{
 		OnCompleteConfirm,
-		OnCompleteAutoCommit,
 		OnCompleteAutoMerge,
 		OnCompleteAutoPR,
 	}

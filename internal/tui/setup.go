@@ -126,7 +126,7 @@ func (m *SetupWizard) View() tea.View {
 		}
 
 	case 1:
-		sb.WriteString("On Complete Action:\n")
+		sb.WriteString("When Task Completes:\n")
 		sb.WriteString(descStyle.Render("What happens when a task is completed\n\n"))
 
 		options := []struct {
@@ -134,14 +134,13 @@ func (m *SetupWizard) View() tea.View {
 			desc string
 		}{
 			{"confirm (Recommended)", "Ask before each action"},
-			{"auto-commit", "Automatically commit changes"},
 		}
 
 		// In worktree mode, add merge and PR options
 		if m.workMode == config.WorkModeWorktree {
 			options = append(options,
-				struct{ name, desc string }{"auto-merge", "Auto commit + merge + cleanup"},
 				struct{ name, desc string }{"auto-pr", "Auto commit + create pull request"},
+				struct{ name, desc string }{"auto-merge", "Auto commit + merge + cleanup"},
 			)
 		}
 
@@ -170,9 +169,9 @@ func (m *SetupWizard) maxCursor() int {
 		return 1 // worktree, main
 	case 1:
 		if m.workMode == config.WorkModeWorktree {
-			return 3 // confirm, auto-commit, auto-merge, auto-pr
+			return 2 // confirm, auto-pr, auto-merge
 		}
-		return 1 // confirm, auto-commit (main mode)
+		return 0 // confirm only (main mode)
 	}
 	return 0
 }
@@ -197,11 +196,9 @@ func (m *SetupWizard) selectOption() (tea.Model, tea.Cmd) {
 		case 0:
 			m.onComplete = config.OnCompleteConfirm
 		case 1:
-			m.onComplete = config.OnCompleteAutoCommit
+			m.onComplete = config.OnCompleteAutoPR
 		case 2:
 			m.onComplete = config.OnCompleteAutoMerge
-		case 3:
-			m.onComplete = config.OnCompleteAutoPR
 		}
 		m.done = true
 		return m, tea.Quit

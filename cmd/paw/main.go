@@ -695,18 +695,17 @@ func runSetupWizard(app *app.App) error {
 		}
 	}
 
-	// On complete
-	fmt.Println("\nOn Complete Action:")
+	// When task completes
+	fmt.Println("\nWhen Task Completes:")
 	fmt.Println("  1. confirm (Recommended) - Ask before each action")
-	fmt.Println("  2. auto-commit - Automatically commit changes")
 
 	// Show merge/PR options only in worktree mode
 	if cfg.WorkMode == config.WorkModeWorktree {
+		fmt.Println("  2. auto-pr - Auto commit + create pull request")
 		fmt.Println("  3. auto-merge - Auto commit + merge + cleanup")
-		fmt.Println("  4. auto-pr - Auto commit + create pull request")
-		fmt.Print("\nSelect [1-4, default: 1]: ")
+		fmt.Print("\nSelect [1-3, default: 1]: ")
 	} else {
-		fmt.Print("\nSelect [1-2, default: 1]: ")
+		fmt.Print("\nSelect [1, default: 1]: ")
 	}
 
 	var choice string
@@ -714,16 +713,14 @@ func runSetupWizard(app *app.App) error {
 
 	switch choice {
 	case "2":
-		cfg.OnComplete = config.OnCompleteAutoCommit
-	case "3":
 		if cfg.WorkMode == config.WorkModeWorktree {
-			cfg.OnComplete = config.OnCompleteAutoMerge
+			cfg.OnComplete = config.OnCompleteAutoPR
 		} else {
 			cfg.OnComplete = config.OnCompleteConfirm // Invalid in main mode, default to confirm
 		}
-	case "4":
+	case "3":
 		if cfg.WorkMode == config.WorkModeWorktree {
-			cfg.OnComplete = config.OnCompleteAutoPR
+			cfg.OnComplete = config.OnCompleteAutoMerge
 		} else {
 			cfg.OnComplete = config.OnCompleteConfirm // Invalid in main mode, default to confirm
 		}
