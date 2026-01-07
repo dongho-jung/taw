@@ -108,8 +108,8 @@ func TestConstants(t *testing.T) {
 	if DefaultMainBranch != "main" {
 		t.Errorf("DefaultMainBranch = %q, want %q", DefaultMainBranch, "main")
 	}
-	if NewWindowName != EmojiNew+"new" {
-		t.Errorf("NewWindowName = %q, want %q", NewWindowName, EmojiNew+"new")
+	if NewWindowName != EmojiNew+"main" {
+		t.Errorf("NewWindowName = %q, want %q", NewWindowName, EmojiNew+"main")
 	}
 }
 

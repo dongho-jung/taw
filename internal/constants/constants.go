@@ -102,7 +102,7 @@ const (
 // Tmux related constants
 const (
 	TmuxSocketPrefix = "paw-"
-	NewWindowName    = EmojiNew + "new"
+	NewWindowName    = EmojiNew + "main"
 )
 
 // Pane capture settings
