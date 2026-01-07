@@ -426,17 +426,23 @@ func (m *TaskInput) View() tea.View {
 	// Build left panel (task input) with scrollbar if needed
 	textareaView := m.textarea.View()
 
-	// Add scrollbar to textarea if content overflows
-	// Textarea height is 7, check if content has more lines
+	// Always render a scrollbar column to prevent layout shifts when scrolling starts
+	// The column includes padding for top and bottom borders (1 line each)
+	// Total: 1 (top border) + 7 (content) + 1 (bottom border) = 9 lines
 	contentLines := strings.Count(m.textarea.Value(), "\n") + 1
 	visibleLines := 7
+
+	var scrollbarColumn string
 	if contentLines > visibleLines {
 		scrollOffset := m.textarea.Line() // Use cursor line as scroll indicator
 		scrollbar := renderVerticalScrollbar(contentLines, visibleLines, scrollOffset, m.isDark)
-		if scrollbar != "" {
-			textareaView = lipgloss.JoinHorizontal(lipgloss.Top, textareaView, scrollbar)
-		}
+		// Add padding: space for top border, scrollbar, space for bottom border
+		scrollbarColumn = " \n" + scrollbar + "\n "
+	} else {
+		// Empty placeholder to maintain layout (9 lines: 1 + 7 + 1)
+		scrollbarColumn = strings.Repeat(" \n", 8) + " "
 	}
+	textareaView = lipgloss.JoinHorizontal(lipgloss.Top, textareaView, scrollbarColumn)
 
 	// Build right panel (options)
 	rightPanel := m.renderOptionsPanel()
