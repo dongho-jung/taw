@@ -17,6 +17,12 @@ type KanbanView struct {
 	height   int
 	isDark   bool
 	service  *service.TaskDiscoveryService
+
+	// Cached task data (refreshed on tick, not on every render)
+	working  []*service.DiscoveredTask
+	waiting  []*service.DiscoveredTask
+	done     []*service.DiscoveredTask
+	warning  []*service.DiscoveredTask
 }
 
 // NewKanbanView creates a new Kanban view.
@@ -33,10 +39,17 @@ func (k *KanbanView) SetSize(width, height int) {
 	k.height = height
 }
 
-// Render renders the Kanban board.
+// Refresh updates the cached task data by discovering all tasks.
+// This should be called periodically (e.g., on tick) rather than on every render.
+func (k *KanbanView) Refresh() {
+	k.working, k.waiting, k.done, k.warning = k.service.DiscoverAll()
+}
+
+// Render renders the Kanban board using cached task data.
+// Call Refresh() first to update the cache.
 func (k *KanbanView) Render() string {
-	// Discover all tasks
-	working, waiting, done, warning := k.service.DiscoverAll()
+	// Use cached task data (populated by Refresh())
+	working, waiting, done, warning := k.working, k.waiting, k.done, k.warning
 
 	// Styles (adaptive to light/dark mode)
 	lightDark := lipgloss.LightDark(k.isDark)
@@ -174,14 +187,12 @@ func (k *KanbanView) Render() string {
 	return result.String()
 }
 
-// HasTasks returns true if there are any tasks to display.
+// HasTasks returns true if there are any cached tasks to display.
 func (k *KanbanView) HasTasks() bool {
-	working, waiting, done, warning := k.service.DiscoverAll()
-	return len(working)+len(waiting)+len(done)+len(warning) > 0
+	return len(k.working)+len(k.waiting)+len(k.done)+len(k.warning) > 0
 }
 
-// TaskCount returns the total number of tasks.
+// TaskCount returns the total number of cached tasks.
 func (k *KanbanView) TaskCount() int {
-	working, waiting, done, warning := k.service.DiscoverAll()
-	return len(working) + len(waiting) + len(done) + len(warning)
+	return len(k.working) + len(k.waiting) + len(k.done) + len(k.warning)
 }
