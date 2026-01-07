@@ -460,7 +460,7 @@ var taskListViewerCmd = &cobra.Command{
 			// Trigger end-task for merge
 			logging.Trace("taskListViewerCmd: merging task=%s windowID=%s", item.Name, item.WindowID)
 			if item.WindowID != "" {
-				endCmd := exec.Command(pawBin, "internal", "end-task", sessionName, item.WindowID)
+				endCmd := exec.Command(pawBin, "internal", "end-task", "--user-initiated", sessionName, item.WindowID)
 				return endCmd.Start()
 			}
 

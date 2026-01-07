@@ -487,7 +487,7 @@ var handleTaskCmd = &cobra.Command{
 		projectPrompt, _ := os.ReadFile(app.GetPromptPath())
 		systemPrompt := claude.BuildSystemPrompt(globalPrompt, string(projectPrompt))
 
-		// Get paw binary path for end-task (needed for user prompt)
+		// Get paw binary path for end-task script
 		pawBin, _ := os.Executable()
 
 		// Build user prompt with context
@@ -498,10 +498,10 @@ var handleTaskCmd = &cobra.Command{
 		}
 		userPrompt.WriteString(fmt.Sprintf("**Project**: %s\n\n", app.ProjectDir))
 
-		// Add ON_COMPLETE setting and end-task path for auto-merge
+		// Add ON_COMPLETE setting
 		userPrompt.WriteString(fmt.Sprintf("**ON_COMPLETE**: %s\n", app.Config.OnComplete))
+		userPrompt.WriteString("**Finish**: User triggers completion with Ctrl+F. Do not call end-task automatically.\n\n")
 		endTaskScriptPath := filepath.Join(t.AgentDir, "end-task")
-		userPrompt.WriteString(fmt.Sprintf("**End-Task Script**: %s\n\n", endTaskScriptPath))
 
 		// Add Plan Mode instructions (always shown since we start in plan mode)
 		userPrompt.WriteString("## 📋 PLAN MODE (Required)\n\n")
@@ -524,7 +524,7 @@ var handleTaskCmd = &cobra.Command{
 			userPrompt.WriteString("- Tests are missing or not relevant\n")
 			userPrompt.WriteString("- Verification fails\n\n")
 			userPrompt.WriteString("**If verification succeeds:**\n")
-			userPrompt.WriteString(fmt.Sprintf("→ Run `%s`\n\n", endTaskScriptPath))
+			userPrompt.WriteString("→ Tell the user it's ready and ask them to press Ctrl+F to finish.\n\n")
 			userPrompt.WriteString("**If verification is impossible or fails:**\n")
 			userPrompt.WriteString("→ Explain the blocker and stop; PAW will set the window status automatically.\n\n")
 		}
@@ -540,11 +540,10 @@ var handleTaskCmd = &cobra.Command{
 			logging.Warn("Failed to save user prompt: %v", err)
 		}
 
-		// Create task-specific end-task script
-		// This allows Claude to call end-task without needing environment variables
+		// Create task-specific end-task script (user-initiated only)
 		endTaskContent := fmt.Sprintf(`#!/bin/bash
 # Auto-generated end-task script for this task
-# Claude can call this directly without environment variables
+# Finish is user-initiated (Ctrl+F). This script is retained for reference.
 exec "%s" internal end-task "%s" "%s"
 `, pawBin, sessionName, windowID)
 		if err := os.WriteFile(endTaskScriptPath, []byte(endTaskContent), 0755); err != nil {

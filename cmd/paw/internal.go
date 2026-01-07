@@ -60,4 +60,5 @@ func init() {
 
 	// Add flags to end-task command
 	endTaskCmd.Flags().StringVar(&paneCaptureFile, "pane-capture-file", "", "Path to pre-captured pane content file")
+	endTaskCmd.Flags().BoolVar(&endTaskUserInitiated, "user-initiated", false, "Require explicit user action to finish")
 }

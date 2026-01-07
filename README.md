@@ -51,8 +51,7 @@ Slash commands available to the agent:
 | `/merge` | Merges the worktree branch into the current project branch |
 
 **Task completion**:
-- `auto-merge` mode: Automatically commit → merge → clean up → close the window when the task ends
-- Other modes: Press `⌃F` to commit → PR/merge → clean up according to ON_COMPLETE
+- All modes: Press `⌃F` to finish; PAW handles commit/PR/merge/cleanup according to ON_COMPLETE
 
 <details>
 <summary>Automatically reopen incomplete tasks with session resume</summary>

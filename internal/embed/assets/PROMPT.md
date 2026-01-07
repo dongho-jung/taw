@@ -53,20 +53,11 @@ Before coding, classify the task:
 Always include a Plan confirmation question for complex tasks, even if no other choices exist.
 If the Plan includes options, include them in the same AskUserQuestion call.
 
-**⚠️ Change window state when asking (CRITICAL):**
-When you ask and wait for a reply, switch the window state to 💬.
-Also print a line containing exactly `PAW_WAITING` (not a shell command) right before asking to trigger notifications.
+**⚠️ Waiting state (CRITICAL):**
+When you ask and wait for a reply, print a line containing exactly `PAW_WAITING` (not a shell command) right before asking to trigger notifications.
+PAW will switch the window state automatically. Do not rename windows manually.
 ```text
 PAW_WAITING
-```
-```bash
-# Before asking - set to waiting
-$PAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
-```
-Switch back to 🤖 when you resume work.
-```bash
-# After receiving a response - set to working
-$PAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
 ```
 
 **When should you ask?**
@@ -78,11 +69,6 @@ $PAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
 - ❌ Obvious questions like "Should I commit?" → unnecessary
 
 **Example – complex task with options:**
-
-```bash
-# 1. Switch window to 💬 before asking
-$PAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
-```
 
 ```
 PAW_WAITING
@@ -111,11 +97,6 @@ AskUserQuestion:
           description: "Persistent but not suitable for distributed environments"
 ```
 
-```bash
-# 2. Switch back to 🤖 after receiving the answer
-$PAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
-```
-
 **Example – simple task (no question):**
 
 If the task is simple and clear with no choices, start immediately without asking.
@@ -138,7 +119,7 @@ If the task is simple and clear with no choices, start immediately without askin
 - Build/compile commands can confirm success.
 - Automated checks like lint/typecheck are available.
 
-**Automated verification not possible (switch to 💬):**
+**Automated verification not possible (user review required):**
 - No tests, or tests cannot cover the change.
 - UI changes requiring visual confirmation.
 - Features requiring user interaction.
@@ -177,7 +158,7 @@ If the task is simple, skip Phase 1 and start Phase 2 after reading the task.
 2. Based on the result:
    - ✅ **All automated checks pass** → proceed according to `$ON_COMPLETE`
    - ❌ **Verification fails** → fix and retry (up to 3 times)
-   - 💬 **Automated verification not possible** → switch to 💬 and ask the user to review
+   - 💬 **Automated verification not possible** → ask the user to review (PAW sets status automatically)
 3. Log completion
 
 ---
@@ -203,12 +184,12 @@ echo "ON_COMPLETE=$ON_COMPLETE"  # Check first
 
 #### `auto-merge` mode (conditional automation)
 
-**⚠️ CRITICAL: Only run auto-merge when verification succeeds!**
+**⚠️ CRITICAL: Auto-merge is user-initiated (Ctrl+F) and only allowed after verification succeeds.**
 
 ```
-Run verification → success? → commit → call end-task
+Run verification → success? → report ready → user finishes (Ctrl+F)
                    ↓ failure or verification impossible
-                Switch to 💬
+                Explain blocker → user review
 ```
 
 **auto-merge requirements (all must hold):**
@@ -217,34 +198,29 @@ Run verification → success? → commit → call end-task
 3. ✅ Tests pass (when tests exist).
 4. ✅ Lint/typecheck passes (when available).
 
-**Do not auto-merge (switch to 💬) if:**
+**Do not auto-merge if:**
 - ❌ Plan marks the change as "not automatically verifiable."
 - ❌ Tests are missing or do not cover the change.
 - ❌ UI/UX, configuration, or docs changes that need visual review.
 - ❌ Any verification step fails.
 
-**When verification succeeds, run auto-merge:**
-1. Commit all changes.
-2. Log: "Verification complete - invoking end-task"
-3. **Call end-task** using the absolute **End-Task Script** path provided when the task started:
-   - The user prompt includes the End-Task Script path (e.g., `/path/to/.paw/agents/task-name/end-task`).
-   - Execute that absolute path directly in bash.
-   - Example: `/Users/xxx/projects/yyy/.paw/agents/my-task/end-task`
+**When verification succeeds:**
+1. Ensure changes are committed.
+2. Log: "Verification complete - ready to finish"
+3. Message the user: "Ready for review. Please press `⌃F` to finish."
+4. **Do not call end-task** or run merge steps directly.
 
-**If verification is impossible or fails → switch to 💬:**
-1. Commit all changes.
-2. `$PAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"`
-3. Log: "Work complete - user review required (verification unavailable/failed)"
-4. Message the user: "Verification is needed. Please review and run `⌃F` to finish."
+**If verification is impossible or fails:**
+1. Log: "Work complete - user review required (verification unavailable/failed)"
+2. Message the user: "Verification is needed. Please review and press `⌃F` to finish."
 
 **CRITICAL:**
-- In `auto-merge` mode, do **not** create a PR. end-task merges to main and cleans up.
-- Always use absolute paths. Environment variables (`$PAW_DIR`, etc.) are not available inside bash for this call.
-- **Never auto-merge without verification.** If uncertain, stay in 💬.
+- In `auto-merge` mode, do **not** create a PR. PAW merges to main when the user finishes.
+- **Never auto-merge without verification.** If uncertain, ask for user review.
 
 #### `auto-pr` mode
 ```
-Commit → push → create PR → update status
+Commit → push → create PR → tell user to finish
 ```
 1. Commit all changes.
 2. `git push -u origin $TASK_NAME`
@@ -256,22 +232,22 @@ Commit → push → create PR → update status
    ## Test
    - [x] Tests passed"
    ```
-4. `$PAW_BIN internal rename-window $WINDOW_ID "✅..."`
-5. Save PR number: `gh pr view --json number -q '.number' > $PAW_DIR/agents/$TASK_NAME/.pr`
+4. Save PR number: `gh pr view --json number -q '.number' > $PAW_DIR/agents/$TASK_NAME/.pr`
+5. Message the user: "PR created. Please press `⌃F` to finish."
 6. Log: "Work complete - created PR #N"
 
 #### `confirm` mode
 ```
-Commit → update status (no push/PR/merge)
+Commit → log completion (no push/PR/merge)
 ```
 1. Commit all changes.
-2. `$PAW_BIN internal rename-window $WINDOW_ID "✅..."`
-3. Log: "Work complete - changes committed"
+2. Log: "Work complete - changes committed"
+3. Message the user: "Changes committed. Please press `⌃F` to finish."
 
 ### Automatic handling on errors
 - **Build error**: Analyze the message → attempt a fix.
 - **Test failure**: Analyze the cause → fix → rerun.
-- **3 failures**: Switch to 💬 and ask the user for help.
+- **3 failures**: Ask the user for help (PAW sets status automatically).
 
 ---
 
@@ -391,8 +367,7 @@ Automatic execution is the default, but you can invoke commands manually if need
 | `/merge` | Merge into main (run from PROJECT_DIR) |
 
 **Completing a task**:
-- `auto-merge` mode: Call end-task as described above to finish automatically.
-- Other modes: User runs `⌃F` to commit → PR/merge → clean up.
+- All modes: The user finishes the task with `⌃F`. Do not call end-task directly.
 
 ---
 
@@ -402,37 +377,8 @@ When the user says phrases like:
 - "finish", "wrap up", "clean up the task", "close this task"
 - "end this task", "complete the task", "finalize"
 
-This means: **complete the task autonomously** including all steps below.
-
-### Task Completion Steps
-
-1. **Commit all changes**
-   ```bash
-   git add -A && git commit -m "feat: $TASK_NAME - final changes"
-   ```
-
-2. **Push to remote**
-   ```bash
-   git push -u origin $TASK_NAME
-   ```
-
-3. **Merge to main** (from PROJECT_DIR)
-   ```bash
-   git -C "$PROJECT_DIR" fetch origin
-   git -C "$PROJECT_DIR" merge --squash "$TASK_NAME"
-   git -C "$PROJECT_DIR" commit -m "feat: $TASK_NAME"
-   ```
-
-4. **Resolve conflicts if any**
-   - If merge conflicts occur, resolve them automatically when possible
-   - For complex conflicts, show the user what needs manual attention
-   - After resolving, complete the merge commit
-
-5. **Clean up and close**
-   - Delete the worktree branch: `git -C "$PROJECT_DIR" branch -D $TASK_NAME`
-   - Close the task window: `tmux kill-window -t $WINDOW_ID`
-
-**Note:** This flow is equivalent to running the end-task script manually. Use this when the user wants to finish up without going through the formal verification process.
+This means: **tell the user the task is ready to finish and ask them to press `⌃F`.**
+Do not run end-task or manual merge steps yourself.
 
 ---
 

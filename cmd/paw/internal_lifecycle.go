@@ -25,6 +25,7 @@ import (
 )
 
 var paneCaptureFile string
+var endTaskUserInitiated bool
 
 var endTaskCmd = &cobra.Command{
 	Use:   "end-task [session] [window-id]",
@@ -58,13 +59,24 @@ var endTaskCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
+		tm := tmux.New(sessionName)
+		if !endTaskUserInitiated {
+			message := "Finish is user-initiated. Press Ctrl+F to finish this task."
+			logging.Warn("endTaskCmd: blocked (not user initiated)")
+			fmt.Printf("\n  ⚠️  %s\n\n", message)
+			if paneCaptureFile != "" {
+				_ = os.Remove(paneCaptureFile)
+			}
+			_ = tm.DisplayMessage(message, 3000)
+			return nil
+		}
+
 		logging.Log("=== Finish task: %s ===", targetTask.Name)
 
 		// Print task header for user feedback
 		fmt.Printf("\n  Finishing task: %s\n\n", targetTask.Name)
 		logging.Debug("Configuration: ON_COMPLETE=%s, WorkMode=%s", app.Config.OnComplete, app.Config.WorkMode)
 
-		tm := tmux.New(sessionName)
 		gitClient := git.New()
 		workDir := mgr.GetWorkingDirectory(targetTask)
 		logging.Trace("Working directory: %s", workDir)
@@ -532,10 +544,10 @@ var endTaskUICmd = &cobra.Command{
 		// Include pane-capture-file flag if we have pre-captured content
 		var endTaskCmdStr string
 		if capturePath != "" {
-			endTaskCmdStr = fmt.Sprintf("%s internal end-task --pane-capture-file=%q %s %s; echo; echo 'Press Enter to close...'; read",
+			endTaskCmdStr = fmt.Sprintf("%s internal end-task --user-initiated --pane-capture-file=%q %s %s; echo; echo 'Press Enter to close...'; read",
 				pawBin, capturePath, sessionName, windowID)
 		} else {
-			endTaskCmdStr = fmt.Sprintf("%s internal end-task %s %s; echo; echo 'Press Enter to close...'; read",
+			endTaskCmdStr = fmt.Sprintf("%s internal end-task --user-initiated %s %s; echo; echo 'Press Enter to close...'; read",
 				pawBin, sessionName, windowID)
 		}
 

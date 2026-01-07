@@ -47,20 +47,11 @@ Before coding, classify the task:
 Always include a Plan confirmation question for complex tasks, even if no other choices exist.
 If the Plan includes options, include them in the same AskUserQuestion call.
 
-**⚠️ Change window state when asking (CRITICAL):**
-When you ask and wait for a reply, switch the window state to 💬.
-Also print a line containing exactly `PAW_WAITING` (not a shell command) right before asking to trigger notifications.
+**⚠️ Waiting state (CRITICAL):**
+When you ask and wait for a reply, print a line containing exactly `PAW_WAITING` (not a shell command) right before asking to trigger notifications.
+PAW will switch the window state automatically. Do not rename windows manually.
 ```text
 PAW_WAITING
-```
-```bash
-# Before asking - set to waiting
-$PAW_BIN internal rename-window $WINDOW_ID "💬${TASK_NAME:0:12}"
-```
-Switch back to 🤖 when you resume work.
-```bash
-# After receiving a response - set to working
-$PAW_BIN internal rename-window $WINDOW_ID "🤖${TASK_NAME:0:12}"
 ```
 
 ---
@@ -91,8 +82,8 @@ If the task is simple, skip Phase 1 and start Phase 2 after reading the task.
 
 ### Phase 3: Complete
 1. Ensure all tests pass (if applicable)
-2. Update window status to ✅
-3. Log: "Work complete"
+2. Log: "Work complete - ready to finish"
+3. Message the user: "Please press `⌃F` to finish."
 
 ---
 
@@ -109,17 +100,17 @@ Change → run tests → fix failures → log success
 
 ### On task completion
 ```
-Final tests → update status → write completion log
+Final tests → log completion → user finishes
 ```
 
 1. Verify all changes
-2. `$PAW_BIN internal rename-window $WINDOW_ID "✅..."`
-3. Write the completion log
+2. Write the completion log
+3. Message the user: "Please press `⌃F` to finish."
 
 ### Automatic handling on errors
 - **Build error**: Analyze the message → attempt a fix
 - **Test failure**: Analyze the cause → fix → rerun
-- **3 failures**: Switch to 💬 and ask the user for help
+- **3 failures**: Ask the user for help (PAW will set status automatically)
 
 ---
 
