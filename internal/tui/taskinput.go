@@ -141,6 +141,9 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 
 // Init initializes the task input.
 func (m *TaskInput) Init() tea.Cmd {
+	// Refresh Kanban data on init
+	m.kanban.Refresh()
+
 	return tea.Batch(
 		textarea.Blink,
 		m.tickCmd(),
@@ -161,7 +164,8 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tickMsg:
-		// Refresh Kanban view on tick (re-render will happen in View)
+		// Refresh Kanban data on tick (expensive I/O is done here, not in View)
+		m.kanban.Refresh()
 		// Schedule next tick
 		return m, m.tickCmd()
 
