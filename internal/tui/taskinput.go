@@ -4,6 +4,7 @@ package tui
 import (
 	"os"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
@@ -54,7 +55,13 @@ type TaskInput struct {
 	mouseSelecting  bool
 	selectAnchorRow int
 	selectAnchorCol int
+
+	// Kanban view for tasks across all sessions
+	kanban *KanbanView
 }
+
+// tickMsg is used for periodic Kanban refresh.
+type tickMsg time.Time
 
 // TaskInputResult contains the result of the task input.
 type TaskInputResult struct {
@@ -128,12 +135,23 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 		modelIdx:    modelIdx,
 		condIdx:     0,
 		depTaskIdx:  0, // 0 = no dependency
+		kanban:      NewKanbanView(isDark),
 	}
 }
 
 // Init initializes the task input.
 func (m *TaskInput) Init() tea.Cmd {
-	return textarea.Blink
+	return tea.Batch(
+		textarea.Blink,
+		m.tickCmd(),
+	)
+}
+
+// tickCmd returns a command that triggers a tick after 3 seconds.
+func (m *TaskInput) tickCmd() tea.Cmd {
+	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
 // Update handles messages and updates the model.
@@ -142,14 +160,23 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tickMsg:
+		// Refresh Kanban view on tick (re-render will happen in View)
+		// Schedule next tick
+		return m, m.tickCmd()
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Adjust textarea size (leave space for options panel)
+		// Calculate Kanban height (about 1/3 of the screen, min 8 lines)
+		kanbanHeight := max(8, msg.Height/3)
+		m.kanban.SetSize(msg.Width, kanbanHeight)
+
+		// Adjust textarea size (leave space for options panel and Kanban)
 		// No max height cap - allow flexible scaling with terminal size
 		newWidth := min(msg.Width-50, 80) // Leave room for options panel
-		newHeight := msg.Height - 8       // Reserve space for help text and borders
+		newHeight := msg.Height - kanbanHeight - 8 // Reserve space for Kanban, help text and borders
 		if newWidth > 40 {
 			m.textarea.SetWidth(newWidth)
 		}
@@ -372,16 +399,28 @@ func (m *TaskInput) View() tea.View {
 
 	// Join panels horizontally with gap
 	gapStyle := lipgloss.NewStyle().Width(4)
-	combined := lipgloss.JoinHorizontal(
+	topSection := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		leftPanel.String(),
 		gapStyle.Render(""),
 		rightPanel,
 	)
 
-	// Add help text at bottom
+	// Build content with Kanban below
 	var sb strings.Builder
-	sb.WriteString(combined)
+	sb.WriteString(topSection)
+	sb.WriteString("\n")
+
+	// Add Kanban view if there's enough space
+	if m.height > 20 {
+		kanbanContent := m.kanban.Render()
+		if kanbanContent != "" {
+			sb.WriteString("\n")
+			sb.WriteString(kanbanContent)
+		}
+	}
+
+	// Add help text at bottom
 	sb.WriteString("\n")
 	if m.focusPanel == FocusPanelLeft {
 		sb.WriteString(helpStyle.Render("Alt+Enter/F5: Submit  |  ⌥Tab: Options  |  Esc: Cancel"))
