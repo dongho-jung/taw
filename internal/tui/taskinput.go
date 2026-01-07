@@ -2,11 +2,8 @@
 package tui
 
 import (
-	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
@@ -370,11 +367,8 @@ func (m *TaskInput) View() tea.View {
 	var leftPanel strings.Builder
 	leftPanel.WriteString(m.textarea.View())
 
-	// Build right panel (options + claude info)
-	// Options panel auto-sizes to fit content, Claude info below
+	// Build right panel (options)
 	rightPanel := m.renderOptionsPanel()
-	claudeInfo := m.renderClaudeInfo()
-	rightPanelWithInfo := lipgloss.JoinVertical(lipgloss.Left, rightPanel, claudeInfo)
 
 	// Join panels horizontally with gap
 	gapStyle := lipgloss.NewStyle().Width(4)
@@ -382,7 +376,7 @@ func (m *TaskInput) View() tea.View {
 		lipgloss.Top,
 		leftPanel.String(),
 		gapStyle.Render(""),
-		rightPanelWithInfo,
+		rightPanel,
 	)
 
 	// Add help text at bottom
@@ -605,149 +599,6 @@ func (m *TaskInput) renderOptionsPanel() string {
 	}
 
 	return panelStyle.Render(content.String())
-}
-
-// renderClaudeInfo renders the Claude information panel showing token usage and limits.
-func (m *TaskInput) renderClaudeInfo() string {
-	// Adaptive colors for light/dark terminal themes (use cached isDark value)
-	lightDark := lipgloss.LightDark(m.isDark)
-	normalColor := lightDark(lipgloss.Color("236"), lipgloss.Color("252"))
-	dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("240"))
-
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(dimColor)
-
-	labelStyle := lipgloss.NewStyle().
-		Foreground(dimColor).
-		Width(12)
-
-	valueStyle := lipgloss.NewStyle().
-		Foreground(normalColor)
-
-	panelStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(dimColor).
-		Padding(0, 2).
-		Width(41).
-		MarginTop(1)
-
-	var content strings.Builder
-	content.WriteString(titleStyle.Render("Token Usage"))
-	content.WriteString("\n")
-
-	// Get Claude info
-	info := getClaudeInfo()
-
-	// Today's token usage
-	content.WriteString(labelStyle.Render("Today:"))
-	content.WriteString(valueStyle.Render(info.TodayTokens))
-	content.WriteString("\n")
-
-	// Total token usage
-	content.WriteString(labelStyle.Render("Total:"))
-	content.WriteString(valueStyle.Render(info.TotalTokens))
-	content.WriteString("\n")
-
-	// Limit
-	content.WriteString(labelStyle.Render("Limit:"))
-	content.WriteString(valueStyle.Render(info.Limit))
-	content.WriteString("\n")
-
-	return panelStyle.Render(content.String())
-}
-
-// claudeInfo holds Claude status information.
-type claudeInfo struct {
-	TodayTokens string // Today's total token usage
-	TotalTokens string // Total token usage (all time)
-	Limit       string // Usage limit (if available)
-}
-
-// getClaudeInfo retrieves Claude status information from config files.
-func getClaudeInfo() claudeInfo {
-	info := claudeInfo{
-		TodayTokens: "N/A",
-		TotalTokens: "N/A",
-		Limit:       "N/A",
-	}
-
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return info
-	}
-
-	// Read stats cache for token usage
-	statsPath := homeDir + "/.claude/stats-cache.json"
-	if data, err := os.ReadFile(statsPath); err == nil {
-		today, total := parseTokenUsage(data)
-		info.TodayTokens = today
-		info.TotalTokens = total
-	}
-
-	return info
-}
-
-// parseTokenUsage extracts today's and total token usage from stats-cache.json.
-func parseTokenUsage(data []byte) (today string, total string) {
-	// Parse stats-cache.json
-	var stats struct {
-		DailyModelTokens []struct {
-			Date          string         `json:"date"`
-			TokensByModel map[string]int `json:"tokensByModel"`
-		} `json:"dailyModelTokens"`
-		ModelUsage map[string]struct {
-			InputTokens           int `json:"inputTokens"`
-			OutputTokens          int `json:"outputTokens"`
-			CacheReadInputTokens  int `json:"cacheReadInputTokens"`
-			CacheCreationInputTokens int `json:"cacheCreationInputTokens"`
-		} `json:"modelUsage"`
-	}
-
-	if err := parseJSON(data, &stats); err != nil {
-		return "N/A", "N/A"
-	}
-
-	// Get today's date
-	todayDate := time.Now().Format("2006-01-02")
-
-	// Find today's token count
-	todayTokens := 0
-	for _, day := range stats.DailyModelTokens {
-		if day.Date == todayDate {
-			for _, tokens := range day.TokensByModel {
-				todayTokens += tokens
-			}
-			break
-		}
-	}
-
-	// Calculate total tokens (output tokens from all models)
-	totalTokens := 0
-	for _, usage := range stats.ModelUsage {
-		totalTokens += usage.OutputTokens
-	}
-
-	return formatTokenCount(todayTokens), formatTokenCount(totalTokens)
-}
-
-// formatTokenCount formats a token count with K/M suffixes.
-func formatTokenCount(count int) string {
-	if count == 0 {
-		return "0"
-	}
-	if count >= 1000000 {
-		return fmt.Sprintf("%.1fM", float64(count)/1000000)
-	}
-	if count >= 1000 {
-		return fmt.Sprintf("%.1fK", float64(count)/1000)
-	}
-	return fmt.Sprintf("%d", count)
-}
-
-// parseJSON is a simple JSON parser wrapper.
-func parseJSON(data []byte, v interface{}) error {
-	return json.Unmarshal(data, v)
 }
 
 func (m *TaskInput) handleTextareaMouse(x, y int) (int, int, bool) {
