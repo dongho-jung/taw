@@ -3,6 +3,7 @@
 BINARY_NAME=paw
 NOTIFY_BINARY=paw-notify
 NOTIFY_APP=$(NOTIFY_BINARY).app
+ICON_PATH=cmd/paw-notify/icon.png
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_FLAGS=-ldflags "-X main.Version=$(VERSION) -X main.Commit=$(COMMIT)"
@@ -31,21 +32,21 @@ build-notify:
 	@mkdir -p $(NOTIFY_APP)/Contents/MacOS
 	@mkdir -p $(NOTIFY_APP)/Contents/Resources
 	@cp cmd/paw-notify/Info.plist $(NOTIFY_APP)/Contents/
-	@cp icon.png $(NOTIFY_APP)/Contents/Resources/ 2>/dev/null || true
+	@cp $(ICON_PATH) $(NOTIFY_APP)/Contents/Resources/ 2>/dev/null || true
 	@# Generate icon.icns from icon.png for app icon in notification settings
-	@if [ -f icon.png ]; then \
+	@if [ -f $(ICON_PATH) ]; then \
 		rm -rf icon.iconset && \
 		mkdir -p icon.iconset && \
-		sips -z 16 16 icon.png --out icon.iconset/icon_16x16.png >/dev/null && \
-		sips -z 32 32 icon.png --out icon.iconset/icon_16x16@2x.png >/dev/null && \
-		sips -z 32 32 icon.png --out icon.iconset/icon_32x32.png >/dev/null && \
-		sips -z 64 64 icon.png --out icon.iconset/icon_32x32@2x.png >/dev/null && \
-		sips -z 128 128 icon.png --out icon.iconset/icon_128x128.png >/dev/null && \
-		sips -z 256 256 icon.png --out icon.iconset/icon_128x128@2x.png >/dev/null && \
-		sips -z 256 256 icon.png --out icon.iconset/icon_256x256.png >/dev/null && \
-		sips -z 512 512 icon.png --out icon.iconset/icon_256x256@2x.png >/dev/null && \
-		sips -z 512 512 icon.png --out icon.iconset/icon_512x512.png >/dev/null && \
-		sips -z 1024 1024 icon.png --out icon.iconset/icon_512x512@2x.png >/dev/null && \
+		sips -z 16 16 $(ICON_PATH) --out icon.iconset/icon_16x16.png >/dev/null && \
+		sips -z 32 32 $(ICON_PATH) --out icon.iconset/icon_16x16@2x.png >/dev/null && \
+		sips -z 32 32 $(ICON_PATH) --out icon.iconset/icon_32x32.png >/dev/null && \
+		sips -z 64 64 $(ICON_PATH) --out icon.iconset/icon_32x32@2x.png >/dev/null && \
+		sips -z 128 128 $(ICON_PATH) --out icon.iconset/icon_128x128.png >/dev/null && \
+		sips -z 256 256 $(ICON_PATH) --out icon.iconset/icon_128x128@2x.png >/dev/null && \
+		sips -z 256 256 $(ICON_PATH) --out icon.iconset/icon_256x256.png >/dev/null && \
+		sips -z 512 512 $(ICON_PATH) --out icon.iconset/icon_256x256@2x.png >/dev/null && \
+		sips -z 512 512 $(ICON_PATH) --out icon.iconset/icon_512x512.png >/dev/null && \
+		sips -z 1024 1024 $(ICON_PATH) --out icon.iconset/icon_512x512@2x.png >/dev/null && \
 		iconutil -c icns icon.iconset -o $(NOTIFY_APP)/Contents/Resources/icon.icns && \
 		rm -rf icon.iconset && \
 		echo "Generated icon.icns"; \
@@ -64,7 +65,7 @@ install: build build-notify
 	@mkdir -p $(LOCAL_SHARE)
 	@rm -rf $(LOCAL_SHARE)/$(NOTIFY_APP)
 	@cp -R $(NOTIFY_APP) $(LOCAL_SHARE)/
-	@cp icon.png $(LOCAL_SHARE)/ 2>/dev/null || true
+	@cp $(ICON_PATH) $(LOCAL_SHARE)/ 2>/dev/null || true
 	@xattr -cr $(LOCAL_SHARE)/$(NOTIFY_APP)
 	@codesign -fs - $(LOCAL_SHARE)/$(NOTIFY_APP)
 	@echo "Done! Make sure $(LOCAL_BIN) is in your PATH"
@@ -101,7 +102,7 @@ install-brew: build build-notify
 	@mkdir -p /tmp/paw-brew-local
 	@cp $(BINARY_NAME) /tmp/paw-brew-local/
 	@cp -R $(NOTIFY_APP) /tmp/paw-brew-local/
-	@cp icon.png /tmp/paw-brew-local/ 2>/dev/null || true
+	@cp $(ICON_PATH) /tmp/paw-brew-local/ 2>/dev/null || true
 	@cd /tmp/paw-brew-local && tar -czf ../paw-local.tar.gz .
 	@echo "Setting up local tap..."
 	@# Uninstall first (required before untap), then untap
