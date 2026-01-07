@@ -64,21 +64,27 @@ var ctrlCCmd = &cobra.Command{
 		// Check if there's a pending cancel within 2 seconds
 		if pendingTimeStr != "" {
 			pendingTime, err := parseUnixTime(pendingTimeStr)
-			if err == nil && now-pendingTime <= constants.DoublePressIntervalSec {
-				// Double-press detected, cancel the task
-				_ = tm.SetOption("@paw_cancel_pending", "", true) // Clear pending state
+			if err == nil {
+				if now-pendingTime <= constants.DoublePressIntervalSec {
+					// Double-press detected within 2 seconds, cancel the task
+					_ = tm.SetOption("@paw_cancel_pending", "", true) // Clear pending state
 
-				// Get current window ID
-				windowID, err := tm.Display("#{window_id}")
-				if err != nil {
-					return fmt.Errorf("failed to get window ID: %w", err)
+					// Get current window ID
+					windowID, err := tm.Display("#{window_id}")
+					if err != nil {
+						return fmt.Errorf("failed to get window ID: %w", err)
+					}
+					windowID = strings.TrimSpace(windowID)
+
+					// Delegate to cancel-task-ui (shows progress in top pane)
+					pawBin, _ := os.Executable()
+					cancelCmd := exec.Command(pawBin, "internal", "cancel-task-ui", sessionName, windowID)
+					return cancelCmd.Run()
 				}
-				windowID = strings.TrimSpace(windowID)
-
-				// Delegate to cancel-task-ui (shows progress in top pane)
-				pawBin, _ := os.Executable()
-				cancelCmd := exec.Command(pawBin, "internal", "cancel-task-ui", sessionName, windowID)
-				return cancelCmd.Run()
+				// Time window expired - clear pending state and ignore this press
+				// User must press again to start a new double-press sequence
+				_ = tm.SetOption("@paw_cancel_pending", "", true)
+				return nil
 			}
 		}
 

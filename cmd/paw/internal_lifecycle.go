@@ -1104,14 +1104,20 @@ var doneTaskCmd = &cobra.Command{
 		// Check if there's a pending done within 2 seconds
 		if pendingTimeStr != "" {
 			pendingTime, err := parseUnixTime(pendingTimeStr)
-			if err == nil && now-pendingTime <= constants.DoublePressIntervalSec {
-				// Double-press detected, finish the task
-				_ = tm.SetOption("@paw_done_pending", "", true) // Clear pending state
+			if err == nil {
+				if now-pendingTime <= constants.DoublePressIntervalSec {
+					// Double-press detected within 2 seconds, finish the task
+					_ = tm.SetOption("@paw_done_pending", "", true) // Clear pending state
 
-				// Delegate to end-task-ui
-				pawBin, _ := os.Executable()
-				endCmd := exec.Command(pawBin, "internal", "end-task-ui", sessionName, windowID)
-				return endCmd.Run()
+					// Delegate to end-task-ui
+					pawBin, _ := os.Executable()
+					endCmd := exec.Command(pawBin, "internal", "end-task-ui", sessionName, windowID)
+					return endCmd.Run()
+				}
+				// Time window expired - clear pending state and ignore this press
+				// User must press again to start a new double-press sequence
+				_ = tm.SetOption("@paw_done_pending", "", true)
+				return nil
 			}
 		}
 
