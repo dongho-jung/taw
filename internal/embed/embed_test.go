@@ -175,7 +175,7 @@ func TestGetPromptNoGitDifferent(t *testing.T) {
 	}
 }
 
-func TestWriteClaudeFilesCreatesCommands(t *testing.T) {
+func TestWriteClaudeFilesDoesNotCreateCommands(t *testing.T) {
 	tempDir := t.TempDir()
 	targetDir := filepath.Join(tempDir, ".claude")
 
@@ -183,23 +183,9 @@ func TestWriteClaudeFilesCreatesCommands(t *testing.T) {
 		t.Fatalf("WriteClaudeFiles() error = %v", err)
 	}
 
-	// Check that commands directory exists
 	commandsDir := filepath.Join(targetDir, "commands")
-	info, err := os.Stat(commandsDir)
-	if err != nil {
-		t.Fatalf("Commands directory not created: %v", err)
-	}
-	if !info.IsDir() {
-		t.Error("Commands path is not a directory")
-	}
-
-	// Check for expected command files
-	expectedCommands := []string{"commit.md", "test.md", "pr.md", "merge.md"}
-	for _, cmd := range expectedCommands {
-		cmdPath := filepath.Join(commandsDir, cmd)
-		if _, err := os.Stat(cmdPath); err != nil {
-			t.Errorf("Expected command file %q not found: %v", cmd, err)
-		}
+	if _, err := os.Stat(commandsDir); err == nil || !os.IsNotExist(err) {
+		t.Errorf("Commands directory should not exist, got err = %v", err)
 	}
 }
 

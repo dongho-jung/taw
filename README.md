@@ -39,19 +39,8 @@ To add another task inside the tmux session, press `⌃N`:
 - Submit with `Alt+Enter` (or `F5`) to launch the agent; `Esc` cancels.
 - Use `⌥Tab` to edit per-task options (model, ultrathink, dependencies, worktree hook) before submitting.
 
-### Slash Commands
-
-Slash commands available to the agent:
-
-| Command | Description |
-|---------|-------------|
-| `/commit` | Smart commit (analyzes the diff and generates a message) |
-| `/test` | Detects and runs project tests |
-| `/pr` | Creates a PR and opens the browser |
-| `/merge` | Merges the worktree branch into the current project branch |
-
 **Task completion**:
-- All modes: Press `⌃F` to finish; PAW handles commit/PR/merge/cleanup according to ON_COMPLETE
+- Press `⌃F` to finish; PAW handles commit/PR/merge/cleanup according to ON_COMPLETE
 
 <details>
 <summary>Automatically reopen incomplete tasks with session resume</summary>
@@ -159,7 +148,6 @@ on_complete: confirm
 - System prompt: Embedded in binary (copied to `.paw/.claude/` on setup)
 - `.paw/PROMPT.md`: Project-specific prompt (per project)
 - `.paw/memory`: Project memory (YAML, update in place for reusable info)
-- Slash commands: Embedded in binary (copied to `.paw/.claude/commands/` on setup)
 - Notifications: Configure optional Slack/ntfy settings in `.paw/config`
 </details>
 
@@ -172,7 +160,7 @@ Use `paw check` to verify prerequisites.
 | tmux | Yes | Terminal multiplexer for managing task windows |
 | claude | Yes | Claude Code CLI for running agents |
 | git | Optional | Needed for worktree mode in git repositories |
-| gh | Optional | PR creation for `/pr` and `auto-pr` mode |
+| gh | Optional | PR creation for `auto-pr` mode |
 | paw-notify.app (macOS) | Optional | Desktop notifications and action buttons |
 
 Install tmux/gh via Homebrew: `brew install tmux gh`. Install the Claude Code CLI from https://claude.ai/claude-code.

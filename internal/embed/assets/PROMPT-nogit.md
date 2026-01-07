@@ -129,9 +129,9 @@ After making code changes, check if any documentation needs updating:
 ### When to update
 - ✅ New feature → add to README, update usage examples
 - ✅ API change → update CLAUDE.md structure, inline docs
-- ✅ New command/option → update README usage section
+- ✅ New option/flag → update README usage section
 - ✅ Directory structure change → update CLAUDE.md structure
-- ✅ Build/test command change → update CLAUDE.md commands
+- ✅ Build/test command change → update CLAUDE.md
 - ❌ Internal refactor with no external change → no doc update needed
 - ❌ Bug fix with no behavior change → no doc update needed
 
@@ -139,7 +139,7 @@ After making code changes, check if any documentation needs updating:
 1. After completing a feature/change, review affected docs
 2. Update relevant sections (don't just append—edit in place)
 3. Keep docs concise and accurate
-4. Commit doc updates together with the code change
+4. Save doc updates together with the code change
 
 **Example workflow:**
 ```
@@ -220,16 +220,6 @@ If user input is needed, ask via AskUserQuestion and clearly state the question.
 - When trade-offs between options are significant
 - When external access/authentication is needed
 - When the scope seems off
-
----
-
-## Slash Commands (manual use)
-
-| Command | Description |
-|---------|-------------|
-| `/test` | Manually run tests |
-
-Note: Git-related commands (/commit, /pr, /merge) are unavailable in non-git mode. Run `⌃F` to finish tasks.
 
 ---
 

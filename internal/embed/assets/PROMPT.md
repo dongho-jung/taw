@@ -181,6 +181,16 @@ Change → run tests → fix failures → commit when successful
 - On test failure: analyze error → attempt fix → rerun (up to 3 attempts)
 - On success: commit with a conventional commit type (feat/fix/refactor/docs/test/chore)
 
+### Commit discipline (task branch → finish)
+- Before telling the user you are ready to finish (especially for `auto-merge`), inspect `git status`, staged/unstaged stats, and diffs.
+- Split changes by intent (feature, fix, refactor, config, docs, tests, chore, perf). Do not mix unrelated intents in one commit.
+- For each commit, craft `type(scope?): subject` (≤50 chars) with a body:
+  - `- Key changes`
+    - `- Detail 1`
+    - `- Detail 2`
+- Stage only the files for that commit, show the staged summary, run tests if applicable, then commit.
+- If commit grouping is unclear, ask the user via AskUserQuestion before committing.
+
 ### On task completion (depends on ON_COMPLETE)
 
 **CRITICAL: Check the `$ON_COMPLETE` environment variable and follow its mode!**
@@ -276,9 +286,9 @@ After making code changes, check if any documentation needs updating:
 ### When to update
 - ✅ New feature → add to README, update usage examples
 - ✅ API change → update CLAUDE.md structure, inline docs
-- ✅ New command/option → update README usage section
+- ✅ New option/flag → update README usage section
 - ✅ Directory structure change → update CLAUDE.md structure
-- ✅ Build/test command change → update CLAUDE.md commands
+- ✅ Build/test command change → update CLAUDE.md
 - ❌ Internal refactor with no external change → no doc update needed
 - ❌ Bug fix with no behavior change → no doc update needed
 
@@ -369,22 +379,6 @@ If user input is needed, ask via AskUserQuestion and clearly state the question.
 - When trade-offs between options are significant
 - When external access/authentication is needed
 - When the scope seems off
-
----
-
-## Slash Commands (manual use)
-
-Automatic execution is the default, but you can invoke commands manually if needed:
-
-| Command | Description |
-|---------|-------------|
-| `/commit` | Manual commit (auto-generates the message) |
-| `/test` | Manually run tests |
-| `/pr` | Manually create a PR |
-| `/merge` | Merge into main (run from PROJECT_DIR) |
-
-**Completing a task**:
-- All modes: The user finishes the task with `⌃F`. Do not call end-task directly.
 
 ---
 

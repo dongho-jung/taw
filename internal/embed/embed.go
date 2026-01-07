@@ -43,7 +43,7 @@ func GetTmuxConfig() (string, error) {
 }
 
 // WriteClaudeFiles writes the embedded claude directory to the target path.
-// This copies settings and slash commands to .paw/.claude/
+// This copies Claude settings to .paw/.claude/
 func WriteClaudeFiles(targetDir string) error {
 	// Create target directory
 	if err := os.MkdirAll(targetDir, 0755); err != nil {

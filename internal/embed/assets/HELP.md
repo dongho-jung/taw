@@ -31,14 +31,6 @@ Claude Code-based autonomous agent work environment
   ⌃Y          Toggle idea (quick Claude for side thoughts)
   ⌃/          Toggle help
 
-## Slash Commands (for agents)
-
-  /commit        Smart commit (auto-generate message from diff analysis)
-  /test          Auto-detect and run project tests
-  /pr            Auto-create PR and open browser
-  /merge         Merge worktree branch to project branch
-  /self-improve  Record lessons learned to CLAUDE.md
-
 ## Directory Structure
 
   .paw/

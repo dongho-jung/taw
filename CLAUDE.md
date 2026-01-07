@@ -110,7 +110,7 @@ paw/                           # This repository
 │   │       ├── PROMPT.md      # System prompt (git mode)
 │   │       ├── PROMPT-nogit.md # System prompt (non-git mode)
 │   │       ├── tmux.conf      # Base tmux configuration
-│   │       └── claude/        # Claude settings and slash commands
+│   │       └── claude/        # Claude settings
 │   ├── git/                   # Git/worktree management
 │   ├── github/                # GitHub API client
 │   ├── logging/               # Logging (L0-L5 levels)
@@ -129,9 +129,8 @@ paw/                           # This repository
     ├── memory                 # Project memory (YAML, shared across tasks)
     ├── PROMPT.md              # Project prompt (user-customizable)
     ├── .is-git-repo           # Git mode marker (exists only in git repos)
-    ├── .claude/               # Claude settings and slash commands (copied from embed)
-    │   ├── settings.local.json
-    │   └── commands/          # Slash commands (/commit, /test, /pr, /merge)
+    ├── .claude/               # Claude settings (copied from embed)
+    │   └── settings.local.json
     ├── history/               # Task history directory
     │   └── YYMMDD_HHMMSS_task-name  # Task + summary + pane capture at task end
     └── agents/{task-name}/    # Per-task workspace
