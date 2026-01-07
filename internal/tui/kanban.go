@@ -67,6 +67,10 @@ func (k *KanbanView) Render() string {
 	taskNameStyle := lipgloss.NewStyle().
 		Foreground(normalColor)
 
+	actionStyle := lipgloss.NewStyle().
+		Foreground(dimColor).
+		Italic(true)
+
 	borderColor := dimColor
 	panelStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
@@ -110,21 +114,38 @@ func (k *KanbanView) Render() string {
 		content.WriteString(strings.Repeat("─", columnWidth-4))
 		content.WriteString("\n")
 
-		// Tasks (limited by height) - show only task name
+		// Tasks (limited by height)
+		// Each task shows: project/name (line 1), current action if any (line 2)
 		linesUsed := 2 // header + separator
 		for _, task := range col.tasks {
 			if linesUsed >= maxHeight {
 				break
 			}
 
-			// Task name (truncated)
-			name := task.Name
-			if len(name) > columnWidth-6 {
-				name = name[:columnWidth-7] + "…"
+			// Full task display name: session/taskName
+			fullName := task.Session + "/" + task.Name
+			displayName := fullName
+			if len(displayName) > columnWidth-6 {
+				displayName = displayName[:columnWidth-7] + "…"
 			}
-			content.WriteString(taskNameStyle.Render(name))
+			content.WriteString(taskNameStyle.Render(displayName))
 			content.WriteString("\n")
 			linesUsed++
+
+			// Show current action if available and space permits
+			if task.CurrentAction != "" && linesUsed < maxHeight {
+				action := task.CurrentAction
+				// Leave room for indent and truncation
+				maxActionLen := columnWidth - 8
+				if maxActionLen > 0 {
+					if len(action) > maxActionLen {
+						action = action[:maxActionLen-1] + "…"
+					}
+					content.WriteString("  " + actionStyle.Render(action))
+					content.WriteString("\n")
+					linesUsed++
+				}
+			}
 		}
 
 		// Pad to consistent height

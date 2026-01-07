@@ -16,12 +16,13 @@ import (
 
 // DiscoveredTask represents a task discovered from any PAW session.
 type DiscoveredTask struct {
-	Name        string         // Task name (without emoji)
-	Session     string         // Session name (project name)
-	Status      DiscoveredStatus
-	WindowID    string         // Tmux window ID
-	Preview     string         // Last 3 lines from agent pane
-	CreatedAt   time.Time      // Estimated creation time
+	Name          string         // Task name (without emoji)
+	Session       string         // Session name (project name)
+	Status        DiscoveredStatus
+	WindowID      string         // Tmux window ID
+	Preview       string         // Last 3 lines from agent pane
+	CurrentAction string         // Agent's current action (extracted from ⏺ spinner line)
+	CreatedAt     time.Time      // Estimated creation time
 }
 
 // DiscoveredStatus represents the status of a discovered task.
@@ -147,10 +148,12 @@ func (s *TaskDiscoveryService) discoverFromSocket(socketName string) []*Discover
 			CreatedAt: time.Now(), // We don't have exact creation time
 		}
 
-		// Capture last 3 lines from agent pane (pane .0)
+		// Capture pane content for preview and current action (pane .0)
+		// Use more lines (50) to find the spinner indicator which shows current action
 		agentPane := w.ID + ".0"
-		if preview, err := tm.CapturePane(agentPane, 3); err == nil {
-			task.Preview = trimPreview(preview)
+		if capture, err := tm.CapturePane(agentPane, 50); err == nil {
+			task.Preview = trimPreview(capture)
+			task.CurrentAction = extractCurrentAction(capture)
 		}
 
 		tasks = append(tasks, task)
@@ -198,4 +201,40 @@ func trimPreview(preview string) string {
 	}
 
 	return strings.Join(nonEmpty, "\n")
+}
+
+// extractCurrentAction extracts the agent's current action from pane capture.
+// Looks for the last line containing "⏺" (spinner indicator) which shows what
+// the agent is currently working on (e.g., "⏺ Reading file...", "⏺ Running tests...").
+func extractCurrentAction(capture string) string {
+	lines := strings.Split(capture, "\n")
+
+	// Find the last line containing the spinner indicator "⏺"
+	var lastSpinnerLine string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "⏺") {
+			lastSpinnerLine = trimmed
+		}
+	}
+
+	if lastSpinnerLine == "" {
+		return ""
+	}
+
+	// Extract the text after "⏺" (the action description)
+	// The spinner line format is typically: "⏺ Action description"
+	idx := strings.Index(lastSpinnerLine, "⏺")
+	if idx == -1 {
+		return ""
+	}
+
+	action := strings.TrimSpace(lastSpinnerLine[idx+len("⏺"):])
+
+	// Truncate if too long (max 60 chars for display)
+	if len(action) > 60 {
+		action = action[:57] + "..."
+	}
+
+	return action
 }

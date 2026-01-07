@@ -150,9 +150,9 @@ func (m *TaskInput) Init() tea.Cmd {
 	)
 }
 
-// tickCmd returns a command that triggers a tick after 3 seconds.
+// tickCmd returns a command that triggers a tick after 5 seconds.
 func (m *TaskInput) tickCmd() tea.Cmd {
-	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
