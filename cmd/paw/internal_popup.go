@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 
+	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/embed"
 	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/logging"
@@ -535,15 +536,8 @@ var restorePanesCmd = &cobra.Command{
 		logging.Debug("Current window: name=%s, id=%s", windowName, windowID)
 
 		// Check if this is a task window (has task emoji prefix)
-		taskName := ""
-		for _, prefix := range []string{"🤖", "💬", "✅", "❌", "⏳"} {
-			if strings.HasPrefix(windowName, prefix) {
-				taskName = strings.TrimPrefix(windowName, prefix)
-				break
-			}
-		}
-
-		if taskName == "" {
+		taskName, isTaskWindow := constants.ExtractTaskName(windowName)
+		if !isTaskWindow {
 			_ = tm.DisplayMessage("Not a task window", 2000)
 			return nil
 		}
