@@ -133,14 +133,14 @@ func (m *SetupWizard) View() tea.View {
 			name string
 			desc string
 		}{
-			{"confirm (Recommended)", "Ask before each action"},
+			{"confirm (Recommended)", "Commit only (no push/PR/merge)"},
 		}
 
 		// In worktree mode, add merge and PR options
 		if m.workMode == config.WorkModeWorktree {
 			options = append(options,
-				struct{ name, desc string }{"auto-pr", "Auto commit + create pull request"},
-				struct{ name, desc string }{"auto-merge", "Auto commit + merge + cleanup"},
+				struct{ name, desc string }{"auto-pr", "Auto commit + push + create pull request"},
+				struct{ name, desc string }{"auto-merge", "Auto commit + push + merge + cleanup"},
 			)
 		}
 

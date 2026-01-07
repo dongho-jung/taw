@@ -22,7 +22,7 @@ const (
 type OnComplete string
 
 const (
-	OnCompleteConfirm   OnComplete = "confirm"    // Ask before each action
+	OnCompleteConfirm   OnComplete = "confirm"    // Commit only (no push/PR/merge)
 	OnCompleteAutoMerge OnComplete = "auto-merge" // Auto commit + merge + cleanup
 	OnCompleteAutoPR    OnComplete = "auto-pr"    // Auto commit + create PR
 )
@@ -348,9 +348,9 @@ func (c *Config) Save(pawDir string) error {
 work_mode: %s
 
 # When task completes: confirm, auto-merge, or auto-pr
-# - confirm: Ask before each action (recommended)
-# - auto-merge: Auto commit + merge + cleanup + close window
-# - auto-pr: Auto commit + create pull request
+# - confirm: Commit only (no push/PR/merge)
+# - auto-merge: Auto commit + push + merge + cleanup + close window
+# - auto-pr: Auto commit + push + create pull request
 on_complete: %s
 
 # Hook to run after worktree creation (optional)

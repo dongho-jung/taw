@@ -696,12 +696,12 @@ func runSetupWizard(app *app.App) error {
 
 	// When task completes
 	fmt.Println("\nWhen Task Completes:")
-	fmt.Println("  1. confirm (Recommended) - Ask before each action")
+	fmt.Println("  1. confirm (Recommended) - Commit only (no push/PR/merge)")
 
 	// Show merge/PR options only in worktree mode
 	if cfg.WorkMode == config.WorkModeWorktree {
-		fmt.Println("  2. auto-pr - Auto commit + create pull request")
-		fmt.Println("  3. auto-merge - Auto commit + merge + cleanup")
+		fmt.Println("  2. auto-pr - Auto commit + push + create pull request")
+		fmt.Println("  3. auto-merge - Auto commit + push + merge + cleanup")
 		fmt.Print("\nSelect [1-3, default: 1]: ")
 	} else {
 		fmt.Print("\nSelect [1, default: 1]: ")

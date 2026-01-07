@@ -35,12 +35,13 @@ The first launch automatically opens the task editor.
 ### Create a task
 
 To add another task inside the tmux session, press `⌃N`:
-- The inline task input UI opens in the `_` window.
+- The inline task input UI opens in the `⭐️main` window.
 - Submit with `Alt+Enter` (or `F5`) to launch the agent; `Esc` cancels.
 - Use `⌥Tab` to edit per-task options (model, ultrathink, dependencies, worktree hook) before submitting.
 
 **Task completion**:
-- Press `⌃F` to finish; PAW handles commit/PR/merge/cleanup according to ON_COMPLETE
+- Press `⌃F` twice to finish; PAW commits changes and cleans up, pushes in `auto-pr`/`auto-merge`, and auto-merges in `auto-merge`.
+- In `auto-pr`, the agent creates the PR before you finish.
 
 <details>
 <summary>Automatically reopen incomplete tasks with session resume</summary>
@@ -80,12 +81,11 @@ Work Mode:
 Select [1-2, default: 1]:
 
 On Complete Action:
-  1. confirm (Recommended) - Ask before each action
-  2. auto-commit - Automatically commit changes
-  3. auto-merge - Auto commit + merge + cleanup      (worktree mode only)
-  4. auto-pr - Auto commit + create pull request     (worktree mode only)
+  1. confirm (Recommended) - Commit only (no push/PR/merge)
+  2. auto-pr - Auto commit + push + create pull request     (worktree mode only)
+  3. auto-merge - Auto commit + push + merge + cleanup      (worktree mode only)
 
-Select [1-2 or 1-4, default: 1]:
+Select [1-3, default: 1]:
 
 ✅ Configuration saved!
    Work mode: worktree
@@ -112,11 +112,10 @@ paw setup  # Rerun the setup wizard
 # - main: All tasks work on the current branch
 work_mode: worktree
 
-# On complete action: confirm, auto-commit, auto-merge, or auto-pr
-# - confirm: Ask before each action (recommended)
-# - auto-commit: Automatically commit changes
-# - auto-merge: Auto commit + merge + cleanup + close window
-# - auto-pr: Auto commit + create pull request
+# On complete action: confirm, auto-merge, or auto-pr
+# - confirm: Commit only (no push/PR/merge)
+# - auto-merge: Auto commit + push + merge + cleanup + close window
+# - auto-pr: Auto commit + push + create pull request
 on_complete: confirm
 
 # Hook to run after worktree creation (optional)
@@ -135,10 +134,9 @@ on_complete: confirm
 |---------|--------|-------------|
 | `work_mode` | `worktree` | Create a git worktree per task (isolated, recommended) |
 |             | `main` | Work directly on the current branch (simple) |
-| `on_complete` | `confirm` | Ask before each action (safe) |
-|               | `auto-commit` | Auto commit (merge/PR are manual) |
-|               | `auto-merge` | **Auto** commit + merge + clean up + close window (worktree mode only) |
-|               | `auto-pr` | Auto commit + create PR (worktree mode only) |
+| `on_complete` | `confirm` | Commit only (no push/PR/merge) |
+|               | `auto-merge` | **Auto** commit + push + merge + clean up + close window (worktree mode only) |
+|               | `auto-pr` | Auto commit + push + create PR (worktree mode only) |
 | `worktree_hook` | (command) | Shell command(s) to run after worktree creation (e.g., `npm install`) |
 | `notifications` | `slack.webhook`, `ntfy.topic`, `ntfy.server` | Optional external alerts via Slack webhook or ntfy.sh |
 
@@ -178,8 +176,10 @@ Install tmux/gh via Homebrew: `brew install tmux gh`. Install the Claude Code CL
 |--------|----------|
 | New task | `⌃N` |
 | Cancel task (double-press) | `⌃K` |
-| Finish task | `⌃F` |
-| Branch menu (↑ merge, ↓ sync) | `⌃]` |
+| Finish task (double-press) | `⌃F` |
+| Toggle branch (task ↔ main) | `⌃↑` |
+| Sync from main (rebase) | `⌃↓` |
+| Command palette | `⌃P` |
 | Quit paw | `⌃Q` |
 
 ### Toggle Panels
@@ -189,8 +189,8 @@ Install tmux/gh via Homebrew: `brew install tmux gh`. Install the Claude Code CL
 | Toggle logs | `⌃O` |
 | Toggle git status | `⌃G` |
 | Toggle bottom (shell) | `⌃B` |
+| Toggle idea (quick Claude) | `⌃Y` |
 | Toggle help | `⌃/` |
-| Toggle setup | `⌃,` |
 
 ## Log viewer
 
