@@ -607,7 +607,7 @@ func (m *TaskInput) renderOptionsPanel() string {
 	return panelStyle.Render(content.String())
 }
 
-// renderClaudeInfo renders the Claude information panel showing MCPs, usage, and limits.
+// renderClaudeInfo renders the Claude information panel showing token usage and limits.
 func (m *TaskInput) renderClaudeInfo() string {
 	// Adaptive colors for light/dark terminal themes (use cached isDark value)
 	lightDark := lipgloss.LightDark(m.isDark)
@@ -633,29 +633,25 @@ func (m *TaskInput) renderClaudeInfo() string {
 		MarginTop(1)
 
 	var content strings.Builder
-	content.WriteString(titleStyle.Render("Claude Info"))
+	content.WriteString(titleStyle.Render("Token Usage"))
 	content.WriteString("\n")
 
 	// Get Claude info
 	info := getClaudeInfo()
 
-	// MCPs
-	content.WriteString(labelStyle.Render("MCPs:"))
-	if len(info.MCPs) == 0 {
-		content.WriteString(valueStyle.Render("none"))
-	} else {
-		content.WriteString(valueStyle.Render(strings.Join(info.MCPs, ", ")))
-	}
-	content.WriteString("\n")
-
-	// Today's usage
+	// Today's token usage
 	content.WriteString(labelStyle.Render("Today:"))
-	content.WriteString(valueStyle.Render(info.TodayUsage))
+	content.WriteString(valueStyle.Render(info.TodayTokens))
 	content.WriteString("\n")
 
-	// Model info
-	content.WriteString(labelStyle.Render("Model:"))
-	content.WriteString(valueStyle.Render(info.Model))
+	// Total token usage
+	content.WriteString(labelStyle.Render("Total:"))
+	content.WriteString(valueStyle.Render(info.TotalTokens))
+	content.WriteString("\n")
+
+	// Limit
+	content.WriteString(labelStyle.Render("Limit:"))
+	content.WriteString(valueStyle.Render(info.Limit))
 	content.WriteString("\n")
 
 	return panelStyle.Render(content.String())
@@ -663,17 +659,17 @@ func (m *TaskInput) renderClaudeInfo() string {
 
 // claudeInfo holds Claude status information.
 type claudeInfo struct {
-	MCPs       []string
-	TodayUsage string
-	Model      string
+	TodayTokens string // Today's total token usage
+	TotalTokens string // Total token usage (all time)
+	Limit       string // Usage limit (if available)
 }
 
 // getClaudeInfo retrieves Claude status information from config files.
 func getClaudeInfo() claudeInfo {
 	info := claudeInfo{
-		MCPs:       []string{},
-		TodayUsage: "N/A",
-		Model:      "sonnet",
+		TodayTokens: "N/A",
+		TotalTokens: "N/A",
+		Limit:       "N/A",
 	}
 
 	homeDir, err := os.UserHomeDir()
@@ -681,72 +677,72 @@ func getClaudeInfo() claudeInfo {
 		return info
 	}
 
-	// Read stats cache for usage
+	// Read stats cache for token usage
 	statsPath := homeDir + "/.claude/stats-cache.json"
 	if data, err := os.ReadFile(statsPath); err == nil {
-		info.TodayUsage = parseStatsUsage(data)
-	}
-
-	// Read settings for MCPs and plugins
-	settingsPath := homeDir + "/.claude/settings.json"
-	if data, err := os.ReadFile(settingsPath); err == nil {
-		info.MCPs = parseEnabledPlugins(data)
+		today, total := parseTokenUsage(data)
+		info.TodayTokens = today
+		info.TotalTokens = total
 	}
 
 	return info
 }
 
-// parseStatsUsage extracts today's usage from stats-cache.json.
-func parseStatsUsage(data []byte) string {
-	// Simple JSON parsing for stats
+// parseTokenUsage extracts today's and total token usage from stats-cache.json.
+func parseTokenUsage(data []byte) (today string, total string) {
+	// Parse stats-cache.json
 	var stats struct {
-		DailyActivity []struct {
-			Date         string `json:"date"`
-			MessageCount int    `json:"messageCount"`
-			ToolCallCount int   `json:"toolCallCount"`
-		} `json:"dailyActivity"`
+		DailyModelTokens []struct {
+			Date          string         `json:"date"`
+			TokensByModel map[string]int `json:"tokensByModel"`
+		} `json:"dailyModelTokens"`
+		ModelUsage map[string]struct {
+			InputTokens           int `json:"inputTokens"`
+			OutputTokens          int `json:"outputTokens"`
+			CacheReadInputTokens  int `json:"cacheReadInputTokens"`
+			CacheCreationInputTokens int `json:"cacheCreationInputTokens"`
+		} `json:"modelUsage"`
 	}
 
 	if err := parseJSON(data, &stats); err != nil {
-		return "N/A"
+		return "N/A", "N/A"
 	}
 
 	// Get today's date
-	today := time.Now().Format("2006-01-02")
+	todayDate := time.Now().Format("2006-01-02")
 
-	// Find today's stats
-	for _, day := range stats.DailyActivity {
-		if day.Date == today {
-			return fmt.Sprintf("%d msgs, %d tools", day.MessageCount, day.ToolCallCount)
+	// Find today's token count
+	todayTokens := 0
+	for _, day := range stats.DailyModelTokens {
+		if day.Date == todayDate {
+			for _, tokens := range day.TokensByModel {
+				todayTokens += tokens
+			}
+			break
 		}
 	}
 
-	return "0 msgs"
+	// Calculate total tokens (output tokens from all models)
+	totalTokens := 0
+	for _, usage := range stats.ModelUsage {
+		totalTokens += usage.OutputTokens
+	}
+
+	return formatTokenCount(todayTokens), formatTokenCount(totalTokens)
 }
 
-// parseEnabledPlugins extracts enabled plugins from settings.json.
-func parseEnabledPlugins(data []byte) []string {
-	var settings struct {
-		EnabledPlugins map[string]bool `json:"enabledPlugins"`
+// formatTokenCount formats a token count with K/M suffixes.
+func formatTokenCount(count int) string {
+	if count == 0 {
+		return "0"
 	}
-
-	if err := parseJSON(data, &settings); err != nil {
-		return nil
+	if count >= 1000000 {
+		return fmt.Sprintf("%.1fM", float64(count)/1000000)
 	}
-
-	var plugins []string
-	for name, enabled := range settings.EnabledPlugins {
-		if enabled {
-			// Extract short name (before @)
-			shortName := name
-			if idx := strings.Index(name, "@"); idx > 0 {
-				shortName = name[:idx]
-			}
-			plugins = append(plugins, shortName)
-		}
+	if count >= 1000 {
+		return fmt.Sprintf("%.1fK", float64(count)/1000)
 	}
-
-	return plugins
+	return fmt.Sprintf("%d", count)
 }
 
 // parseJSON is a simple JSON parser wrapper.
