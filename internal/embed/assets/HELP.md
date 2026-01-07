@@ -28,6 +28,7 @@ Claude Code-based autonomous agent work environment
   ⌃O          Toggle logs (show log viewer)
   ⌃G          Toggle git status
   ⌃B          Toggle bottom (shell pane)
+  ⌃Y          Toggle idea (quick Claude for side thoughts)
   ⌃/          Toggle help
 
 ## Slash Commands (for agents)
@@ -55,6 +56,7 @@ Claude Code-based autonomous agent work environment
 ## Window Status Icons
 
   ⭐️  New task input window
+  💡  Idea window (quick Claude for side thoughts)
   🤖  Agent working
   💬  Waiting for user input
   ✅  Task completed
