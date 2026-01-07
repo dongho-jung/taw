@@ -24,6 +24,16 @@ var TaskEmojis = []string{
 	EmojiWarning,
 }
 
+// IsTaskWindow returns true if the window name has a task emoji prefix.
+func IsTaskWindow(windowName string) bool {
+	for _, emoji := range TaskEmojis {
+		if strings.HasPrefix(windowName, emoji) {
+			return true
+		}
+	}
+	return false
+}
+
 // ExtractTaskName extracts the task name from a window name by removing the emoji prefix.
 // Returns the task name and true if a task emoji was found, or empty string and false otherwise.
 // Note: The returned name may be truncated to MaxWindowNameLen characters.

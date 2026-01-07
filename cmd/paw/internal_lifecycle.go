@@ -1150,10 +1150,7 @@ var mergeTaskUICmd = &cobra.Command{
 		windowName = strings.TrimSpace(windowName)
 
 		// Check if this is a task window
-		if !strings.HasPrefix(windowName, constants.EmojiWorking) &&
-			!strings.HasPrefix(windowName, constants.EmojiWaiting) &&
-			!strings.HasPrefix(windowName, constants.EmojiDone) &&
-			!strings.HasPrefix(windowName, constants.EmojiWarning) {
+		if !constants.IsTaskWindow(windowName) {
 			_ = tm.DisplayMessage("Not a task window", 1500)
 			return nil
 		}
@@ -1228,10 +1225,7 @@ var doneTaskCmd = &cobra.Command{
 		windowName = strings.TrimSpace(windowName)
 
 		// Check if this is a task window (has emoji prefix)
-		if !strings.HasPrefix(windowName, constants.EmojiWorking) &&
-			!strings.HasPrefix(windowName, constants.EmojiWaiting) &&
-			!strings.HasPrefix(windowName, constants.EmojiDone) &&
-			!strings.HasPrefix(windowName, constants.EmojiWarning) {
+		if !constants.IsTaskWindow(windowName) {
 			_ = tm.DisplayMessage("Not a task window", 1500)
 			return nil
 		}

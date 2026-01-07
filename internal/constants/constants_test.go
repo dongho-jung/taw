@@ -78,6 +78,63 @@ func TestExtractTaskName(t *testing.T) {
 	}
 }
 
+func TestIsTaskWindow(t *testing.T) {
+	tests := []struct {
+		name       string
+		windowName string
+		want       bool
+	}{
+		{
+			name:       "working emoji prefix",
+			windowName: "🤖my-task",
+			want:       true,
+		},
+		{
+			name:       "waiting emoji prefix",
+			windowName: "💬my-task",
+			want:       true,
+		},
+		{
+			name:       "done emoji prefix",
+			windowName: "✅my-task",
+			want:       true,
+		},
+		{
+			name:       "warning emoji prefix",
+			windowName: "⚠️my-task",
+			want:       true,
+		},
+		{
+			name:       "no emoji prefix",
+			windowName: "my-task",
+			want:       false,
+		},
+		{
+			name:       "new window emoji",
+			windowName: "⭐️main",
+			want:       false, // EmojiNew is not a task emoji
+		},
+		{
+			name:       "idea window emoji",
+			windowName: "💡idea",
+			want:       false, // EmojiIdea is not a task emoji
+		},
+		{
+			name:       "empty string",
+			windowName: "",
+			want:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsTaskWindow(tt.windowName); got != tt.want {
+				t.Errorf("IsTaskWindow(%q) = %v, want %v", tt.windowName, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTaskEmojis(t *testing.T) {
 	expectedEmojis := []string{
 		EmojiWorking,

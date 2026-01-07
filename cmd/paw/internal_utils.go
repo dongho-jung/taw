@@ -50,10 +50,7 @@ var ctrlCCmd = &cobra.Command{
 		windowName = strings.TrimSpace(windowName)
 
 		// If not a task window, just send Ctrl+C to the pane
-		if !strings.HasPrefix(windowName, constants.EmojiWorking) &&
-			!strings.HasPrefix(windowName, constants.EmojiWaiting) &&
-			!strings.HasPrefix(windowName, constants.EmojiDone) &&
-			!strings.HasPrefix(windowName, constants.EmojiWarning) {
+		if !constants.IsTaskWindow(windowName) {
 			return tm.SendKeys("", "C-c")
 		}
 
