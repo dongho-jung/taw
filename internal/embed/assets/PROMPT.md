@@ -60,6 +60,13 @@ PAW will switch the window state automatically. Do not rename windows manually.
 PAW_WAITING
 ```
 
+**✅ Done state (CRITICAL):**
+When verification succeeds and work is complete, print a line containing exactly `PAW_DONE` to signal task completion.
+This ensures the window status changes to ✅ immediately.
+```text
+PAW_DONE
+```
+
 **When should you ask?**
 - ✅ For Plan confirmation on complex tasks
 - ✅ When multiple implementation options exist (e.g., "Approach A vs B")
@@ -207,8 +214,9 @@ Run verification → success? → report ready → user finishes (Ctrl+F)
 **When verification succeeds:**
 1. Ensure changes are committed.
 2. Log: "Verification complete - ready to finish"
-3. Message the user: "Ready for review. Please press `⌃F` to finish."
-4. **Do not call end-task** or run merge steps directly.
+3. Print `PAW_DONE` on its own line to update window status to ✅.
+4. Message the user: "Ready for review. Please press `⌃F` to finish."
+5. **Do not call end-task** or run merge steps directly.
 
 **If verification is impossible or fails:**
 1. Log: "Work complete - user review required (verification unavailable/failed)"
@@ -233,8 +241,9 @@ Commit → push → create PR → tell user to finish
    - [x] Tests passed"
    ```
 4. Save PR number: `gh pr view --json number -q '.number' > $PAW_DIR/agents/$TASK_NAME/.pr`
-5. Message the user: "PR created. Please press `⌃F` to finish."
-6. Log: "Work complete - created PR #N"
+5. Print `PAW_DONE` on its own line to update window status to ✅.
+6. Message the user: "PR created. Please press `⌃F` to finish."
+7. Log: "Work complete - created PR #N"
 
 #### `confirm` mode
 ```
@@ -242,7 +251,8 @@ Commit → log completion (no push/PR/merge)
 ```
 1. Commit all changes.
 2. Log: "Work complete - changes committed"
-3. Message the user: "Changes committed. Please press `⌃F` to finish."
+3. Print `PAW_DONE` on its own line to update window status to ✅.
+4. Message the user: "Changes committed. Please press `⌃F` to finish."
 
 ### Automatic handling on errors
 - **Build error**: Analyze the message → attempt a fix.

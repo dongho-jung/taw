@@ -33,3 +33,56 @@ func TestParseStopHookDecision(t *testing.T) {
 		})
 	}
 }
+
+func TestHasDoneMarker(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{
+			name:    "marker at end",
+			content: "Some output\nVerification complete\nPAW_DONE\n",
+			want:    true,
+		},
+		{
+			name:    "marker with trailing whitespace",
+			content: "Some output\n  PAW_DONE  \n",
+			want:    true,
+		},
+		{
+			name:    "marker in middle (within last 20 lines)",
+			content: "Line 1\nPAW_DONE\nReady for review\n",
+			want:    true,
+		},
+		{
+			name:    "no marker",
+			content: "Some output\nReady for review\n",
+			want:    false,
+		},
+		{
+			name:    "partial marker",
+			content: "PAW_DONE_EXTRA\n",
+			want:    false,
+		},
+		{
+			name:    "marker embedded in text",
+			content: "Text PAW_DONE text\n",
+			want:    false,
+		},
+		{
+			name:    "empty content",
+			content: "",
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hasDoneMarker(tt.content)
+			if got != tt.want {
+				t.Fatalf("hasDoneMarker() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

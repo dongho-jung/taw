@@ -19,6 +19,7 @@ import (
 )
 
 const stopHookTimeout = 20 * time.Second
+const doneMarker = "PAW_DONE"
 
 var stopHookCmd = &cobra.Command{
 	Use:   "stop-hook",
@@ -75,10 +76,19 @@ var stopHookCmd = &cobra.Command{
 
 		paneContent = tailString(paneContent, constants.SummaryMaxLen)
 
-		status, err := classifyStopStatus(taskName, paneContent)
-		if err != nil {
-			logging.Warn("stopHookCmd: classification failed: %v", err)
-			status = task.StatusWaiting
+		// Check for explicit PAW_DONE marker first (fast path)
+		var status task.Status
+		if hasDoneMarker(paneContent) {
+			logging.Debug("stopHookCmd: PAW_DONE marker detected")
+			status = task.StatusDone
+		} else {
+			// Fallback to Claude classification
+			var err error
+			status, err = classifyStopStatus(taskName, paneContent)
+			if err != nil {
+				logging.Warn("stopHookCmd: classification failed: %v", err)
+				status = task.StatusWaiting
+			}
 		}
 
 		newName := windowNameForStatus(taskName, status)
@@ -186,4 +196,22 @@ func tailString(value string, maxLen int) string {
 		return value
 	}
 	return value[len(value)-maxLen:]
+}
+
+// hasDoneMarker checks if the pane content contains the PAW_DONE marker.
+// The marker must appear on its own line (possibly with whitespace).
+func hasDoneMarker(content string) bool {
+	lines := strings.Split(content, "\n")
+	// Check the last N lines for the marker (it should be near the end)
+	maxLines := 20
+	start := len(lines) - maxLines
+	if start < 0 {
+		start = 0
+	}
+	for _, line := range lines[start:] {
+		if strings.TrimSpace(line) == doneMarker {
+			return true
+		}
+	}
+	return false
 }
