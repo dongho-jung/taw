@@ -155,7 +155,7 @@ Code change: Add --verbose flag to CLI
 
 **Log major milestones immediately (≤32 chars per line):**
 ```bash
-echo "Short progress summary" >> $PAW_DIR/agents/$TASK_NAME/log
+echo "Short progress summary" >> $PAW_DIR/log
 ```
 
 **When to log:**
