@@ -3,6 +3,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
@@ -16,6 +17,8 @@ type Spinner struct {
 	done    bool
 	result  string
 	err     error
+	width   int
+	height  int
 }
 
 // spinnerFrames are the animation frames for the spinner.
@@ -45,6 +48,10 @@ func (m *Spinner) Init() tea.Cmd {
 // Update handles messages and updates the model.
 func (m *Spinner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -67,26 +74,63 @@ func (m *Spinner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the spinner.
 func (m *Spinner) View() tea.View {
-	var content string
+	// Default dimensions for fallback
+	width := m.width
+	height := m.height
+	if width == 0 {
+		width = 80
+	}
+	if height == 0 {
+		height = 24
+	}
+
+	// Build the spinner content
+	var innerContent string
 	if m.done {
 		if m.err != nil {
 			style := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-			content = style.Render(fmt.Sprintf("✗ %s: %v\n", m.message, m.err))
+			innerContent = style.Render(fmt.Sprintf("✗ %s: %v", m.message, m.err))
 		} else {
 			style := lipgloss.NewStyle().Foreground(lipgloss.Color("40"))
 			if m.result != "" {
-				content = style.Render(fmt.Sprintf("✓ %s: %s\n", m.message, m.result))
+				innerContent = style.Render(fmt.Sprintf("✓ %s: %s", m.message, m.result))
 			} else {
-				content = style.Render(fmt.Sprintf("✓ %s\n", m.message))
+				innerContent = style.Render(fmt.Sprintf("✓ %s", m.message))
 			}
 		}
 	} else {
 		spinnerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
 		frame := spinnerFrames[m.frame]
-		content = spinnerStyle.Render(fmt.Sprintf("%s %s", frame, m.message))
+		innerContent = spinnerStyle.Render(fmt.Sprintf("%s %s", frame, m.message))
 	}
 
-	return tea.NewView(content)
+	// Create a box around the spinner content
+	boxStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("39")).
+		Padding(1, 3)
+
+	box := boxStyle.Render(innerContent)
+
+	// Calculate vertical padding to center
+	boxLines := strings.Count(box, "\n") + 1
+	topPadding := (height - boxLines) / 2
+	if topPadding < 0 {
+		topPadding = 0
+	}
+
+	// Center horizontally and vertically
+	centeredStyle := lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		Align(lipgloss.Center, lipgloss.Center)
+
+	content := centeredStyle.Render(box)
+
+	v := tea.NewView(content)
+	v.AltScreen = true
+
+	return v
 }
 
 // tick returns a command that sends a tick message.
