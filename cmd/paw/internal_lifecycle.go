@@ -109,293 +109,321 @@ var endTaskCmd = &cobra.Command{
 			}
 
 			// Push changes
-			pushSpinner := tui.NewSimpleSpinner("Pushing to remote")
-			pushSpinner.Start()
-
-			pushTimer := logging.StartTimer("git push")
-			if err := gitClient.Push(workDir, "origin", targetTask.Name, true); err != nil {
-				pushTimer.StopWithResult(false, err.Error())
-				pushSpinner.Stop(false, err.Error())
+			shouldPush := app.Config != nil && app.Config.OnComplete != config.OnCompleteConfirm
+			branchName := ""
+			skipReason := ""
+			if shouldPush {
+				fallbackBranch := ""
+				if app.IsWorktreeMode() {
+					fallbackBranch = targetTask.Name
+				}
+				var ok bool
+				branchName, ok = resolvePushBranch(gitClient, workDir, fallbackBranch)
+				if !ok {
+					shouldPush = false
+					skipReason = "unable to determine branch"
+				}
 			} else {
-				pushTimer.StopWithResult(true, fmt.Sprintf("branch=%s", targetTask.Name))
-				pushSpinner.Stop(true, targetTask.Name)
+				skipReason = "confirm mode"
+			}
+
+			if shouldPush {
+				pushSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s to remote", branchName))
+				pushSpinner.Start()
+
+				pushTimer := logging.StartTimer("git push")
+				if err := gitClient.Push(workDir, "origin", branchName, true); err != nil {
+					pushTimer.StopWithResult(false, err.Error())
+					pushSpinner.Stop(false, err.Error())
+				} else {
+					pushTimer.StopWithResult(true, fmt.Sprintf("branch=%s", branchName))
+					pushSpinner.Stop(true, branchName)
+				}
+			} else if skipReason != "" {
+				fmt.Printf("  ○ Skipping push (%s)\n", skipReason)
 			}
 
 			// Handle auto-merge mode
-			mergeSuccess := true // Track merge result to decide cleanup
 			if app.Config != nil && app.Config.OnComplete == config.OnCompleteAutoMerge {
-				logging.Log("auto-merge: starting merge process")
-				fmt.Println()
-				fmt.Println("  Auto-merge mode:")
+				if !app.IsWorktreeMode() {
+					logging.Warn("auto-merge requested in non-worktree mode; skipping merge")
+					fmt.Println()
+					fmt.Println("  ⚠️  Auto-merge is only available in worktree mode")
+				} else {
+					mergeSuccess := true // Track merge result to decide cleanup
+					logging.Log("auto-merge: starting merge process")
+					fmt.Println()
+					fmt.Println("  Auto-merge mode:")
 
-				// Get main branch name
-				mainBranch := gitClient.GetMainBranch(app.ProjectDir)
-				logging.Debug("Main branch: %s", mainBranch)
+					// Get main branch name
+					mainBranch := gitClient.GetMainBranch(app.ProjectDir)
+					logging.Debug("Main branch: %s", mainBranch)
 
-				mergeTimer := logging.StartTimer("auto-merge")
+					mergeTimer := logging.StartTimer("auto-merge")
 
-				// Acquire merge lock to prevent concurrent merges
-				// This is necessary because we need to checkout main in project dir
-				lockSpinner := tui.NewSimpleSpinner("Acquiring merge lock")
-				lockSpinner.Start()
+					// Acquire merge lock to prevent concurrent merges
+					// This is necessary because we need to checkout main in project dir
+					lockSpinner := tui.NewSimpleSpinner("Acquiring merge lock")
+					lockSpinner.Start()
 
-				lockFile := filepath.Join(app.PawDir, "merge.lock")
-				lockAcquired := false
-				for retries := 0; retries < constants.MergeLockMaxRetries; retries++ {
-					f, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
-					if err == nil {
-						_, writeErr := fmt.Fprintf(f, "%s\n%d", targetTask.Name, os.Getpid())
-						closeErr := f.Close()
-						if writeErr != nil || closeErr != nil {
-							// Failed to write lock info, remove and retry
-							_ = os.Remove(lockFile)
-							logging.Warn("Failed to write lock file: write=%v, close=%v", writeErr, closeErr)
-							time.Sleep(constants.MergeLockRetryInterval)
+					lockFile := filepath.Join(app.PawDir, "merge.lock")
+					lockAcquired := false
+					for retries := 0; retries < constants.MergeLockMaxRetries; retries++ {
+						f, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+						if err == nil {
+							_, writeErr := fmt.Fprintf(f, "%s\n%d", targetTask.Name, os.Getpid())
+							closeErr := f.Close()
+							if writeErr != nil || closeErr != nil {
+								// Failed to write lock info, remove and retry
+								_ = os.Remove(lockFile)
+								logging.Warn("Failed to write lock file: write=%v, close=%v", writeErr, closeErr)
+								time.Sleep(constants.MergeLockRetryInterval)
+								continue
+							}
+							lockAcquired = true
+							break
+						}
+
+						// Lock file exists - check if the process holding it is still alive
+						if isStaleLock(lockFile) {
+							logging.Debug("Detected stale merge lock, removing...")
+							if rmErr := os.Remove(lockFile); rmErr != nil {
+								logging.Warn("Failed to remove stale lock: %v", rmErr)
+							}
+							// Try again immediately without sleeping
 							continue
 						}
-						lockAcquired = true
-						break
+
+						logging.Trace("Waiting for merge lock (attempt %d/%d)...", retries+1, constants.MergeLockMaxRetries)
+						time.Sleep(constants.MergeLockRetryInterval)
 					}
 
-					// Lock file exists - check if the process holding it is still alive
-					if isStaleLock(lockFile) {
-						logging.Debug("Detected stale merge lock, removing...")
-						if rmErr := os.Remove(lockFile); rmErr != nil {
-							logging.Warn("Failed to remove stale lock: %v", rmErr)
-						}
-						// Try again immediately without sleeping
-						continue
-					}
-
-					logging.Trace("Waiting for merge lock (attempt %d/%d)...", retries+1, constants.MergeLockMaxRetries)
-					time.Sleep(constants.MergeLockRetryInterval)
-				}
-
-				if !lockAcquired {
-					logging.Warn("Failed to acquire merge lock after %d seconds", constants.MergeLockMaxRetries)
-					mergeTimer.StopWithResult(false, "lock timeout")
-					lockSpinner.Stop(false, fmt.Sprintf("timeout after %ds", constants.MergeLockMaxRetries))
-					mergeSuccess = false
-				} else {
-					lockSpinner.Stop(true, "")
-					// Ensure lock is released on exit
-					defer func() { _ = os.Remove(lockFile) }()
-
-					// Check for ongoing merge or conflicts in project dir
-					hasConflicts, conflictFiles, _ := gitClient.HasConflicts(app.ProjectDir)
-					hasOngoingMerge := gitClient.HasOngoingMerge(app.ProjectDir)
-
-					if hasConflicts || hasOngoingMerge {
-						logging.Warn("Project directory has ongoing merge or conflicts")
-						fmt.Println()
-						fmt.Println("  ⚠️  Project directory has unresolved conflicts or ongoing merge")
-						if hasConflicts && len(conflictFiles) > 0 {
-							fmt.Println("  Conflicting files:")
-							for _, f := range conflictFiles {
-								fmt.Printf("    - %s\n", f)
-							}
-						}
-						fmt.Println()
-						fmt.Println("  Please resolve conflicts in the project directory first:")
-						fmt.Printf("    cd %s\n", app.ProjectDir)
-						fmt.Println("    git status  # View current state")
-						fmt.Println("    # Resolve conflicts, then: git add . && git commit")
-						fmt.Println("    # Or abort merge: git merge --abort")
-						fmt.Println()
-						mergeTimer.StopWithResult(false, "project has conflicts")
+					if !lockAcquired {
+						logging.Warn("Failed to acquire merge lock after %d seconds", constants.MergeLockMaxRetries)
+						mergeTimer.StopWithResult(false, "lock timeout")
+						lockSpinner.Stop(false, fmt.Sprintf("timeout after %ds", constants.MergeLockMaxRetries))
 						mergeSuccess = false
-					}
+					} else {
+						lockSpinner.Stop(true, "")
+						// Ensure lock is released on exit
+						defer func() { _ = os.Remove(lockFile) }()
 
-					// Stash any uncommitted changes in project dir (skip if conflicts detected)
-					hasLocalChanges := false
-					if mergeSuccess {
-						hasLocalChanges = gitClient.HasChanges(app.ProjectDir)
-						if hasLocalChanges {
-							logging.Debug("Stashing local changes...")
-							if err := gitClient.StashPush(app.ProjectDir, "paw-merge-temp"); err != nil {
-								logging.Warn("Failed to stash changes: %v", err)
+						// Check for ongoing merge or conflicts in project dir
+						hasConflicts, conflictFiles, _ := gitClient.HasConflicts(app.ProjectDir)
+						hasOngoingMerge := gitClient.HasOngoingMerge(app.ProjectDir)
+
+						if hasConflicts || hasOngoingMerge {
+							logging.Warn("Project directory has ongoing merge or conflicts")
+							fmt.Println()
+							fmt.Println("  ⚠️  Project directory has unresolved conflicts or ongoing merge")
+							if hasConflicts && len(conflictFiles) > 0 {
+								fmt.Println("  Conflicting files:")
+								for _, f := range conflictFiles {
+									fmt.Printf("    - %s\n", f)
+								}
 							}
-						}
-					}
-
-					// Remember current branch to restore later
-					currentBranch, _ := gitClient.GetCurrentBranch(app.ProjectDir)
-
-					// Only proceed with merge if no conflicts were detected
-					if mergeSuccess {
-						// Fetch latest from origin
-						fetchSpinner := tui.NewSimpleSpinner("Fetching from origin")
-						fetchSpinner.Start()
-						logging.Debug("Fetching from origin...")
-						if err := gitClient.Fetch(app.ProjectDir, "origin"); err != nil {
-							logging.Warn("Failed to fetch: %v", err)
-							fetchSpinner.Stop(false, err.Error())
-						} else {
-							fetchSpinner.Stop(true, "")
-						}
-
-						// Checkout main
-						checkoutSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Checking out %s", mainBranch))
-						checkoutSpinner.Start()
-						logging.Debug("Checking out %s...", mainBranch)
-						if err := gitClient.Checkout(app.ProjectDir, mainBranch); err != nil {
-							logging.Warn("Failed to checkout %s: %v", mainBranch, err)
-							mergeTimer.StopWithResult(false, "checkout failed")
-							checkoutSpinner.Stop(false, err.Error())
+							fmt.Println()
+							fmt.Println("  Please resolve conflicts in the project directory first:")
+							fmt.Printf("    cd %s\n", app.ProjectDir)
+							fmt.Println("    git status  # View current state")
+							fmt.Println("    # Resolve conflicts, then: git add . && git commit")
+							fmt.Println("    # Or abort merge: git merge --abort")
+							fmt.Println()
+							mergeTimer.StopWithResult(false, "project has conflicts")
 							mergeSuccess = false
-						} else {
-							checkoutSpinner.Stop(true, "")
+						}
 
-							// Pull latest
-							pullSpinner := tui.NewSimpleSpinner("Pulling latest changes")
-							pullSpinner.Start()
-							logging.Debug("Pulling latest changes...")
-							if err := gitClient.Pull(app.ProjectDir); err != nil {
-								logging.Warn("Failed to pull: %v", err)
-								pullSpinner.Stop(false, err.Error())
+						// Stash any uncommitted changes in project dir (skip if conflicts detected)
+						hasLocalChanges := false
+						if mergeSuccess {
+							hasLocalChanges = gitClient.HasChanges(app.ProjectDir)
+							if hasLocalChanges {
+								logging.Debug("Stashing local changes...")
+								if err := gitClient.StashPush(app.ProjectDir, "paw-merge-temp"); err != nil {
+									logging.Warn("Failed to stash changes: %v", err)
+								}
+							}
+						}
+
+						// Remember current branch to restore later
+						currentBranch, _ := gitClient.GetCurrentBranch(app.ProjectDir)
+
+						// Only proceed with merge if no conflicts were detected
+						if mergeSuccess {
+							// Fetch latest from origin
+							fetchSpinner := tui.NewSimpleSpinner("Fetching from origin")
+							fetchSpinner.Start()
+							logging.Debug("Fetching from origin...")
+							if err := gitClient.Fetch(app.ProjectDir, "origin"); err != nil {
+								logging.Warn("Failed to fetch: %v", err)
+								fetchSpinner.Stop(false, err.Error())
 							} else {
-								pullSpinner.Stop(true, "")
+								fetchSpinner.Stop(true, "")
 							}
 
-							// Merge task branch (squash)
-							mergeSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Merging %s into %s", targetTask.Name, mainBranch))
-							mergeSpinner.Start()
-							logging.Debug("Squash merging branch %s into %s...", targetTask.Name, mainBranch)
-							mergeMsg := fmt.Sprintf(constants.CommitMessageMerge, targetTask.Name)
-							mergeConflictOccurred := false // Track if we had to resolve conflicts
-							if err := gitClient.MergeSquash(app.ProjectDir, targetTask.Name, mergeMsg); err != nil {
-								logging.Warn("Merge failed: %v - checking for conflicts", err)
-								mergeSpinner.Stop(false, "conflict")
-								mergeConflictOccurred = true
+							// Checkout main
+							checkoutSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Checking out %s", mainBranch))
+							checkoutSpinner.Start()
+							logging.Debug("Checking out %s...", mainBranch)
+							if err := gitClient.Checkout(app.ProjectDir, mainBranch); err != nil {
+								logging.Warn("Failed to checkout %s: %v", mainBranch, err)
+								mergeTimer.StopWithResult(false, "checkout failed")
+								checkoutSpinner.Stop(false, err.Error())
+								mergeSuccess = false
+							} else {
+								checkoutSpinner.Stop(true, "")
 
-								// Check if this is a conflict situation
-								hasConflicts, conflictFiles, _ := gitClient.HasConflicts(app.ProjectDir)
-								if hasConflicts && len(conflictFiles) > 0 {
-									// Try to resolve conflicts with Claude
-									fmt.Println()
-									fmt.Printf("  ⚠️  Merge conflicts detected in %d file(s):\n", len(conflictFiles))
-									for _, f := range conflictFiles {
-										fmt.Printf("      - %s\n", f)
-									}
-									fmt.Println()
+								// Pull latest
+								pullSpinner := tui.NewSimpleSpinner("Pulling latest changes")
+								pullSpinner.Start()
+								logging.Debug("Pulling latest changes...")
+								if err := gitClient.Pull(app.ProjectDir); err != nil {
+									logging.Warn("Failed to pull: %v", err)
+									pullSpinner.Stop(false, err.Error())
+								} else {
+									pullSpinner.Stop(true, "")
+								}
 
-									resolveSpinner := tui.NewSimpleSpinner("Resolving conflicts with Claude")
-									resolveSpinner.Start()
+								// Merge task branch (squash)
+								mergeSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Merging %s into %s", targetTask.Name, mainBranch))
+								mergeSpinner.Start()
+								logging.Debug("Squash merging branch %s into %s...", targetTask.Name, mainBranch)
+								mergeMsg := fmt.Sprintf(constants.CommitMessageMerge, targetTask.Name)
+								mergeConflictOccurred := false // Track if we had to resolve conflicts
+								if err := gitClient.MergeSquash(app.ProjectDir, targetTask.Name, mergeMsg); err != nil {
+									logging.Warn("Merge failed: %v - checking for conflicts", err)
+									mergeSpinner.Stop(false, "conflict")
+									mergeConflictOccurred = true
 
-									// Get task content for context
-									taskContent, _ := targetTask.LoadContent()
-
-									// Run Claude to resolve conflicts
-									if resolveErr := resolveConflictsWithClaude(app.ProjectDir, targetTask.Name, taskContent, conflictFiles); resolveErr != nil {
-										logging.Warn("Claude conflict resolution failed: %v", resolveErr)
-										resolveSpinner.Stop(false, "failed")
-										// Abort merge
-										if abortErr := gitClient.MergeAbort(app.ProjectDir); abortErr != nil {
-											logging.Warn("Failed to abort merge: %v", abortErr)
+									// Check if this is a conflict situation
+									hasConflicts, conflictFiles, _ := gitClient.HasConflicts(app.ProjectDir)
+									if hasConflicts && len(conflictFiles) > 0 {
+										// Try to resolve conflicts with Claude
+										fmt.Println()
+										fmt.Printf("  ⚠️  Merge conflicts detected in %d file(s):\n", len(conflictFiles))
+										for _, f := range conflictFiles {
+											fmt.Printf("      - %s\n", f)
 										}
-										mergeTimer.StopWithResult(false, "conflict resolution failed")
-										mergeSuccess = false
-									} else {
-										// Check if conflicts are actually resolved
-										stillHasConflicts, remainingFiles, _ := gitClient.HasConflicts(app.ProjectDir)
-										if stillHasConflicts && len(remainingFiles) > 0 {
-											logging.Warn("Conflicts still exist after Claude resolution: %v", remainingFiles)
-											resolveSpinner.Stop(false, "unresolved")
+										fmt.Println()
+
+										resolveSpinner := tui.NewSimpleSpinner("Resolving conflicts with Claude")
+										resolveSpinner.Start()
+
+										// Get task content for context
+										taskContent, _ := targetTask.LoadContent()
+
+										// Run Claude to resolve conflicts
+										if resolveErr := resolveConflictsWithClaude(app.ProjectDir, targetTask.Name, taskContent, conflictFiles); resolveErr != nil {
+											logging.Warn("Claude conflict resolution failed: %v", resolveErr)
+											resolveSpinner.Stop(false, "failed")
 											// Abort merge
 											if abortErr := gitClient.MergeAbort(app.ProjectDir); abortErr != nil {
 												logging.Warn("Failed to abort merge: %v", abortErr)
 											}
-											mergeTimer.StopWithResult(false, "conflicts remain")
+											mergeTimer.StopWithResult(false, "conflict resolution failed")
 											mergeSuccess = false
 										} else {
-											resolveSpinner.Stop(true, "resolved")
-											logging.Log("Conflicts resolved by Claude, completing merge")
-
-											// Stage all changes and commit
-											if addErr := gitClient.AddAll(app.ProjectDir); addErr != nil {
-												logging.Warn("Failed to stage resolved files: %v", addErr)
-											}
-											if commitErr := gitClient.Commit(app.ProjectDir, mergeMsg); commitErr != nil {
-												logging.Warn("Failed to commit merge: %v", commitErr)
-												mergeTimer.StopWithResult(false, "commit failed")
+											// Check if conflicts are actually resolved
+											stillHasConflicts, remainingFiles, _ := gitClient.HasConflicts(app.ProjectDir)
+											if stillHasConflicts && len(remainingFiles) > 0 {
+												logging.Warn("Conflicts still exist after Claude resolution: %v", remainingFiles)
+												resolveSpinner.Stop(false, "unresolved")
+												// Abort merge
+												if abortErr := gitClient.MergeAbort(app.ProjectDir); abortErr != nil {
+													logging.Warn("Failed to abort merge: %v", abortErr)
+												}
+												mergeTimer.StopWithResult(false, "conflicts remain")
 												mergeSuccess = false
 											} else {
-												// Merge completed successfully after conflict resolution
-												logging.Log("Merge completed after conflict resolution")
+												resolveSpinner.Stop(true, "resolved")
+												logging.Log("Conflicts resolved by Claude, completing merge")
+
+												// Stage all changes and commit
+												if addErr := gitClient.AddAll(app.ProjectDir); addErr != nil {
+													logging.Warn("Failed to stage resolved files: %v", addErr)
+												}
+												if commitErr := gitClient.Commit(app.ProjectDir, mergeMsg); commitErr != nil {
+													logging.Warn("Failed to commit merge: %v", commitErr)
+													mergeTimer.StopWithResult(false, "commit failed")
+													mergeSuccess = false
+												} else {
+													// Merge completed successfully after conflict resolution
+													logging.Log("Merge completed after conflict resolution")
+												}
 											}
 										}
+									} else {
+										// No conflicts detected, but merge still failed - abort
+										logging.Warn("Merge failed without conflicts - may need manual resolution")
+										if abortErr := gitClient.MergeAbort(app.ProjectDir); abortErr != nil {
+											logging.Warn("Failed to abort merge: %v", abortErr)
+										}
+										mergeTimer.StopWithResult(false, "merge failed")
+										mergeSuccess = false
 									}
-								} else {
-									// No conflicts detected, but merge still failed - abort
-									logging.Warn("Merge failed without conflicts - may need manual resolution")
-									if abortErr := gitClient.MergeAbort(app.ProjectDir); abortErr != nil {
-										logging.Warn("Failed to abort merge: %v", abortErr)
-									}
-									mergeTimer.StopWithResult(false, "merge failed")
-									mergeSuccess = false
 								}
-							}
-							// If merge succeeded (either directly or after conflict resolution), push
-							if mergeSuccess {
-								// Only stop merge spinner if we didn't have conflicts (already stopped above)
-								if !mergeConflictOccurred {
-									mergeSpinner.Stop(true, "")
+								// If merge succeeded (either directly or after conflict resolution), push
+								if mergeSuccess {
+									// Only stop merge spinner if we didn't have conflicts (already stopped above)
+									if !mergeConflictOccurred {
+										mergeSpinner.Stop(true, "")
+									}
+
+									// Push merged main
+									pushMainSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s to origin", mainBranch))
+									pushMainSpinner.Start()
+									logging.Debug("Pushing merged main to origin...")
+									if err := gitClient.Push(app.ProjectDir, "origin", mainBranch, false); err != nil {
+										logging.Warn("Failed to push merged main: %v", err)
+										mergeTimer.StopWithResult(false, "push failed")
+										pushMainSpinner.Stop(false, err.Error())
+										mergeSuccess = false
+									} else {
+										mergeTimer.StopWithResult(true, fmt.Sprintf("squash merged %s into %s", targetTask.Name, mainBranch))
+										pushMainSpinner.Stop(true, "")
+									}
 								}
 
-								// Push merged main
-								pushMainSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s to origin", mainBranch))
-								pushMainSpinner.Start()
-								logging.Debug("Pushing merged main to origin...")
-								if err := gitClient.Push(app.ProjectDir, "origin", mainBranch, false); err != nil {
-									logging.Warn("Failed to push merged main: %v", err)
-									mergeTimer.StopWithResult(false, "push failed")
-									pushMainSpinner.Stop(false, err.Error())
-									mergeSuccess = false
-								} else {
-									mergeTimer.StopWithResult(true, fmt.Sprintf("squash merged %s into %s", targetTask.Name, mainBranch))
-									pushMainSpinner.Stop(true, "")
+								// Restore original branch if different from main
+								if currentBranch != "" && currentBranch != mainBranch {
+									logging.Debug("Restoring branch %s...", currentBranch)
+									if err := gitClient.Checkout(app.ProjectDir, currentBranch); err != nil {
+										logging.Warn("Failed to restore branch: %v", err)
+									}
 								}
 							}
 
-							// Restore original branch if different from main
-							if currentBranch != "" && currentBranch != mainBranch {
-								logging.Debug("Restoring branch %s...", currentBranch)
-								if err := gitClient.Checkout(app.ProjectDir, currentBranch); err != nil {
-									logging.Warn("Failed to restore branch: %v", err)
+							// Restore stashed changes
+							if hasLocalChanges {
+								logging.Debug("Restoring stashed changes...")
+								if err := gitClient.StashPop(app.ProjectDir); err != nil {
+									logging.Warn("Failed to restore stashed changes: %v", err)
 								}
 							}
 						}
+					}
 
-						// Restore stashed changes
-						if hasLocalChanges {
-							logging.Debug("Restoring stashed changes...")
-							if err := gitClient.StashPop(app.ProjectDir); err != nil {
-								logging.Warn("Failed to restore stashed changes: %v", err)
-							}
+					// If merge failed, rename window to warning and skip cleanup
+					if !mergeSuccess {
+						logging.Warn("Merge failed - keeping task for manual resolution")
+						fmt.Println()
+						fmt.Println("  ✗ Merge failed - manual resolution needed")
+						warningWindowName := constants.EmojiWarning + targetTask.Name
+						logging.Trace("endTaskCmd: renaming window to warning state name=%s", warningWindowName)
+						if err := tm.RenameWindow(windowID, warningWindowName); err != nil {
+							logging.Warn("Failed to rename window: %v", err)
 						}
+						// Notify user of merge failure
+						logging.Trace("endTaskCmd: playing SoundError for merge failure task=%s", targetTask.Name)
+						notify.PlaySound(notify.SoundError)
+						// Send to all configured notification channels (macOS, Slack, ntfy)
+						notify.SendAll(app.Config.Notifications, "Merge failed", fmt.Sprintf("⚠️ %s - manual resolution needed", targetTask.Name))
+						logging.Trace("endTaskCmd: displaying merge failure message for task=%s", targetTask.Name)
+						if err := tm.DisplayMessage(fmt.Sprintf("⚠️ Merge failed: %s - manual resolution needed", targetTask.Name), 3000); err != nil {
+							logging.Trace("Failed to display message: %v", err)
+						}
+						return nil // Exit without cleanup - keep worktree and branch
 					}
-				}
-
-				// If merge failed, rename window to warning and skip cleanup
-				if !mergeSuccess {
-					logging.Warn("Merge failed - keeping task for manual resolution")
-					fmt.Println()
-					fmt.Println("  ✗ Merge failed - manual resolution needed")
-					warningWindowName := constants.EmojiWarning + targetTask.Name
-					logging.Trace("endTaskCmd: renaming window to warning state name=%s", warningWindowName)
-					if err := tm.RenameWindow(windowID, warningWindowName); err != nil {
-						logging.Warn("Failed to rename window: %v", err)
-					}
-					// Notify user of merge failure
-					logging.Trace("endTaskCmd: playing SoundError for merge failure task=%s", targetTask.Name)
-					notify.PlaySound(notify.SoundError)
-					// Send to all configured notification channels (macOS, Slack, ntfy)
-					notify.SendAll(app.Config.Notifications, "Merge failed", fmt.Sprintf("⚠️ %s - manual resolution needed", targetTask.Name))
-					logging.Trace("endTaskCmd: displaying merge failure message for task=%s", targetTask.Name)
-					if err := tm.DisplayMessage(fmt.Sprintf("⚠️ Merge failed: %s - manual resolution needed", targetTask.Name), 3000); err != nil {
-						logging.Trace("Failed to display message: %v", err)
-					}
-					return nil // Exit without cleanup - keep worktree and branch
 				}
 			}
 		}
@@ -873,6 +901,10 @@ var mergeTaskCmd = &cobra.Command{
 			fmt.Println("  ✗ Not a git repository")
 			return nil
 		}
+		if !app.IsWorktreeMode() {
+			fmt.Println("  ✗ Merge is only available in worktree mode")
+			return nil
+		}
 
 		gitClient := git.New()
 		workDir := mgr.GetWorkingDirectory(targetTask)
@@ -903,14 +935,19 @@ var mergeTaskCmd = &cobra.Command{
 		}
 
 		// Push task branch
-		pushSpinner := tui.NewSimpleSpinner("Pushing task branch")
-		pushSpinner.Start()
-
-		if err := gitClient.Push(workDir, "origin", targetTask.Name, true); err != nil {
-			pushSpinner.Stop(false, err.Error())
-			logging.Warn("Failed to push task branch: %v", err)
+		branchName, ok := resolvePushBranch(gitClient, workDir, targetTask.Name)
+		if !ok {
+			fmt.Println("  ⚠️  Skipping push: unable to determine branch")
 		} else {
-			pushSpinner.Stop(true, targetTask.Name)
+			pushSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s to remote", branchName))
+			pushSpinner.Start()
+
+			if err := gitClient.Push(workDir, "origin", branchName, true); err != nil {
+				pushSpinner.Stop(false, err.Error())
+				logging.Warn("Failed to push task branch: %v", err)
+			} else {
+				pushSpinner.Stop(true, branchName)
+			}
 		}
 
 		// Acquire merge lock
@@ -1353,6 +1390,28 @@ Start resolving the conflicts now.`, filesStr, taskName, taskContent)
 
 	logging.Debug("resolveConflictsWithClaude: claude completed successfully")
 	return nil
+}
+
+func resolvePushBranch(gitClient git.Client, workDir, fallback string) (string, bool) {
+	branchName, err := gitClient.GetCurrentBranch(workDir)
+	if err == nil && branchName != "" && branchName != "HEAD" {
+		return branchName, true
+	}
+
+	if err != nil {
+		logging.Warn("Failed to determine current branch: %v", err)
+	} else if branchName == "" {
+		logging.Warn("Current branch name is empty for %s", workDir)
+	} else {
+		logging.Warn("Detected detached HEAD for %s", workDir)
+	}
+
+	if fallback == "" {
+		return "", false
+	}
+
+	logging.Warn("Falling back to branch %s", fallback)
+	return fallback, true
 }
 
 // isStaleLock checks if the merge lock file is stale (the process that created it is no longer running).
