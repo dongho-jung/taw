@@ -58,6 +58,62 @@ func TestFindMergedTasks_ExternallyCleanedUp(t *testing.T) {
 	}
 }
 
+func TestFindTaskByTruncatedName(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "paw-task-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	agentsDir := filepath.Join(tempDir, ".paw", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("Failed to create agents dir: %v", err)
+	}
+
+	pawDir := filepath.Join(tempDir, ".paw")
+	mgr := NewManager(agentsDir, tempDir, pawDir, false, config.DefaultConfig())
+
+	// Create a task with a long name that exceeds MaxWindowNameLen (12 chars)
+	longTaskName := "fix-restore-pane-truncated-window"
+	taskDir := filepath.Join(agentsDir, longTaskName)
+	if err := os.MkdirAll(taskDir, 0755); err != nil {
+		t.Fatalf("Failed to create task directory: %v", err)
+	}
+	// Create task file
+	if err := os.WriteFile(filepath.Join(taskDir, "task"), []byte("test task"), 0644); err != nil {
+		t.Fatalf("Failed to create task file: %v", err)
+	}
+
+	t.Run("find by full name", func(t *testing.T) {
+		// Truncate to MaxWindowNameLen (12 chars): "fix-restore-"
+		task, err := mgr.FindTaskByTruncatedName(longTaskName[:12])
+		if err != nil {
+			t.Fatalf("FindTaskByTruncatedName returned error: %v", err)
+		}
+		if task.Name != longTaskName {
+			t.Fatalf("Expected task name %s, got %s", longTaskName, task.Name)
+		}
+	})
+
+	t.Run("find by exact truncated name", func(t *testing.T) {
+		// The truncated window name would be "fix-restore-"
+		task, err := mgr.FindTaskByTruncatedName("fix-restore-")
+		if err != nil {
+			t.Fatalf("FindTaskByTruncatedName returned error: %v", err)
+		}
+		if task.Name != longTaskName {
+			t.Fatalf("Expected task name %s, got %s", longTaskName, task.Name)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		_, err := mgr.FindTaskByTruncatedName("nonexistent-t")
+		if !errors.Is(err, ErrTaskNotFound) {
+			t.Fatalf("Expected ErrTaskNotFound, got %v", err)
+		}
+	})
+}
+
 func TestFindTaskByWindowID(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "paw-task-*")
 	if err != nil {
