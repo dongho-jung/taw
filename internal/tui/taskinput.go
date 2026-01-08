@@ -70,6 +70,9 @@ type TaskInput struct {
 
 	// Double-press cancel detection
 	cancelPressTime time.Time
+
+	// History search request
+	historyRequested bool
 }
 
 // tickMsg is used for periodic Kanban refresh.
@@ -80,9 +83,10 @@ type cancelClearMsg struct{}
 
 // TaskInputResult contains the result of the task input.
 type TaskInputResult struct {
-	Content   string
-	Options   *config.TaskOptions
-	Cancelled bool
+	Content          string
+	Options          *config.TaskOptions
+	Cancelled        bool
+	HistoryRequested bool // True when Ctrl+R was pressed to show history
 }
 
 // NewTaskInput creates a new task input model.
@@ -273,6 +277,11 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.switchFocusTo(FocusPanelLeft)
 			}
 			return m, nil
+
+		// History search: Ctrl+R
+		case "ctrl+r":
+			m.historyRequested = true
+			return m, tea.Quit
 		}
 
 		// Panel-specific key handling
@@ -543,7 +552,7 @@ func (m *TaskInput) View() tea.View {
 		var helpText string
 		switch m.focusPanel {
 		case FocusPanelLeft:
-			helpText = "Alt+Enter/F5: Submit  |  ⌥Tab: Options  |  Esc×2: Cancel"
+			helpText = "⌃R: History  |  Alt+Enter/F5: Submit  |  ⌥Tab: Options  |  Esc×2: Cancel"
 		case FocusPanelRight:
 			helpText = "↑/↓: Navigate  |  ←/→: Change  |  ⌥Tab: Tasks  |  Alt+Enter: Submit"
 		case FocusPanelKanban:
@@ -1048,10 +1057,18 @@ func embedScrollbarInTextarea(view string, scrollbar string, visibleLines int) s
 func (m *TaskInput) Result() TaskInputResult {
 	m.applyOptionInputValues()
 	return TaskInputResult{
-		Content:   strings.TrimSpace(m.textarea.Value()),
-		Options:   m.options,
-		Cancelled: m.cancelled,
+		Content:          strings.TrimSpace(m.textarea.Value()),
+		Options:          m.options,
+		Cancelled:        m.cancelled,
+		HistoryRequested: m.historyRequested,
 	}
+}
+
+// SetContent sets the textarea content (for pre-filling from history).
+func (m *TaskInput) SetContent(content string) {
+	m.textarea.SetValue(content)
+	// Move cursor to end
+	m.textarea.CursorEnd()
 }
 
 // RunTaskInput runs the task input and returns the result.
@@ -1061,7 +1078,15 @@ func RunTaskInput() (*TaskInputResult, error) {
 
 // RunTaskInputWithTasks runs the task input with active task list and returns the result.
 func RunTaskInputWithTasks(activeTasks []string) (*TaskInputResult, error) {
+	return RunTaskInputWithTasksAndContent(activeTasks, "")
+}
+
+// RunTaskInputWithTasksAndContent runs the task input with active task list and initial content.
+func RunTaskInputWithTasksAndContent(activeTasks []string, initialContent string) (*TaskInputResult, error) {
 	m := NewTaskInputWithTasks(activeTasks)
+	if initialContent != "" {
+		m.SetContent(initialContent)
+	}
 	p := tea.NewProgram(m)
 
 	finalModel, err := p.Run()

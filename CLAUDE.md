@@ -133,6 +133,7 @@ paw/                           # This repository
     ├── config                 # Project config (YAML, created during setup)
     ├── log                    # Consolidated logs (all scripts write here)
     ├── memory                 # Project memory (YAML, shared across tasks)
+    ├── input-history          # Task input history (JSON, for Ctrl+R search)
     ├── PROMPT.md              # Project prompt (user-customizable)
     ├── .is-git-repo           # Git mode marker (exists only in git repos)
     ├── .claude/               # Claude settings (copied from embed)

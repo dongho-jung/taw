@@ -116,6 +116,9 @@ var newTaskCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
+		// Initialize input history service
+		inputHistorySvc := service.NewInputHistoryService(app.PawDir)
+
 		// Get active task names for dependency selection
 		activeTasks := getActiveTaskNames(app.AgentsDir)
 		if !app.IsGitRepo && app.Config != nil && app.Config.NonGitWorkspace != string(config.NonGitWorkspaceCopy) && len(activeTasks) > 0 {
@@ -123,12 +126,41 @@ var newTaskCmd = &cobra.Command{
 			fmt.Println("  ⚠️  Non-git shared workspace: parallel tasks may conflict")
 		}
 
+		// Track pre-filled content from history
+		prefillContent := ""
+
 		// Loop continuously for task creation
 		for {
-			// Use inline task input TUI with active task list
-			result, err := tui.RunTaskInputWithTasks(activeTasks)
+			// Use inline task input TUI with active task list and optional pre-filled content
+			result, err := tui.RunTaskInputWithTasksAndContent(activeTasks, prefillContent)
+			prefillContent = "" // Reset after use
 			if err != nil {
 				fmt.Printf("Failed to get task input: %v\n", err)
+				continue
+			}
+
+			// Handle history search request
+			if result.HistoryRequested {
+				// Load history and show picker
+				history, err := inputHistorySvc.GetAllContents()
+				if err != nil {
+					logging.Warn("Failed to load input history: %v", err)
+					continue
+				}
+				if len(history) == 0 {
+					fmt.Println("No task history yet.")
+					continue
+				}
+
+				action, selected, err := tui.RunInputHistoryPicker(history)
+				if err != nil {
+					logging.Warn("Failed to run history picker: %v", err)
+					continue
+				}
+
+				if action == tui.InputHistorySelect && selected != "" {
+					prefillContent = selected
+				}
 				continue
 			}
 
@@ -194,6 +226,11 @@ var newTaskCmd = &cobra.Command{
 				logging.Warn("Failed to start spawn-task: %v", err)
 				fmt.Printf("Failed to start task: %v\n", err)
 				continue
+			}
+
+			// Save content to input history (after successful spawn)
+			if err := inputHistorySvc.SaveInput(content); err != nil {
+				logging.Warn("Failed to save input history: %v", err)
 			}
 
 			logging.Debug("Task spawned in background, content file: %s, opts file: %s", tmpFile.Name(), optsTmpPath)

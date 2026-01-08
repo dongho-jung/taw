@@ -16,6 +16,7 @@ Claude Code-based autonomous agent work environment
 
 ### Task Commands
   ⌃N          New task
+  ⌃R          Search task history (in new task window)
   ⌃K          Cancel task (double-press)
   ⌃F          Finish task (double-press, complete and cleanup)
   ⌃↑          Toggle branch (task ↔ main)
@@ -37,6 +38,7 @@ Claude Code-based autonomous agent work environment
   ├── PROMPT.md              Project-specific agent instructions
   ├── memory                 Shared project memory (YAML)
   ├── log                    Unified log file
+  ├── input-history          Task input history (for ⌃R search)
   ├── window-map.json        Window token to task mapping
   ├── history/               Completed task history
   │   └── YYMMDD_HHMMSS_name Task content + work capture
