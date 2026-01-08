@@ -162,13 +162,11 @@ func (m *TaskOptsUI) View() tea.View {
 		MarginBottom(1)
 
 	labelStyle := lipgloss.NewStyle().
-		Foreground(normalColor).
-		Width(20)
+		Foreground(normalColor)
 
 	selectedLabelStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("39")).
-		Bold(true).
-		Width(20)
+		Bold(true)
 
 	valueStyle := lipgloss.NewStyle().
 		Foreground(normalColor)
@@ -189,13 +187,14 @@ func (m *TaskOptsUI) View() tea.View {
 	sb.WriteString(titleStyle.Render("Task Options"))
 	sb.WriteString("\n\n")
 
-	// Model field
+	// Model field - use manual padding instead of Width() to avoid ANSI code issues
 	{
-		label := labelStyle.Render("Model:")
+		// Manually pad label to 20 chars for alignment (standalone Options UI uses wider labels)
+		paddedLabel := fmt.Sprintf("%-20s", "Model:")
+		label := labelStyle.Render(paddedLabel)
 		if m.field == TaskOptsFieldModel {
-			label = selectedLabelStyle.Render("Model:")
+			label = selectedLabelStyle.Render(paddedLabel)
 		}
-		sb.WriteString(label)
 
 		models := config.ValidModels()
 		// Calculate max model name length for consistent padding
@@ -219,17 +218,20 @@ func (m *TaskOptsUI) View() tea.View {
 				modelParts = append(modelParts, dimStyle.Render(" "+paddedName+" "))
 			}
 		}
-		sb.WriteString(strings.Join(modelParts, ""))
+		// Use JoinHorizontal to properly handle styled strings
+		modelRow := lipgloss.JoinHorizontal(lipgloss.Left, label, strings.Join(modelParts, ""))
+		sb.WriteString(modelRow)
 		sb.WriteString("\n")
 	}
 
-	// Ultrathink field
+	// Ultrathink field - use manual padding instead of Width() to avoid ANSI code issues
 	{
-		label := labelStyle.Render("Ultrathink:")
+		// Manually pad label to 20 chars for alignment (standalone Options UI uses wider labels)
+		paddedLabel := fmt.Sprintf("%-20s", "Ultrathink:")
+		label := labelStyle.Render(paddedLabel)
 		if m.field == TaskOptsFieldUltrathink {
-			label = selectedLabelStyle.Render("Ultrathink:")
+			label = selectedLabelStyle.Render(paddedLabel)
 		}
-		sb.WriteString(label)
 
 		var onText, offText string
 		if m.options.Ultrathink {
@@ -247,7 +249,9 @@ func (m *TaskOptsUI) View() tea.View {
 				offText = valueStyle.Render("[off]")
 			}
 		}
-		sb.WriteString(onText + " " + offText)
+		// Use JoinHorizontal to properly handle styled strings
+		ultrathinkRow := lipgloss.JoinHorizontal(lipgloss.Left, label, onText, " ", offText)
+		sb.WriteString(ultrathinkRow)
 		sb.WriteString("\n")
 	}
 

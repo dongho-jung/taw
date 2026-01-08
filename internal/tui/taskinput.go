@@ -597,13 +597,11 @@ func (m *TaskInput) renderOptionsPanel() string {
 		MarginBottom(1)
 
 	labelStyle := lipgloss.NewStyle().
-		Foreground(normalColor).
-		Width(12)
+		Foreground(normalColor)
 
 	selectedLabelStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("39")).
-		Bold(true).
-		Width(12)
+		Bold(true)
 
 	valueStyle := lipgloss.NewStyle().
 		Foreground(normalColor)
@@ -635,14 +633,15 @@ func (m *TaskInput) renderOptionsPanel() string {
 	}
 	// Note: MarginBottom(1) on titleStyle already provides spacing, no explicit \n needed
 
-	// Model field
+	// Model field - use manual padding instead of Width() to avoid ANSI code issues
 	{
 		isSelected := isFocused && m.optField == OptFieldModel
-		label := labelStyle.Render("Model:")
+		// Manually pad label to 12 chars for alignment
+		paddedLabel := fmt.Sprintf("%-12s", "Model:")
+		label := labelStyle.Render(paddedLabel)
 		if isSelected {
-			label = selectedLabelStyle.Render("Model:")
+			label = selectedLabelStyle.Render(paddedLabel)
 		}
-		content.WriteString(label)
 
 		models := config.ValidModels()
 		// Calculate max model name length for consistent padding
@@ -666,18 +665,21 @@ func (m *TaskInput) renderOptionsPanel() string {
 				parts = append(parts, dimStyle.Render(" "+paddedName+" "))
 			}
 		}
-		content.WriteString(strings.Join(parts, ""))
+		// Use JoinHorizontal to properly handle styled strings
+		modelRow := lipgloss.JoinHorizontal(lipgloss.Left, label, strings.Join(parts, ""))
+		content.WriteString(modelRow)
 		content.WriteString("\n")
 	}
 
-	// Ultrathink field
+	// Ultrathink field - use manual padding instead of Width() to avoid ANSI code issues
 	{
 		isSelected := isFocused && m.optField == OptFieldUltrathink
-		label := labelStyle.Render("Ultrathink:")
+		// Manually pad label to 12 chars for alignment
+		paddedLabel := fmt.Sprintf("%-12s", "Ultrathink:")
+		label := labelStyle.Render(paddedLabel)
 		if isSelected {
-			label = selectedLabelStyle.Render("Ultrathink:")
+			label = selectedLabelStyle.Render(paddedLabel)
 		}
-		content.WriteString(label)
 
 		var onText, offText string
 		if m.options.Ultrathink {
@@ -695,7 +697,9 @@ func (m *TaskInput) renderOptionsPanel() string {
 				offText = valueStyle.Render("[off]")
 			}
 		}
-		content.WriteString(onText + offText)
+		// Use JoinHorizontal to properly handle styled strings
+		ultrathinkRow := lipgloss.JoinHorizontal(lipgloss.Left, label, onText, offText)
+		content.WriteString(ultrathinkRow)
 		content.WriteString("\n")
 	}
 
