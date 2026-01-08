@@ -407,13 +407,31 @@ var endTaskCmd = &cobra.Command{
 											}
 										}
 									} else {
-										// No conflicts detected, but merge still failed - abort
-										logging.Warn("Merge failed without conflicts - may need manual resolution")
-										if abortErr := gitClient.MergeAbort(app.ProjectDir); abortErr != nil {
-											logging.Warn("Failed to abort merge: %v", abortErr)
+										// No conflicts detected, but merge still failed
+										// Try auto-resolution with Claude opus ultrathink
+										logging.Warn("Merge failed without conflicts - attempting auto-resolution with Claude")
+										fmt.Println()
+										fmt.Println("  ⚠️  Merge failed without obvious conflicts")
+										fmt.Println()
+
+										autoResolveSpinner := tui.NewSimpleSpinner("Attempting auto-resolution with Claude")
+										autoResolveSpinner.Start()
+
+										taskContent, _ := targetTask.LoadContent()
+										if autoResolveErr := autoResolveMergeFailure(app.ProjectDir, targetTask.Name, taskContent, targetTask.Name, mainBranch, gitClient); autoResolveErr != nil {
+											logging.Warn("Auto-resolution failed: %v", autoResolveErr)
+											autoResolveSpinner.Stop(false, "failed")
+											// Abort merge
+											if abortErr := gitClient.MergeAbort(app.ProjectDir); abortErr != nil {
+												logging.Warn("Failed to abort merge: %v", abortErr)
+											}
+											mergeTimer.StopWithResult(false, "merge failed")
+											mergeSuccess = false
+										} else {
+											autoResolveSpinner.Stop(true, "resolved")
+											logging.Log("Merge issue resolved by Claude auto-resolution")
+											// Repository should be clean now, merge completed
 										}
-										mergeTimer.StopWithResult(false, "merge failed")
-										mergeSuccess = false
 									}
 								}
 								// If merge succeeded (either directly or after conflict resolution)
@@ -1202,9 +1220,28 @@ var mergeTaskCmd = &cobra.Command{
 						}
 					}
 				} else {
-					// No conflicts detected, but merge still failed - abort
-					_ = gitClient.MergeAbort(app.ProjectDir)
-					mergeSuccess = false
+					// No conflicts detected, but merge still failed
+					// Try auto-resolution with Claude opus ultrathink
+					logging.Warn("Merge failed without conflicts - attempting auto-resolution with Claude")
+					fmt.Println()
+					fmt.Println("  ⚠️  Merge failed without obvious conflicts")
+					fmt.Println()
+
+					autoResolveSpinner := tui.NewSimpleSpinner("Attempting auto-resolution with Claude")
+					autoResolveSpinner.Start()
+
+					taskContent, _ := targetTask.LoadContent()
+					if autoResolveErr := autoResolveMergeFailure(app.ProjectDir, targetTask.Name, taskContent, targetTask.Name, mainBranch, gitClient); autoResolveErr != nil {
+						logging.Warn("Auto-resolution failed: %v", autoResolveErr)
+						autoResolveSpinner.Stop(false, "failed")
+						// Abort merge
+						_ = gitClient.MergeAbort(app.ProjectDir)
+						mergeSuccess = false
+					} else {
+						autoResolveSpinner.Stop(true, "resolved")
+						logging.Log("Merge issue resolved by Claude auto-resolution")
+						// Repository should be clean now, merge completed
+					}
 				}
 			}
 
@@ -1464,16 +1501,16 @@ var recoverTaskCmd = &cobra.Command{
 }
 
 // resolveConflictsWithClaude attempts to resolve merge conflicts using Claude.
-// It runs Claude with a prompt asking it to resolve the conflicts in the given files.
+// It runs Claude with opus model and ultrathink enabled for better conflict resolution.
 // Returns nil if conflicts were resolved, error otherwise.
 func resolveConflictsWithClaude(projectDir, taskName, taskContent string, conflictFiles []string) error {
 	if len(conflictFiles) == 0 {
 		return nil
 	}
 
-	// Build the prompt for Claude
+	// Build the prompt for Claude with ultrathink prefix
 	filesStr := strings.Join(conflictFiles, "\n  - ")
-	prompt := fmt.Sprintf(`You are resolving merge conflicts in a git repository.
+	prompt := fmt.Sprintf(`ultrathink You are resolving merge conflicts in a git repository.
 
 ## Conflicting Files
   - %s
@@ -1498,15 +1535,15 @@ IMPORTANT:
 
 Start resolving the conflicts now.`, filesStr, taskName, taskContent)
 
-	logging.Debug("resolveConflictsWithClaude: starting conflict resolution for %d files", len(conflictFiles))
+	logging.Debug("resolveConflictsWithClaude: starting conflict resolution for %d files with opus ultrathink", len(conflictFiles))
 	logging.Trace("resolveConflictsWithClaude: prompt=%s", prompt)
 
-	// Set a timeout for conflict resolution (5 minutes)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Set a timeout for conflict resolution (10 minutes for ultrathink)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	// Run claude with the conflict resolution prompt
-	cmd := exec.CommandContext(ctx, "claude", "--dangerously-skip-permissions", prompt)
+	// Run claude with opus model and ultrathink-enabled prompt
+	cmd := exec.CommandContext(ctx, "claude", "--model", "opus", "--dangerously-skip-permissions", prompt)
 	cmd.Dir = projectDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -1517,6 +1554,84 @@ Start resolving the conflicts now.`, filesStr, taskName, taskContent)
 	}
 
 	logging.Debug("resolveConflictsWithClaude: claude completed successfully")
+	return nil
+}
+
+// autoResolveMergeFailure attempts to resolve a general merge failure using Claude.
+// This is called when merge fails but no explicit conflicts are detected, or when
+// conflict resolution has failed. It uses opus model with ultrathink for comprehensive analysis.
+// Returns nil if the issue was resolved, error otherwise.
+func autoResolveMergeFailure(projectDir, taskName, taskContent, branchToMerge, mainBranch string, gitClient git.Client) error {
+	// Get current git status for context
+	statusOutput, _ := exec.Command("git", "-C", projectDir, "status").Output()
+
+	// Build a comprehensive prompt for Claude with ultrathink prefix
+	prompt := fmt.Sprintf(`ultrathink You are an expert at resolving git merge issues. A merge operation has failed and needs your help.
+
+## Current Situation
+- Project directory: %s
+- Task branch: %s
+- Target branch: %s
+
+## Task Context
+Task name: %s
+Task description:
+%s
+
+## Current Git Status
+%s
+
+## Instructions
+1. First, analyze the current git status and understand what went wrong
+2. Check for any conflict markers in files (<<<<<<< HEAD, =======, >>>>>>> branch)
+3. Check the git log to understand recent commits on both branches
+4. Resolve any issues you find:
+   - If there are conflicts, resolve them by editing the files
+   - If there's a failed merge state, decide whether to complete or abort it
+   - If files need to be staged, stage them with: git add -A
+5. After resolving all issues, verify the repository is in a clean state
+6. If you need to complete a merge, commit it with an appropriate message
+
+IMPORTANT:
+- Make sure the final code is valid and compiles
+- Do NOT leave the repository in a broken state
+- If you absolutely cannot resolve the issue, explain why clearly
+- Prefer completing the merge over aborting if possible
+
+Start analyzing and resolving the merge issue now.`, projectDir, branchToMerge, mainBranch, taskName, taskContent, string(statusOutput))
+
+	logging.Debug("autoResolveMergeFailure: starting auto-resolution for task %s with opus ultrathink", taskName)
+	logging.Trace("autoResolveMergeFailure: prompt length=%d", len(prompt))
+
+	// Set a timeout for auto-resolution (10 minutes for ultrathink)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	// Run claude with opus model and ultrathink-enabled prompt
+	cmd := exec.CommandContext(ctx, "claude", "--model", "opus", "--dangerously-skip-permissions", prompt)
+	cmd.Dir = projectDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		logging.Warn("autoResolveMergeFailure: claude command failed: %v", err)
+		return fmt.Errorf("auto merge resolution failed: %w", err)
+	}
+
+	// Verify the repository is in a clean state after Claude's intervention
+	hasConflicts, conflictFiles, _ := gitClient.HasConflicts(projectDir)
+	if hasConflicts && len(conflictFiles) > 0 {
+		logging.Warn("autoResolveMergeFailure: conflicts still exist after Claude: %v", conflictFiles)
+		return fmt.Errorf("conflicts still exist after auto-resolution: %v", conflictFiles)
+	}
+
+	hasOngoingMerge := gitClient.HasOngoingMerge(projectDir)
+	if hasOngoingMerge {
+		logging.Warn("autoResolveMergeFailure: merge still in progress after Claude")
+		return fmt.Errorf("merge still in progress after auto-resolution")
+	}
+
+	logging.Debug("autoResolveMergeFailure: claude completed successfully, repository is clean")
 	return nil
 }
 

@@ -214,7 +214,7 @@ const (
 
 // Merge lock settings
 const (
-	MergeLockMaxRetries    = 30              // Maximum retries to acquire merge lock
+	MergeLockMaxRetries    = 900             // Maximum retries to acquire merge lock (15 minutes)
 	MergeLockRetryInterval = 1 * time.Second // Interval between lock retries
 )
 
