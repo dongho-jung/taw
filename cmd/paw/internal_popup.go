@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 
+	"github.com/dongho-jung/paw/internal/app"
 	"github.com/dongho-jung/paw/internal/claude"
 	"github.com/dongho-jung/paw/internal/config"
 	"github.com/dongho-jung/paw/internal/constants"
@@ -265,39 +266,6 @@ var loadingScreenCmd = &cobra.Command{
 	},
 }
 
-var toggleTaskListCmd = &cobra.Command{
-	Use:   "toggle-task-list [session]",
-	Short: "Toggle task list popup",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		sessionName := args[0]
-		tm := tmux.New(sessionName)
-
-		app, err := getAppFromSession(sessionName)
-		if err != nil {
-			return err
-		}
-
-		pawBin, err := os.Executable()
-		if err != nil {
-			pawBin = "paw"
-		}
-
-		// Run task list viewer in popup (closes with q/Esc/Ctrl+T)
-		listCmd := fmt.Sprintf("%s internal task-list-viewer %s", pawBin, sessionName)
-
-		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:     "90%",
-			Height:    "80%",
-			Title:     " Tasks ",
-			Close:     true,
-			Style:     "fg=terminal,bg=terminal",
-			Directory: app.ProjectDir,
-		}, listCmd)
-		return nil
-	},
-}
-
 var toggleSetupCmd = &cobra.Command{
 	Use:   "toggle-setup [session]",
 	Short: "Toggle setup wizard popup",
@@ -364,112 +332,6 @@ var setupWizardCmd = &cobra.Command{
 		fmt.Println("\n✅ Settings applied!")
 		fmt.Println("Press Enter to close...")
 		_, _ = fmt.Scanln()
-
-		return nil
-	},
-}
-
-var taskListViewerCmd = &cobra.Command{
-	Use:    "task-list-viewer [session]",
-	Short:  "Run the task list viewer",
-	Args:   cobra.ExactArgs(1),
-	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		sessionName := args[0]
-
-		app, err := getAppFromSession(sessionName)
-		if err != nil {
-			return err
-		}
-
-		// Setup logging
-		logger, _ := logging.New(app.GetLogPath(), app.Debug)
-		if logger != nil {
-			defer func() { _ = logger.Close() }()
-			logger.SetScript("task-list-viewer")
-			logging.SetGlobal(logger)
-		}
-
-		logging.Trace("taskListViewerCmd: start session=%s", sessionName)
-		defer logging.Trace("taskListViewerCmd: end")
-
-		action, item, err := tui.RunTaskListUI(
-			app.AgentsDir,
-			app.GetHistoryDir(),
-			app.ProjectDir,
-			sessionName,
-			app.PawDir,
-			app.IsGitRepo,
-		)
-		if err != nil {
-			return err
-		}
-
-		if item == nil {
-			return nil
-		}
-
-		tm := tmux.New(sessionName)
-		gitClient := git.New()
-		pawBin, _ := os.Executable()
-
-		logging.Trace("taskListViewerCmd: action=%v item=%s", action, item.Name)
-
-		switch action {
-		case tui.TaskListActionSelect:
-			// Focus the task window
-			logging.Trace("taskListViewerCmd: selecting window task=%s windowID=%s", item.Name, item.WindowID)
-			if item.WindowID != "" {
-				return tm.SelectWindow(item.WindowID)
-			}
-
-		case tui.TaskListActionCancel:
-			// Trigger cancel-task-ui for cancellation with revert if needed
-			logging.Trace("taskListViewerCmd: cancelling task=%s windowID=%s", item.Name, item.WindowID)
-			if item.WindowID != "" {
-				cancelCmd := exec.Command(pawBin, "internal", "cancel-task-ui", sessionName, item.WindowID)
-				return cancelCmd.Start()
-			}
-
-		case tui.TaskListActionMerge:
-			// Trigger end-task for merge
-			logging.Trace("taskListViewerCmd: merging task=%s windowID=%s", item.Name, item.WindowID)
-			if item.WindowID != "" {
-				endCmd := exec.Command(pawBin, "internal", "end-task", "--user-initiated", sessionName, item.WindowID)
-				return endCmd.Start()
-			}
-
-		case tui.TaskListActionPush:
-			// Push the branch
-			logging.Trace("taskListViewerCmd: pushing task=%s", item.Name)
-			if item.AgentDir != "" {
-				worktreeDir := filepath.Join(item.AgentDir, "worktree")
-				if _, err := os.Stat(worktreeDir); err == nil {
-					// Commit any changes first
-					if gitClient.HasChanges(worktreeDir) {
-						_ = gitClient.AddAll(worktreeDir)
-						_ = gitClient.Commit(worktreeDir, constants.CommitMessageAutoCommitPush)
-					}
-					return gitClient.Push(worktreeDir, "origin", item.Name, true)
-				}
-			}
-
-		case tui.TaskListActionResume:
-			// Resume a completed task from history
-			logging.Trace("taskListViewerCmd: resuming task=%s", item.Name)
-			if item.HistoryFile != "" && item.Content != "" {
-				// Create a new task with the same content
-				mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
-				newTask, err := mgr.CreateTask(item.Content)
-				if err != nil {
-					return fmt.Errorf("failed to create task: %w", err)
-				}
-
-				// Handle the task
-				handleCmd := exec.Command(pawBin, "internal", "handle-task", sessionName, newTask.AgentDir)
-				return handleCmd.Start()
-			}
-		}
 
 		return nil
 	},
@@ -545,6 +407,236 @@ var cmdPaletteTUICmd = &cobra.Command{
 		case "restore-panes":
 			restoreCmd := exec.Command(pawBin, "internal", "restore-panes", sessionName)
 			return restoreCmd.Run()
+		}
+
+		return nil
+	},
+}
+
+var toggleTemplateCmd = &cobra.Command{
+	Use:   "toggle-template [session]",
+	Short: "Toggle template selector popup",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		tm := tmux.New(sessionName)
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		pawBin, err := os.Executable()
+		if err != nil {
+			pawBin = "paw"
+		}
+
+		// Run template viewer in popup
+		templateCmd := fmt.Sprintf("%s internal template-viewer %s", pawBin, sessionName)
+
+		_ = tm.DisplayPopup(tmux.PopupOpts{
+			Width:     "90%",
+			Height:    "80%",
+			Title:     " Templates ",
+			Close:     true,
+			Style:     "fg=terminal,bg=terminal",
+			Directory: app.ProjectDir,
+		}, templateCmd)
+		return nil
+	},
+}
+
+var templateViewerCmd = &cobra.Command{
+	Use:    "template-viewer [session]",
+	Short:  "Run the template viewer",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(app.GetLogPath(), app.Debug)
+		if logger != nil {
+			defer func() { _ = logger.Close() }()
+			logger.SetScript("template-viewer")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Trace("templateViewerCmd: start session=%s", sessionName)
+		defer logging.Trace("templateViewerCmd: end")
+
+		return runTemplateLoop(app, sessionName)
+	},
+}
+
+// runTemplateLoop runs the template UI loop, handling CRUD operations.
+func runTemplateLoop(appCtx *app.App, sessionName string) error {
+	for {
+		action, selected, err := tui.RunTemplateUI(appCtx.PawDir)
+		if err != nil {
+			return err
+		}
+
+		switch action {
+		case tui.TemplateActionNone:
+			// User closed without action
+			return nil
+
+		case tui.TemplateActionSelect:
+			// User selected a template - send content to task input via tmux
+			if selected != nil && selected.Content != "" {
+				logging.Trace("templateViewerCmd: selected template=%s", selected.Name)
+				tm := tmux.New(sessionName)
+
+				// Get the current window name to check if we're in the new task window
+				windowName, _ := tm.Display("#{window_name}")
+				windowName = strings.TrimSpace(windowName)
+
+				// Only send keys if we're in the new task window (⭐️)
+				if strings.HasPrefix(windowName, "⭐️") {
+					// Send the template content to the input box
+					// Use tmux send-keys to type the content
+					if err := tm.SendKeys("", selected.Content); err != nil {
+						logging.Warn("Failed to send template content: %v", err)
+					}
+				} else {
+					logging.Debug("Not in new task window, skipping template injection")
+				}
+			}
+			return nil
+
+		case tui.TemplateActionCreate:
+			// Open editor for new template
+			result, err := tui.RunTemplateEditor(tui.TemplateEditorModeCreate, "", "")
+			if err != nil {
+				return err
+			}
+
+			if result.Saved && result.Name != "" && result.Content != "" {
+				templates, err := config.LoadTemplates(appCtx.PawDir)
+				if err != nil {
+					templates = &config.Templates{Items: []config.Template{}}
+				}
+
+				if err := templates.Add(result.Name, result.Content); err != nil {
+					logging.Warn("Failed to add template: %v", err)
+				} else if err := templates.Save(appCtx.PawDir); err != nil {
+					logging.Warn("Failed to save templates: %v", err)
+				} else {
+					logging.Info("Created template: %s", result.Name)
+				}
+			}
+			// Continue loop to show updated list
+
+		case tui.TemplateActionEdit:
+			// Open editor for existing template
+			if selected != nil {
+				result, err := tui.RunTemplateEditor(tui.TemplateEditorModeEdit, selected.Name, selected.Content)
+				if err != nil {
+					return err
+				}
+
+				if result.Saved && result.Name != "" && result.Content != "" {
+					templates, err := config.LoadTemplates(appCtx.PawDir)
+					if err != nil {
+						logging.Warn("Failed to load templates: %v", err)
+						continue
+					}
+
+					if err := templates.Update(selected.Name, result.Name, result.Content); err != nil {
+						logging.Warn("Failed to update template: %v", err)
+					} else if err := templates.Save(appCtx.PawDir); err != nil {
+						logging.Warn("Failed to save templates: %v", err)
+					} else {
+						logging.Info("Updated template: %s", result.Name)
+					}
+				}
+			}
+			// Continue loop to show updated list
+
+		case tui.TemplateActionDelete:
+			// Delete the selected template
+			if selected != nil {
+				templates, err := config.LoadTemplates(appCtx.PawDir)
+				if err != nil {
+					logging.Warn("Failed to load templates: %v", err)
+					continue
+				}
+
+				if err := templates.Delete(selected.Name); err != nil {
+					logging.Warn("Failed to delete template: %v", err)
+				} else if err := templates.Save(appCtx.PawDir); err != nil {
+					logging.Warn("Failed to save templates: %v", err)
+				} else {
+					logging.Info("Deleted template: %s", selected.Name)
+				}
+			}
+			// Continue loop to show updated list
+		}
+	}
+}
+
+var templateEditorCmd = &cobra.Command{
+	Use:    "template-editor [session] [mode] [name]",
+	Short:  "Run the template editor",
+	Args:   cobra.RangeArgs(2, 3),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		mode := args[1]
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		var name, content string
+		var editorMode tui.TemplateEditorMode
+
+		if mode == "edit" && len(args) > 2 {
+			name = args[2]
+			editorMode = tui.TemplateEditorModeEdit
+
+			// Load existing template content
+			templates, err := config.LoadTemplates(app.PawDir)
+			if err == nil {
+				if tmpl := templates.Find(name); tmpl != nil {
+					content = tmpl.Content
+				}
+			}
+		} else {
+			editorMode = tui.TemplateEditorModeCreate
+		}
+
+		result, err := tui.RunTemplateEditor(editorMode, name, content)
+		if err != nil {
+			return err
+		}
+
+		if result.Saved && result.Name != "" && result.Content != "" {
+			templates, err := config.LoadTemplates(app.PawDir)
+			if err != nil {
+				templates = &config.Templates{Items: []config.Template{}}
+			}
+
+			if editorMode == tui.TemplateEditorModeEdit {
+				if err := templates.Update(name, result.Name, result.Content); err != nil {
+					return fmt.Errorf("failed to update template: %w", err)
+				}
+			} else {
+				if err := templates.Add(result.Name, result.Content); err != nil {
+					return fmt.Errorf("failed to add template: %w", err)
+				}
+			}
+
+			if err := templates.Save(app.PawDir); err != nil {
+				return fmt.Errorf("failed to save templates: %w", err)
+			}
 		}
 
 		return nil

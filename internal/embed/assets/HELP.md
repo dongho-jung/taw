@@ -25,7 +25,7 @@ Claude Code-based autonomous agent work environment
   ⌃Q          Quit paw
 
 ### Toggle Panels
-  ⌃T          Toggle tasks (show task list)
+  ⌃T          Toggle templates (show template selector)
   ⌃O          Toggle logs (show log viewer)
   ⌃G          Toggle git status
   ⌃B          Toggle bottom (shell pane)
@@ -55,29 +55,24 @@ Claude Code-based autonomous agent work environment
   ✅  Task completed
   ⚠️  Warning (merge failed, needs manual resolution)
 
-## Task List Viewer (⌃T)
+## Template Selector (⌃T)
 
-View all active and completed tasks with preview panel.
+Browse and manage reusable task templates with fuzzy search.
 
 ### Navigation
-  ↑/↓/j/k     Navigate tasks
+  ↑/↓         Navigate templates
+  ⌃K/⌃J       Navigate templates (vim-style)
   PgUp/PgDn   Scroll preview panel
-  Ctrl+U/D    Scroll preview panel (vim-style)
-  ⏎/Space     Focus selected task window
-  q/Esc       Close the task list
+  ⏎           Select template (fills task input)
+  q/Esc/⌃T    Close template selector
 
-### Actions
-  c           Cancel task (active tasks only)
-  m           Merge task (triggers finish-task flow)
-  p           Push branch to remote
-  r           Resume task (history/cancelled items, creates new task)
+### Template Management
+  ⌃N          Create new template
+  ⌃E          Edit selected template
+  ⌃D          Delete selected template
 
-### Status Icons
-  🤖  Working (agent active)
-  💬  Waiting (needs user input)
-  ✅  Done (ready to merge)
-  📁  History (completed, from history)
-  ❌  Cancelled (from history, can resume)
+### Search
+  Type any characters to fuzzy search templates by name or content.
 
 ## Log Viewer (⌃O)
 

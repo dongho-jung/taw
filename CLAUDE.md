@@ -92,7 +92,7 @@ paw/                           # This repository
 │   ├── internal.go            # Internal command registration
 │   ├── internal_create.go     # Task creation commands (toggleNew, newTask, spawnTask, handleTask)
 │   ├── internal_lifecycle.go  # Task lifecycle commands (endTask, cancelTask, doneTask)
-│   ├── internal_popup.go      # Popup/UI commands (toggleLog, toggleHelp, taskList)
+│   ├── internal_popup.go      # Popup/UI commands (toggleLog, toggleHelp, toggleTemplate)
 │   ├── internal_sync.go       # Sync commands (syncWithMain, syncTask, toggleBranch)
 │   ├── internal_stop_hook.go  # Claude stop hook handling (task status classification)
 │   ├── internal_user_prompt_hook.go # User prompt submission hook
@@ -134,6 +134,7 @@ paw/                           # This repository
     ├── log                    # Consolidated logs (all scripts write here)
     ├── memory                 # Project memory (YAML, shared across tasks)
     ├── input-history          # Task input history (JSON, for Ctrl+R search)
+    ├── templates.yaml         # Task templates (YAML, for ⌃T template selector)
     ├── PROMPT.md              # Project prompt (user-customizable)
     ├── .is-git-repo           # Git mode marker (exists only in git repos)
     ├── .claude/               # Claude settings (copied from embed)

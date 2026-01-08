@@ -15,7 +15,7 @@ import (
 //   - Ctrl+Down: Sync task branch with main
 //   - Ctrl+P: Command palette
 //   - Ctrl+Q: Quit paw
-//   - Ctrl+T: Toggle tasks
+//   - Ctrl+T: Toggle templates
 //   - Ctrl+O: Toggle logs
 //   - Ctrl+G: Toggle git status
 //   - Ctrl+B: Toggle bottom (shell)
@@ -30,7 +30,7 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	cmdToggleBranch := fmt.Sprintf("run-shell '%s internal toggle-branch %s'", pawBin, sessionName)
 	cmdSyncTask := fmt.Sprintf("run-shell '%s internal sync-task %s'", pawBin, sessionName)
 	cmdQuit := "detach-client"
-	cmdToggleTasks := fmt.Sprintf("run-shell '%s internal toggle-task-list %s'", pawBin, sessionName)
+	cmdToggleTemplates := fmt.Sprintf("run-shell '%s internal toggle-template %s'", pawBin, sessionName)
 	cmdToggleLogs := fmt.Sprintf("run-shell '%s internal toggle-log %s'", pawBin, sessionName)
 	cmdToggleGitStatus := fmt.Sprintf("run-shell '%s internal toggle-git-status %s'", pawBin, sessionName)
 	cmdToggleBottom := fmt.Sprintf("run-shell '%s internal popup-shell %s'", pawBin, sessionName)
@@ -60,7 +60,7 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 		{Key: "C-q", Command: cmdQuit, NoPrefix: true},
 
 		// Toggle commands (Ctrl-based)
-		{Key: "C-t", Command: cmdToggleTasks, NoPrefix: true},
+		{Key: "C-t", Command: cmdToggleTemplates, NoPrefix: true},
 		{Key: "C-o", Command: cmdToggleLogs, NoPrefix: true},
 		{Key: "C-g", Command: cmdToggleGitStatus, NoPrefix: true},
 		{Key: "C-b", Command: cmdToggleBottom, NoPrefix: true},
