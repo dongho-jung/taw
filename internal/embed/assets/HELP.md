@@ -127,6 +127,7 @@ Fuzzy-searchable command palette for quick access to commands.
   Esc/⌃P      Close palette
 
 ### Available Commands
+  Show Diff      Show diff between task branch and main
   Restore Panes  Restore missing panes in current task window
 
 ## Help Viewer (⌃/)

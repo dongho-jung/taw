@@ -197,6 +197,53 @@ var toggleGitStatusCmd = &cobra.Command{
 	},
 }
 
+var toggleShowDiffCmd = &cobra.Command{
+	Use:   "toggle-show-diff [session]",
+	Short: "Show diff between task branch and main",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		tm := tmux.New(sessionName)
+
+		app, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Check if this is a git repo
+		if !app.IsGitRepo {
+			_ = tm.DisplayMessage("Not a git repository", 2000)
+			return nil
+		}
+
+		// Get current pane's working directory (for worktree context)
+		panePath, err := tm.Display("#{pane_current_path}")
+		if err != nil || panePath == "" {
+			panePath = app.ProjectDir
+		}
+		panePath = strings.TrimSpace(panePath)
+
+		// Get the main branch name dynamically
+		gitClient := git.New()
+		mainBranch := gitClient.GetMainBranch(panePath)
+
+		// Build command to show diff between main and current branch with color
+		// Uses less -R to preserve colors and allow scrolling, closes with q
+		// git diff main...HEAD shows changes on the current branch since it diverged from main
+		popupCmd := fmt.Sprintf("cd '%s' && git diff --color=always %s...HEAD | less -R", panePath, mainBranch)
+
+		_ = tm.DisplayPopup(tmux.PopupOpts{
+			Width:     "90%",
+			Height:    "80%",
+			Title:     fmt.Sprintf(" Diff (%s...HEAD) ", mainBranch),
+			Close:     true,
+			Style:     "fg=terminal,bg=terminal",
+			Directory: panePath,
+		}, popupCmd)
+		return nil
+	},
+}
+
 var loadingScreenCmd = &cobra.Command{
 	Use:    "loading-screen [message]",
 	Short:  "Show a loading screen with braille animation",
@@ -465,6 +512,11 @@ var cmdPaletteTUICmd = &cobra.Command{
 		// Define available commands
 		commands := []tui.Command{
 			{
+				Name:        "Show Diff",
+				Description: "Show diff between task branch and main",
+				ID:          "show-diff",
+			},
+			{
 				Name:        "Restore Panes",
 				Description: "Restore missing panes in current task window",
 				ID:          "restore-panes",
@@ -487,6 +539,9 @@ var cmdPaletteTUICmd = &cobra.Command{
 		}
 
 		switch selected.ID {
+		case "show-diff":
+			showDiffCmd := exec.Command(pawBin, "internal", "toggle-show-diff", sessionName)
+			return showDiffCmd.Run()
 		case "restore-panes":
 			restoreCmd := exec.Command(pawBin, "internal", "restore-panes", sessionName)
 			return restoreCmd.Run()
