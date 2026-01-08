@@ -28,7 +28,6 @@ Claude Code-based autonomous agent work environment
   ⌃O          Toggle logs (show log viewer)
   ⌃G          Toggle git status
   ⌃B          Toggle bottom (shell pane)
-  ⌃Y          Toggle idea (quick Claude for side thoughts)
   ⌃/          Toggle help
 
 ## Directory Structure
@@ -38,6 +37,7 @@ Claude Code-based autonomous agent work environment
   ├── PROMPT.md              Project-specific agent instructions
   ├── memory                 Shared project memory (YAML)
   ├── log                    Unified log file
+  ├── window-map.json        Window token to task mapping
   ├── history/               Completed task history
   │   └── YYMMDD_HHMMSS_name Task content + work capture
   └── agents/{task-name}/
@@ -48,7 +48,6 @@ Claude Code-based autonomous agent work environment
 ## Window Status Icons
 
   ⭐️  New task input window
-  💡  Idea window (quick Claude for side thoughts)
   🤖  Agent working
   💬  Waiting for user input
   ✅  Task completed
@@ -90,6 +89,14 @@ View all active and completed tasks with preview panel.
   l           Cycle log level filter (L0+ → L1+ → ... → L5 only)
   ⌃O/q/Esc    Close the log viewer
 
+## CLI Commands (outside tmux)
+
+  paw logs --since 1h --task my-task
+  paw history --task my-task --since 2d --query "error"
+  paw history show 1
+  paw doctor --fix
+  paw check --fix
+
 ## Task Options (⌥Tab in new task window)
 
 Configure per-task settings before submission:
@@ -104,7 +111,7 @@ Configure per-task settings before submission:
   TASK_NAME     Task identifier (branch name)
   PAW_DIR       .paw directory path
   PROJECT_DIR   Project root path
-  WORKTREE_DIR  Worktree path (git mode only)
+  WORKTREE_DIR  Worktree path (git mode) or workspace copy (non-git copy mode)
   WINDOW_ID     tmux window ID
   ON_COMPLETE   Completion mode (confirm/auto-merge/auto-pr)
   PAW_HOME      PAW installation directory

@@ -16,7 +16,7 @@ brew install dongho-jung/tap/paw
 - Start a tmux-based workspace from any directory with the `paw` command.
 - Creating a task automatically launches the Claude Code agent.
 - **Git mode**: Each task gets its own worktree when running in a git repo.
-- **Non-Git mode**: Works without git; tasks run in the project directory.
+- **Non-Git mode**: Shared by default; optionally use per-task workspace copies (`non_git_workspace: copy`).
 
 ## Usage
 
@@ -28,7 +28,7 @@ paw  # Creates .paw, starts tmux session, and automatically runs new-task
 ```
 
 - In a git repo: Git mode (worktree created per task)
-- In a regular directory: Non-Git mode (works directly in the project directory)
+- In a regular directory: Non-Git mode (shared workspace by default; optional copy mode for isolation)
 
 The first launch automatically opens the task editor.
 
@@ -42,6 +42,7 @@ To add another task inside the tmux session, press `⌃N`:
 **Task completion**:
 - Press `⌃F` twice to finish; PAW commits changes and cleans up, pushes in `auto-pr`/`auto-merge`, and auto-merges in `auto-merge`.
 - In `auto-pr`, the agent creates the PR before you finish.
+- Optional verification and hooks can run before finish/merge (see config).
 
 <details>
 <summary>Automatically reopen incomplete tasks with session resume</summary>
@@ -118,12 +119,33 @@ work_mode: worktree
 # - auto-pr: Auto commit + push + create pull request
 on_complete: confirm
 
-# Hook to run after worktree creation (optional)
+# Non-git workspace: shared or copy
+non_git_workspace: shared
+
+# Hook to run after worktree/workspace creation (optional)
 # Single line example: worktree_hook: npm install
 # Multi-line example:
 #   worktree_hook: |
 #     npm install
 #     npm run build
+
+# Verification (optional)
+# verify_command: npm test
+verify_timeout_sec: 600
+verify_required: false
+
+# Hooks (optional)
+# pre_task_hook: echo "pre task"
+# post_task_hook: echo "post task"
+# pre_merge_hook: echo "pre merge"
+# post_merge_hook: echo "post merge"
+
+# Log format: text or jsonl
+log_format: text
+
+# Log rotation (size in MB, backups)
+log_max_size_mb: 10
+log_max_backups: 3
 
 ```
 </details>
@@ -137,8 +159,22 @@ on_complete: confirm
 | `on_complete` | `confirm` | Commit only (no push/PR/merge) |
 |               | `auto-merge` | **Auto** commit + push + merge + clean up + close window (worktree mode only) |
 |               | `auto-pr` | Auto commit + push + create PR (worktree mode only) |
-| `worktree_hook` | (command) | Shell command(s) to run after worktree creation (e.g., `npm install`) |
+| `non_git_workspace` | `shared` | Use the project directory directly (default) |
+|                   | `copy` | Create a per-task workspace copy (isolation) |
+| `worktree_hook` | (command) | Shell command(s) to run after worktree/workspace creation (e.g., `npm install`) |
+| `verify_command` | (command) | Shell command(s) to verify before finish/merge (e.g., `npm test`) |
+| `verify_timeout_sec` | (seconds) | Verification timeout (default: 600) |
+| `verify_required` | `true/false` | Block auto-merge if verification fails |
+| `pre_task_hook` | (command) | Runs before starting the agent |
+| `post_task_hook` | (command) | Runs after finishing a task |
+| `pre_merge_hook` | (command) | Runs before auto-merge/merge-task |
+| `post_merge_hook` | (command) | Runs after auto-merge/merge-task |
+| `log_format` | `text/jsonl` | Log output format |
+| `log_max_size_mb` | (MB) | Log rotation size (default: 10) |
+| `log_max_backups` | (count) | Log rotation backups (default: 3) |
 | `notifications` | `slack.webhook`, `ntfy.topic`, `ntfy.server` | Optional external alerts via Slack webhook or ntfy.sh |
+
+When `non_git_workspace` is set to `copy`, PAW creates an isolated workspace under `.paw/agents/<task>/worktree`. Changes are not automatically merged back into the project; use hooks or manual copy when needed.
 
 <details>
 <summary>Other configuration</summary>
@@ -189,12 +225,14 @@ Install tmux/gh via Homebrew: `brew install tmux gh`. Install the Claude Code CL
 | Toggle logs | `⌃O` |
 | Toggle git status | `⌃G` |
 | Toggle bottom (shell) | `⌃B` |
-| Toggle idea (quick Claude) | `⌃Y` |
 | Toggle help | `⌃/` |
 
 ## Log viewer
 
 Press `⌃O` to open the live log viewer.
+
+Logs are written to `.paw/log` with optional JSONL formatting and rotation.
+Use `paw logs --since 2h --task my-task` for CLI filtering.
 
 <details>
 <summary>Controls</summary>
@@ -228,3 +266,10 @@ When a task ends, the full content of the agent pane is automatically captured a
 - Review what the agent did in a past task.
 - Trace how a problem was solved.
 - Use as reference material for learning and improvement.
+
+Use `paw history` to list entries and `paw history show <index|task|file>` to view one.
+
+## CLI utilities
+
+- `paw doctor` checks project and session health (use `--fix` for safe repairs).
+- `paw check --fix` attempts Homebrew installs for missing dependencies.
