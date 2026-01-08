@@ -33,6 +33,7 @@ type Client interface {
 	BranchMerged(dir, branch, into string) bool
 	BranchCreate(dir, branch, startPoint string) error
 	GetCurrentBranch(dir string) (string, error)
+	GetHeadCommit(dir string) (string, error)
 
 	// Changes
 	HasChanges(dir string) bool
@@ -269,6 +270,10 @@ func (c *gitClient) BranchCreate(dir, branch, startPoint string) error {
 
 func (c *gitClient) GetCurrentBranch(dir string) (string, error) {
 	return c.runOutput(dir, "rev-parse", "--abbrev-ref", "HEAD")
+}
+
+func (c *gitClient) GetHeadCommit(dir string) (string, error) {
+	return c.runOutput(dir, "rev-parse", "HEAD")
 }
 
 // Changes

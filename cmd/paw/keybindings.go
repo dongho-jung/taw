@@ -20,7 +20,6 @@ import (
 //   - Ctrl+G: Toggle git status
 //   - Ctrl+B: Toggle bottom (shell)
 //   - Ctrl+/: Toggle help
-//   - Ctrl+Y: Toggle idea (quick Claude window)
 //   - Alt+Left/Right: Move window
 //   - Alt+Tab: Cycle pane (in task windows) / Cycle options (in new task window)
 func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
@@ -37,7 +36,6 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	cmdToggleBottom := fmt.Sprintf("run-shell '%s internal popup-shell %s'", pawBin, sessionName)
 	cmdToggleHelp := fmt.Sprintf("run-shell '%s internal toggle-help %s'", pawBin, sessionName)
 	cmdToggleCmdPalette := fmt.Sprintf("run-shell '%s internal toggle-cmd-palette %s'", pawBin, sessionName)
-	cmdToggleIdea := fmt.Sprintf("run-shell '%s internal toggle-idea %s'", pawBin, sessionName)
 
 	// Alt+Tab: context-aware - pass through to TUI in new task window, cycle panes otherwise
 	// #{m:pattern,string} checks if string matches pattern (⭐️* = starts with ⭐️)
@@ -67,6 +65,5 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 		{Key: "C-g", Command: cmdToggleGitStatus, NoPrefix: true},
 		{Key: "C-b", Command: cmdToggleBottom, NoPrefix: true},
 		{Key: "C-_", Command: cmdToggleHelp, NoPrefix: true}, // Ctrl+/ sends C-_
-		{Key: "C-y", Command: cmdToggleIdea, NoPrefix: true},
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -124,6 +125,9 @@ func (s *TaskDiscoveryService) discoverFromSocket(socketName string) []*Discover
 		return nil
 	}
 
+	pawDir := resolvePawDir(tm, sessionName)
+	tokenMap := buildTokenMap(pawDir)
+
 	// List windows
 	windows, err := tm.ListWindows()
 	if err != nil {
@@ -135,10 +139,12 @@ func (s *TaskDiscoveryService) discoverFromSocket(socketName string) []*Discover
 
 	for _, w := range windows {
 		// Parse window name to extract task name and status
-		taskName, status := parseWindowName(w.Name)
-		if taskName == "" {
+		taskToken, status := parseWindowName(w.Name)
+		if taskToken == "" {
 			continue // Not a task window
 		}
+
+		taskName := resolveTaskName(taskToken, tokenMap)
 
 		task := &DiscoveredTask{
 			Name:      taskName,
@@ -154,12 +160,72 @@ func (s *TaskDiscoveryService) discoverFromSocket(socketName string) []*Discover
 		if capture, err := tm.CapturePane(agentPane, 50); err == nil {
 			task.Preview = trimPreview(capture)
 			task.CurrentAction = extractCurrentAction(capture)
+		} else {
+			logging.Trace("TaskDiscovery: capture failed session=%s window=%s err=%v", sessionName, w.ID, err)
 		}
 
 		tasks = append(tasks, task)
 	}
 
 	return tasks
+}
+
+func resolvePawDir(tm tmux.Client, sessionName string) string {
+	sessionPath, err := tm.RunWithOutput("display-message", "-p", "-t", sessionName, "#{session_path}")
+	if err != nil || sessionPath == "" {
+		logging.Trace("TaskDiscovery: failed to resolve session path for %s: %v", sessionName, err)
+		return ""
+	}
+	sessionPath = strings.TrimSpace(sessionPath)
+	if sessionPath == "" {
+		return ""
+	}
+	pawDir := filepath.Join(sessionPath, constants.PawDirName)
+	if _, err := os.Stat(pawDir); err != nil {
+		return ""
+	}
+	return pawDir
+}
+
+func buildTokenMap(pawDir string) map[string]string {
+	mapping := map[string]string{}
+	if pawDir == "" {
+		return mapping
+	}
+
+	if fileMap, err := LoadWindowMap(pawDir); err == nil {
+		for token, name := range fileMap {
+			mapping[token] = name
+		}
+	} else {
+		logging.Trace("TaskDiscovery: failed to load window map: %v", err)
+	}
+
+	agentsDir := filepath.Join(pawDir, constants.AgentsDirName)
+	entries, err := os.ReadDir(agentsDir)
+	if err != nil {
+		return mapping
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		mapping[constants.TruncateForWindowName(name)] = name
+		mapping[constants.LegacyTruncateForWindowName(name)] = name
+	}
+
+	return mapping
+}
+
+func resolveTaskName(token string, tokenMap map[string]string) string {
+	if token == "" {
+		return token
+	}
+	if name, ok := tokenMap[token]; ok {
+		return name
+	}
+	return token
 }
 
 // parseWindowName parses a window name to extract task name and status.

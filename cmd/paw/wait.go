@@ -84,14 +84,10 @@ var watchWaitCmd = &cobra.Command{
 
 			// Verify this window still belongs to this task (prevents stale watcher issues)
 			if extractedName, isTask := constants.ExtractTaskName(windowName); isTask {
-				expectedName := taskName
-				if len(expectedName) > 12 {
-					expectedName = expectedName[:12]
-				}
-				if extractedName != expectedName {
+				if !constants.MatchesWindowToken(extractedName, taskName) {
 					// Window was reassigned to a different task, stop this watcher
 					logging.Debug("Window %s now belongs to different task (%s vs %s), stopping wait watcher",
-						windowID, extractedName, expectedName)
+						windowID, extractedName, taskName)
 					return nil
 				}
 			}
@@ -121,7 +117,7 @@ var watchWaitCmd = &cobra.Command{
 				doneDetected := detectDoneInContent(content)
 				if doneDetected && !isFinal {
 					logging.Debug("Done marker detected in pane content")
-					if err := ensureDoneWindow(tm, windowID, taskName); err != nil {
+					if err := ensureDoneWindow(tm, windowID, taskName, app.PawDir); err != nil {
 						logging.Trace("Failed to rename window to done: %v", err)
 					}
 					// Skip wait detection since task is done
@@ -132,7 +128,7 @@ var watchWaitCmd = &cobra.Command{
 				waitDetected, reason := detectWaitInContent(content)
 
 				if waitDetected && !isFinal {
-					if err := ensureWaitingWindow(tm, windowID, taskName); err != nil {
+					if err := ensureWaitingWindow(tm, windowID, taskName, app.PawDir); err != nil {
 						logging.Trace("Failed to rename window: %v", err)
 					}
 					// Try to parse the prompt - first YAML format, then rendered UI format
@@ -189,7 +185,7 @@ func isFinalWindow(name string) bool {
 		strings.HasPrefix(name, constants.EmojiWarning)
 }
 
-func ensureWaitingWindow(tm tmux.Client, windowID, taskName string) error {
+func ensureWaitingWindow(tm tmux.Client, windowID, taskName, pawDir string) error {
 	logging.Trace("ensureWaitingWindow: start windowID=%s task=%s", windowID, taskName)
 	defer logging.Trace("ensureWaitingWindow: end")
 
@@ -206,12 +202,7 @@ func ensureWaitingWindow(tm tmux.Client, windowID, taskName string) error {
 		return nil
 	}
 
-	// Verify task name matches (accounting for truncation to 12 chars)
-	expectedName := taskName
-	if len(expectedName) > 12 {
-		expectedName = expectedName[:12]
-	}
-	if extractedName != expectedName {
+	if !constants.MatchesWindowToken(extractedName, taskName) {
 		// Wrong task window, don't rename (prevents race condition)
 		return nil
 	}
@@ -223,7 +214,7 @@ func ensureWaitingWindow(tm tmux.Client, windowID, taskName string) error {
 
 	newName := waitingWindowName(taskName)
 	logging.Trace("ensureWaitingWindow: renaming window from=%s to=%s", windowName, newName)
-	return tm.RenameWindow(windowID, newName)
+	return renameWindowWithStatus(tm, windowID, newName, pawDir, taskName, "watch-wait")
 }
 
 func waitingWindowName(taskName string) string {
@@ -257,7 +248,7 @@ func detectDoneInContent(content string) bool {
 }
 
 // ensureDoneWindow renames the window to done status if it belongs to the task.
-func ensureDoneWindow(tm tmux.Client, windowID, taskName string) error {
+func ensureDoneWindow(tm tmux.Client, windowID, taskName, pawDir string) error {
 	logging.Trace("ensureDoneWindow: start windowID=%s task=%s", windowID, taskName)
 	defer logging.Trace("ensureDoneWindow: end")
 
@@ -274,12 +265,7 @@ func ensureDoneWindow(tm tmux.Client, windowID, taskName string) error {
 		return nil
 	}
 
-	// Verify task name matches (accounting for truncation to 12 chars)
-	expectedName := taskName
-	if len(expectedName) > 12 {
-		expectedName = expectedName[:12]
-	}
-	if extractedName != expectedName {
+	if !constants.MatchesWindowToken(extractedName, taskName) {
 		// Wrong task window, don't rename (prevents race condition)
 		return nil
 	}
@@ -291,7 +277,7 @@ func ensureDoneWindow(tm tmux.Client, windowID, taskName string) error {
 
 	newName := doneWindowName(taskName)
 	logging.Trace("ensureDoneWindow: renaming window from=%s to=%s", windowName, newName)
-	return tm.RenameWindow(windowID, newName)
+	return renameWindowWithStatus(tm, windowID, newName, pawDir, taskName, "watch-wait")
 }
 
 func detectWaitInContent(content string) (bool, string) {

@@ -16,6 +16,7 @@ import (
 	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/notify"
+	"github.com/dongho-jung/paw/internal/service"
 	"github.com/dongho-jung/paw/internal/task"
 	"github.com/dongho-jung/paw/internal/tmux"
 )
@@ -146,48 +147,74 @@ var renameWindowCmd = &cobra.Command{
 		}
 
 		tm := tmux.New(sessionName)
-		err := tm.RenameWindow(windowID, name)
-		if err != nil {
-			return err
-		}
+		pawDir := os.Getenv("PAW_DIR")
+		taskName := os.Getenv("TASK_NAME")
 
-		// Determine status from emoji prefix and save it
-		var newStatus task.Status
-		switch {
-		case strings.HasPrefix(name, constants.EmojiDone):
-			newStatus = task.StatusDone
-			logging.Trace("renameWindowCmd: playing SoundTaskCompleted (done state)")
-			notify.PlaySound(notify.SoundTaskCompleted)
-		case strings.HasPrefix(name, constants.EmojiWaiting):
-			newStatus = task.StatusWaiting
-			logging.Trace("renameWindowCmd: playing SoundNeedInput (waiting state)")
-			notify.PlaySound(notify.SoundNeedInput)
-		case strings.HasPrefix(name, constants.EmojiWarning):
-			newStatus = task.StatusCorrupted
-			logging.Trace("renameWindowCmd: playing SoundError (warning state)")
-			notify.PlaySound(notify.SoundError)
-		case strings.HasPrefix(name, constants.EmojiWorking):
-			newStatus = task.StatusWorking
-			// No sound for EmojiWorking (🤖) - too frequent
-		}
-
-		// Save status to disk for resume
-		if newStatus != "" {
-			pawDir := os.Getenv("PAW_DIR")
-			taskName := os.Getenv("TASK_NAME")
-			if pawDir != "" && taskName != "" {
-				agentDir := filepath.Join(pawDir, "agents", taskName)
-				t := task.New(taskName, agentDir)
-				if err := t.SaveStatus(newStatus); err != nil {
-					logging.Trace("Failed to save status: %v", err)
-				} else {
-					logging.Trace("Status saved: %s", newStatus)
-				}
+		status := statusFromWindowName(name)
+		if status != "" {
+			switch status {
+			case task.StatusDone:
+				logging.Trace("renameWindowCmd: playing SoundTaskCompleted (done state)")
+				notify.PlaySound(notify.SoundTaskCompleted)
+			case task.StatusWaiting:
+				logging.Trace("renameWindowCmd: playing SoundNeedInput (waiting state)")
+				notify.PlaySound(notify.SoundNeedInput)
+			case task.StatusCorrupted:
+				logging.Trace("renameWindowCmd: playing SoundError (warning state)")
+				notify.PlaySound(notify.SoundError)
 			}
+		}
+
+		if err := renameWindowWithStatus(tm, windowID, name, pawDir, taskName, "rename-window"); err != nil {
+			return err
 		}
 
 		return nil
 	},
+}
+
+func statusFromWindowName(name string) task.Status {
+	switch {
+	case strings.HasPrefix(name, constants.EmojiDone):
+		return task.StatusDone
+	case strings.HasPrefix(name, constants.EmojiWaiting):
+		return task.StatusWaiting
+	case strings.HasPrefix(name, constants.EmojiWarning):
+		return task.StatusCorrupted
+	case strings.HasPrefix(name, constants.EmojiWorking):
+		return task.StatusWorking
+	}
+	return ""
+}
+
+func renameWindowWithStatus(tm tmux.Client, windowID, name, pawDir, taskName, source string) error {
+	if err := tm.RenameWindow(windowID, name); err != nil {
+		return err
+	}
+
+	status := statusFromWindowName(name)
+	if status == "" || pawDir == "" || taskName == "" {
+		return nil
+	}
+
+	agentDir := filepath.Join(pawDir, "agents", taskName)
+	t := task.New(taskName, agentDir)
+	prevStatus, valid, err := t.TransitionStatus(status)
+	if err != nil {
+		logging.Trace("Failed to save status: %v", err)
+	} else {
+		logging.Trace("Status saved: %s", status)
+	}
+	if !valid {
+		logging.Warn("Invalid status transition: %s -> %s", prevStatus, status)
+	}
+
+	historyService := service.NewHistoryService(filepath.Join(pawDir, constants.HistoryDirName))
+	if err := historyService.RecordStatusTransition(taskName, prevStatus, status, source, "", valid); err != nil {
+		logging.Trace("Failed to record status transition: %v", err)
+	}
+
+	return nil
 }
 
 // getAppFromSession creates an App from session name
@@ -242,6 +269,11 @@ func loadAppConfig(application *app.App) (*app.App, error) {
 
 	if err := application.LoadConfig(); err != nil {
 		application.Config = config.DefaultConfig()
+	}
+	if application.Config != nil {
+		_ = os.Setenv("PAW_LOG_FORMAT", application.Config.LogFormat)
+		_ = os.Setenv("PAW_LOG_MAX_SIZE_MB", fmt.Sprintf("%d", application.Config.LogMaxSizeMB))
+		_ = os.Setenv("PAW_LOG_MAX_BACKUPS", fmt.Sprintf("%d", application.Config.LogMaxBackups))
 	}
 
 	return application, nil

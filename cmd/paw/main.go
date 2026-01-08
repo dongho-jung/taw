@@ -49,7 +49,11 @@ var showVersion bool
 func init() {
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(cleanCmd)
+	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(setupCmd)
+	rootCmd.AddCommand(logsCmd)
+	rootCmd.AddCommand(historyCmd)
+	rootCmd.AddCommand(windowMapCmd)
 	rootCmd.AddCommand(versionCmd)
 
 	// Internal commands (hidden, called by tmux keybindings)
@@ -142,14 +146,8 @@ func runMain(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize: %w", err)
 	}
 
-	// Setup logging
-	logger, err := logging.New(application.GetLogPath(), application.Debug)
-	if err != nil {
-		return fmt.Errorf("failed to setup logging: %w", err)
-	}
-	defer func() { _ = logger.Close() }()
-	logger.SetScript("paw")
-	logging.SetGlobal(logger)
+	// Bootstrap logger (stdout) until config loads
+	logging.SetGlobal(logging.NewStdout(application.Debug))
 
 	// Check if config exists, run setup if not
 	if !application.HasConfig() {
@@ -163,6 +161,20 @@ func runMain(cmd *cobra.Command, args []string) error {
 	if err := application.LoadConfig(); err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+	if application.Config != nil {
+		_ = os.Setenv("PAW_LOG_FORMAT", application.Config.LogFormat)
+		_ = os.Setenv("PAW_LOG_MAX_SIZE_MB", fmt.Sprintf("%d", application.Config.LogMaxSizeMB))
+		_ = os.Setenv("PAW_LOG_MAX_BACKUPS", fmt.Sprintf("%d", application.Config.LogMaxBackups))
+	}
+
+	// Setup logging (file) with configured options
+	logger, err := logging.New(application.GetLogPath(), application.Debug)
+	if err != nil {
+		return fmt.Errorf("failed to setup logging: %w", err)
+	}
+	defer func() { _ = logger.Close() }()
+	logger.SetScript("paw")
+	logging.SetGlobal(logger)
 
 	// Create tmux client
 	tm := tmux.New(application.SessionName)
@@ -321,8 +333,13 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 			}
 			// If no tab-lock or tab-lock didn't have window ID, try to find by window name
 			if !windowKilled {
-				if windowID, ok := taskWindowMap[t.Name]; ok {
+				token := constants.TruncateForWindowName(t.Name)
+				legacy := constants.LegacyTruncateForWindowName(t.Name)
+				if windowID, ok := taskWindowMap[token]; ok {
 					logging.Debug("Killing window %s (by name) for merged task %s", windowID, t.Name)
+					_ = tm.KillWindow(windowID)
+				} else if windowID, ok := taskWindowMap[legacy]; ok {
+					logging.Debug("Killing window %s (legacy name) for merged task %s", windowID, t.Name)
 					_ = tm.KillWindow(windowID)
 				}
 			}

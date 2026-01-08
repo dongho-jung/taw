@@ -9,6 +9,7 @@ import (
 
 	"github.com/dongho-jung/paw/internal/config"
 	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/logging"
 )
 
 // App represents the main application context with all dependencies.
@@ -83,6 +84,9 @@ func (a *App) LoadConfig() error {
 	cfg, err := config.Load(a.PawDir)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+	for _, warning := range cfg.Normalize() {
+		logging.Warn("config: %s", warning)
 	}
 	a.Config = cfg
 	return nil
@@ -168,6 +172,9 @@ var pawEnvVars = []string{
 	"SESSION_NAME",
 	"ON_COMPLETE",
 	"WORKTREE_DIR",
+	"PAW_LOG_FORMAT",
+	"PAW_LOG_MAX_SIZE_MB",
+	"PAW_LOG_MAX_BACKUPS",
 }
 
 // GetEnvVars returns environment variables to be passed to Claude.
@@ -186,6 +193,11 @@ func (a *App) GetEnvVars(taskName, worktreeDir, windowID string) []string {
 
 	if a.Config != nil {
 		env = append(env, "ON_COMPLETE="+string(a.Config.OnComplete))
+		env = append(env,
+			"PAW_LOG_FORMAT="+a.Config.LogFormat,
+			"PAW_LOG_MAX_SIZE_MB="+fmt.Sprintf("%d", a.Config.LogMaxSizeMB),
+			"PAW_LOG_MAX_BACKUPS="+fmt.Sprintf("%d", a.Config.LogMaxBackups),
+		)
 	}
 
 	if worktreeDir != "" {

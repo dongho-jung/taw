@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dongho-jung/paw/internal/git"
+	"github.com/dongho-jung/paw/internal/logging"
 )
 
 // RecoveryManager handles recovery of corrupted tasks.
@@ -36,23 +37,38 @@ const (
 
 // RecoverTask attempts to recover a corrupted task.
 func (r *RecoveryManager) RecoverTask(task *Task) error {
+	if task == nil {
+		return fmt.Errorf("task is nil")
+	}
+
+	logging.Log("Recovery: start task=%s reason=%s", task.Name, task.CorruptedReason)
+	var err error
 	switch task.CorruptedReason {
 	case CorruptMissingWorktree:
-		return r.recoverMissingWorktree(task)
+		err = r.recoverMissingWorktree(task)
 	case CorruptNotInGit:
-		return r.recoverNotInGit(task)
+		err = r.recoverNotInGit(task)
 	case CorruptInvalidGit:
-		return r.recoverInvalidGit(task)
+		err = r.recoverInvalidGit(task)
 	case CorruptMissingBranch:
-		return r.recoverMissingBranch(task)
+		err = r.recoverMissingBranch(task)
 	default:
-		return fmt.Errorf("unknown corruption reason: %s", task.CorruptedReason)
+		err = fmt.Errorf("unknown corruption reason: %s", task.CorruptedReason)
 	}
+
+	if err != nil {
+		logging.Warn("Recovery: failed task=%s reason=%s err=%v", task.Name, task.CorruptedReason, err)
+		return err
+	}
+
+	logging.Log("Recovery: completed task=%s reason=%s", task.Name, task.CorruptedReason)
+	return nil
 }
 
 // recoverMissingWorktree recreates a worktree from an existing branch.
 func (r *RecoveryManager) recoverMissingWorktree(task *Task) error {
 	worktreeDir := task.GetWorktreeDir()
+	logging.Debug("Recovery: recreating missing worktree task=%s path=%s", task.Name, worktreeDir)
 
 	// Branch exists, just recreate the worktree
 	if err := r.gitClient.WorktreeAdd(r.projectDir, worktreeDir, task.Name, false); err != nil {
@@ -65,6 +81,7 @@ func (r *RecoveryManager) recoverMissingWorktree(task *Task) error {
 // recoverNotInGit removes the directory and recreates the worktree.
 func (r *RecoveryManager) recoverNotInGit(task *Task) error {
 	worktreeDir := task.GetWorktreeDir()
+	logging.Debug("Recovery: removing unregistered worktree task=%s path=%s", task.Name, worktreeDir)
 
 	// Remove the unregistered directory
 	if err := os.RemoveAll(worktreeDir); err != nil {
@@ -72,7 +89,9 @@ func (r *RecoveryManager) recoverNotInGit(task *Task) error {
 	}
 
 	// Prune worktrees
-	_ = r.gitClient.WorktreePrune(r.projectDir)
+	if err := r.gitClient.WorktreePrune(r.projectDir); err != nil {
+		logging.Trace("Recovery: worktree prune failed task=%s err=%v", task.Name, err)
+	}
 
 	// Recreate worktree
 	createBranch := !r.gitClient.BranchExists(r.projectDir, task.Name)
@@ -87,6 +106,7 @@ func (r *RecoveryManager) recoverNotInGit(task *Task) error {
 func (r *RecoveryManager) recoverInvalidGit(task *Task) error {
 	worktreeDir := task.GetWorktreeDir()
 	backupDir := worktreeDir + ".backup"
+	logging.Debug("Recovery: backing up invalid worktree task=%s path=%s", task.Name, worktreeDir)
 
 	// Check if branch exists
 	branchExists := r.gitClient.BranchExists(r.projectDir, task.Name)
@@ -97,12 +117,16 @@ func (r *RecoveryManager) recoverInvalidGit(task *Task) error {
 	}
 
 	// Prune worktrees
-	_ = r.gitClient.WorktreePrune(r.projectDir)
+	if err := r.gitClient.WorktreePrune(r.projectDir); err != nil {
+		logging.Trace("Recovery: worktree prune failed task=%s err=%v", task.Name, err)
+	}
 
 	// Recreate worktree
 	if err := r.gitClient.WorktreeAdd(r.projectDir, worktreeDir, task.Name, !branchExists); err != nil {
 		// Restore backup on failure
-		_ = os.Rename(backupDir, worktreeDir)
+		if restoreErr := os.Rename(backupDir, worktreeDir); restoreErr != nil {
+			logging.Warn("Recovery: failed to restore backup task=%s err=%v", task.Name, restoreErr)
+		}
 		return fmt.Errorf("failed to recreate worktree: %w", err)
 	}
 
@@ -112,7 +136,9 @@ func (r *RecoveryManager) recoverInvalidGit(task *Task) error {
 	}
 
 	// Remove backup
-	_ = os.RemoveAll(backupDir)
+	if err := os.RemoveAll(backupDir); err != nil {
+		logging.Trace("Recovery: failed to remove backup task=%s err=%v", task.Name, err)
+	}
 
 	return nil
 }
@@ -120,12 +146,14 @@ func (r *RecoveryManager) recoverInvalidGit(task *Task) error {
 // recoverMissingBranch creates a branch from the worktree HEAD.
 func (r *RecoveryManager) recoverMissingBranch(task *Task) error {
 	worktreeDir := task.GetWorktreeDir()
+	logging.Debug("Recovery: recreating missing branch task=%s", task.Name)
 
 	// Get HEAD commit from worktree
 	headCommit, err := r.getWorktreeHead(worktreeDir)
 	if err != nil {
 		return fmt.Errorf("failed to get worktree HEAD: %w", err)
 	}
+	logging.Trace("Recovery: worktree head task=%s commit=%s", task.Name, headCommit)
 
 	// Create branch at HEAD
 	if err := r.gitClient.BranchCreate(r.projectDir, task.Name, headCommit); err != nil {
