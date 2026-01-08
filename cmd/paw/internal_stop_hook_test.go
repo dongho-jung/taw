@@ -13,10 +13,13 @@ func TestParseStopHookDecision(t *testing.T) {
 		want   task.Status
 		ok     bool
 	}{
+		{name: "working exact", output: "WORKING", want: task.StatusWorking, ok: true},
+		{name: "working lowercase", output: "working", want: task.StatusWorking, ok: true},
 		{name: "waiting exact", output: "WAITING", want: task.StatusWaiting, ok: true},
 		{name: "done lowercase", output: "done", want: task.StatusDone, ok: true},
 		{name: "warning exact", output: "WARNING", want: task.StatusCorrupted, ok: true},
 		{name: "warning prefix", output: "warn", want: task.StatusCorrupted, ok: true},
+		{name: "contains working", output: "Status: WORKING", want: task.StatusWorking, ok: true},
 		{name: "contains waiting", output: "Result: WAITING", want: task.StatusWaiting, ok: true},
 		{name: "unknown", output: "maybe", want: "", ok: false},
 	}

@@ -126,8 +126,8 @@ var stopHookCmd = &cobra.Command{
 			status, err = classifyStopStatus(taskName, paneContent)
 			if err != nil {
 				logging.Warn("stopHookCmd: classification failed: %v", err)
-				status = task.StatusWaiting
-				stopHookTrace("Classification FAILED task=%s error=%v (defaulting to WAITING)", taskName, err)
+				status = task.StatusWorking
+				stopHookTrace("Classification FAILED task=%s error=%v (defaulting to WORKING)", taskName, err)
 			} else {
 				stopHookTrace("Classification SUCCESS task=%s status=%s", taskName, status)
 			}
@@ -149,16 +149,17 @@ var stopHookCmd = &cobra.Command{
 }
 
 func classifyStopStatus(taskName, paneContent string) (task.Status, error) {
-	prompt := fmt.Sprintf(`You are classifying the final state of a coding task.
+	prompt := fmt.Sprintf(`You are classifying the current state of a coding task.
 
-Return exactly one label: WAITING, DONE, or WARNING.
+Return exactly one label: WORKING, WAITING, DONE, or WARNING.
 
 Definitions:
+- WORKING: actively processing, making tool calls, executing commands, in progress.
 - WAITING: user input required, question asked, blocked on decision or info.
 - DONE: work completed successfully and ready for review/merge.
 - WARNING: errors, failing tests, merge conflicts, or incomplete/failed work.
 
-If unsure, return WAITING.
+If unsure, return WORKING.
 
 Task: %s
 Terminal output (most recent):
@@ -206,12 +207,16 @@ func parseStopHookDecision(output string) (task.Status, bool) {
 	upper := strings.ToUpper(cleaned)
 
 	switch {
+	case strings.HasPrefix(upper, "WORKING"):
+		return task.StatusWorking, true
 	case strings.HasPrefix(upper, "WAITING"):
 		return task.StatusWaiting, true
 	case strings.HasPrefix(upper, "DONE"):
 		return task.StatusDone, true
 	case strings.HasPrefix(upper, "WARNING"), strings.HasPrefix(upper, "WARN"):
 		return task.StatusCorrupted, true
+	case strings.Contains(upper, "WORKING"):
+		return task.StatusWorking, true
 	case strings.Contains(upper, "WAITING"):
 		return task.StatusWaiting, true
 	case strings.Contains(upper, "DONE"):
