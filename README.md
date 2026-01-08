@@ -271,5 +271,4 @@ Use `paw history` to list entries and `paw history show <index|task|file>` to vi
 
 ## CLI utilities
 
-- `paw doctor` checks project and session health (use `--fix` for safe repairs).
-- `paw check --fix` attempts Homebrew installs for missing dependencies.
+- `paw check --fix` attempts Homebrew installs for missing dependencies and repairs missing PAW files/folders.

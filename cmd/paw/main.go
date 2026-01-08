@@ -49,7 +49,6 @@ var showVersion bool
 func init() {
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(cleanCmd)
-	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(setupCmd)
 	rootCmd.AddCommand(logsCmd)
 	rootCmd.AddCommand(historyCmd)

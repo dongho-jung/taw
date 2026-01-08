@@ -94,7 +94,6 @@ View all active and completed tasks with preview panel.
   paw logs --since 1h --task my-task
   paw history --task my-task --since 2d --query "error"
   paw history show 1
-  paw doctor --fix
   paw check --fix
 
 ## Task Options (⌥Tab in new task window)
