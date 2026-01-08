@@ -248,9 +248,9 @@ func tailString(value string, maxLen int) string {
 // The marker must appear on its own line (possibly with whitespace).
 func hasDoneMarker(content string) bool {
 	lines := strings.Split(content, "\n")
-	// Check the last N lines for the marker (it should be near the end)
-	maxLines := 20
-	start := len(lines) - maxLines
+	// Check the last N lines for the marker (agent may output text after PAW_DONE)
+	// Uses doneMarkerMaxDistance from wait.go for consistency
+	start := len(lines) - doneMarkerMaxDistance
 	if start < 0 {
 		start = 0
 	}
