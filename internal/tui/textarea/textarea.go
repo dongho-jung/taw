@@ -1112,6 +1112,11 @@ func (m *Model) repositionView() {
 	}
 }
 
+// EnsureCursorVisible updates the viewport to keep the cursor within view.
+func (m *Model) EnsureCursorVisible() {
+	m.repositionView()
+}
+
 // Width returns the width of the textarea.
 func (m Model) Width() int {
 	return m.width

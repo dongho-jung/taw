@@ -75,13 +75,12 @@ func (k *KanbanView) Render() string {
 
 	// Calculate column width (4 columns with gaps)
 	// Minimum width per column
-	if k.width < 40 {
+	const minColumnWidth = 15
+	const columnGap = 6
+	if k.width < minColumnWidth*4+columnGap {
 		return ""
 	}
-	columnWidth := (k.width - 6) / 4 // -6 for borders and gaps
-	if columnWidth < 15 {
-		columnWidth = 15
-	}
+	columnWidth := (k.width - columnGap) / 4 // -6 for borders and gaps
 
 	// Build each column
 	columns := []struct {
@@ -116,7 +115,7 @@ func (k *KanbanView) Render() string {
 		header := fmt.Sprintf("%s %s (%d)", col.emoji, col.title, len(col.tasks))
 		content.WriteString(colHeaderStyle.Render(header))
 		content.WriteString("\n")
-		content.WriteString(strings.Repeat("─", columnWidth-4))
+		content.WriteString(strings.Repeat("─", max(0, columnWidth-4)))
 		content.WriteString("\n")
 
 		// Tasks (limited by height, with scroll offset applied)
@@ -302,41 +301,5 @@ func (k *KanbanView) ContentHeight() int {
 
 // renderScrollbar renders a vertical scrollbar for the kanban view.
 func (k *KanbanView) renderScrollbar(visibleHeight int) string {
-	if visibleHeight <= 0 {
-		return ""
-	}
-
-	contentHeight := k.ContentHeight()
-	if contentHeight <= visibleHeight {
-		return ""
-	}
-
-	lightDark := lipgloss.LightDark(k.isDark)
-	trackColor := lightDark(lipgloss.Color("250"), lipgloss.Color("238"))
-	thumbColor := lightDark(lipgloss.Color("245"), lipgloss.Color("245"))
-
-	trackStyle := lipgloss.NewStyle().Foreground(trackColor)
-	thumbStyle := lipgloss.NewStyle().Foreground(thumbColor)
-
-	// Calculate thumb position and size
-	thumbSize := max(1, visibleHeight*visibleHeight/contentHeight)
-	maxOffset := contentHeight - visibleHeight
-	thumbPosition := 0
-	if maxOffset > 0 {
-		thumbPosition = k.scrollOffset * (visibleHeight - thumbSize) / maxOffset
-	}
-	thumbPosition = max(0, min(thumbPosition, visibleHeight-thumbSize))
-
-	var sb strings.Builder
-	for i := 0; i < visibleHeight; i++ {
-		if i >= thumbPosition && i < thumbPosition+thumbSize {
-			sb.WriteString(thumbStyle.Render("┃"))
-		} else {
-			sb.WriteString(trackStyle.Render("│"))
-		}
-		if i < visibleHeight-1 {
-			sb.WriteString("\n")
-		}
-	}
-	return sb.String()
+	return renderVerticalScrollbar(k.ContentHeight(), visibleHeight, k.scrollOffset, k.isDark)
 }

@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/dongho-jung/paw/internal/tui/textarea"
 	"github.com/mattn/go-runewidth"
 
@@ -426,23 +427,13 @@ func (m *TaskInput) View() tea.View {
 	// Build left panel (task input) with scrollbar if needed
 	textareaView := m.textarea.View()
 
-	// Always render a scrollbar column to prevent layout shifts when scrolling starts
-	// The column includes padding for top and bottom borders (1 line each)
-	// Total: 1 (top border) + 7 (content) + 1 (bottom border) = 9 lines
 	contentLines := strings.Count(m.textarea.Value(), "\n") + 1
-	visibleLines := 7
-
-	var scrollbarColumn string
-	if contentLines > visibleLines {
+	visibleLines := m.textarea.Height()
+	if contentLines > visibleLines && visibleLines > 0 {
 		scrollOffset := m.textarea.Line() // Use cursor line as scroll indicator
 		scrollbar := renderVerticalScrollbar(contentLines, visibleLines, scrollOffset, m.isDark)
-		// Add padding: space for top border, scrollbar, space for bottom border
-		scrollbarColumn = " \n" + scrollbar + "\n "
-	} else {
-		// Empty placeholder to maintain layout (9 lines: 1 + 7 + 1)
-		scrollbarColumn = strings.Repeat(" \n", 8) + " "
+		textareaView = embedScrollbarInTextarea(textareaView, scrollbar, visibleLines)
 	}
-	textareaView = lipgloss.JoinHorizontal(lipgloss.Top, textareaView, scrollbarColumn)
 
 	// Build right panel (options)
 	rightPanel := m.renderOptionsPanel()
@@ -474,7 +465,7 @@ func (m *TaskInput) View() tea.View {
 	helpRendered := helpStyle.Render(helpText)
 	helpWidth := lipgloss.Width(helpRendered)
 	if m.width > helpWidth {
-		padding := strings.Repeat(" ", m.width-helpWidth)
+		padding := strings.Repeat(" ", max(0, m.width-helpWidth))
 		sb.WriteString(padding)
 	}
 	sb.WriteString(helpRendered)
@@ -899,8 +890,10 @@ func (m *TaskInput) handleMouseScroll(msg tea.MouseWheelMsg) {
 		switch msg.Button {
 		case tea.MouseWheelUp:
 			m.textarea.CursorUp()
+			m.textarea.EnsureCursorVisible()
 		case tea.MouseWheelDown:
 			m.textarea.CursorDown()
+			m.textarea.EnsureCursorVisible()
 		}
 	case FocusPanelKanban:
 		// Scroll the kanban view
@@ -913,41 +906,37 @@ func (m *TaskInput) handleMouseScroll(msg tea.MouseWheelMsg) {
 	}
 }
 
-// renderVerticalScrollbar renders a vertical scrollbar indicator.
-// Returns a string with one character per line representing the scrollbar.
-func renderVerticalScrollbar(contentHeight, visibleHeight, scrollOffset int, isDark bool) string {
-	if contentHeight <= visibleHeight || visibleHeight <= 0 {
-		return "" // No scrollbar needed
+func embedScrollbarInTextarea(view string, scrollbar string, visibleLines int) string {
+	if visibleLines <= 0 || scrollbar == "" {
+		return view
 	}
 
-	lightDark := lipgloss.LightDark(isDark)
-	trackColor := lightDark(lipgloss.Color("250"), lipgloss.Color("238"))
-	thumbColor := lightDark(lipgloss.Color("245"), lipgloss.Color("245"))
-
-	trackStyle := lipgloss.NewStyle().Foreground(trackColor)
-	thumbStyle := lipgloss.NewStyle().Foreground(thumbColor)
-
-	// Calculate thumb position and size
-	thumbSize := max(1, visibleHeight*visibleHeight/contentHeight)
-	maxOffset := contentHeight - visibleHeight
-	thumbPosition := 0
-	if maxOffset > 0 {
-		thumbPosition = scrollOffset * (visibleHeight - thumbSize) / maxOffset
+	lines := strings.Split(view, "\n")
+	if len(lines) < visibleLines+2 {
+		return view
 	}
-	thumbPosition = max(0, min(thumbPosition, visibleHeight-thumbSize))
 
-	var sb strings.Builder
-	for i := 0; i < visibleHeight; i++ {
-		if i >= thumbPosition && i < thumbPosition+thumbSize {
-			sb.WriteString(thumbStyle.Render("┃"))
-		} else {
-			sb.WriteString(trackStyle.Render("│"))
+	scrollLines := strings.Split(scrollbar, "\n")
+	if len(scrollLines) < visibleLines {
+		return view
+	}
+
+	for i := 0; i < visibleLines; i++ {
+		lineIdx := i + 1 // Skip top border
+		line := lines[lineIdx]
+		width := ansi.StringWidth(line)
+		if width < 3 {
+			continue
 		}
-		if i < visibleHeight-1 {
-			sb.WriteString("\n")
-		}
+
+		// Replace the right padding cell so the scrollbar sits inside the border.
+		targetCol := width - 2
+		left := ansi.Cut(line, 0, targetCol)
+		right := ansi.Cut(line, targetCol+1, width)
+		lines[lineIdx] = left + scrollLines[i] + right
 	}
-	return sb.String()
+
+	return strings.Join(lines, "\n")
 }
 
 // Result returns the task input result.

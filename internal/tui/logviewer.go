@@ -2,7 +2,9 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -13,23 +15,37 @@ import (
 
 // LogViewer provides an interactive log viewer with vim-like navigation.
 type LogViewer struct {
-	logFile       string
-	lines         []string
-	scrollPos     int
-	horizontalPos int
-	tailMode      bool
-	wordWrap      bool
-	minLevel      int // 0-5: minimum level to display (0=all, 1=L1+, ..., 5=L5 only)
-	width         int
-	height        int
-	lastModTime   time.Time
-	err           error
+	logFile              string
+	lines                []string
+	scrollPos            int
+	horizontalPos        int
+	tailMode             bool
+	wordWrap             bool
+	minLevel             int // 0-5: minimum level to display (0=all, 1=L1+, ..., 5=L5 only)
+	width                int
+	height               int
+	lastModTime          time.Time
+	lastSize             int64
+	lastEndedWithNewline bool
+	err                  error
 }
+
+const maxLogLines = 5000
 
 // logUpdateMsg is sent when the log file is updated.
 type logUpdateMsg struct {
-	lines   []string
-	modTime time.Time
+	lines           []string
+	modTime         time.Time
+	size            int64
+	endsWithNewline bool
+}
+
+// logAppendMsg is sent when new log lines are appended.
+type logAppendMsg struct {
+	lines           []string
+	modTime         time.Time
+	size            int64
+	endsWithNewline bool
 }
 
 // tickMsg is sent periodically to check for file updates.
@@ -69,8 +85,38 @@ func (m *LogViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case logUpdateMsg:
 		m.lines = msg.lines
 		m.lastModTime = msg.modTime
+		m.lastSize = msg.size
+		m.lastEndedWithNewline = msg.endsWithNewline
+		m.trimLines()
 		if m.tailMode {
 			m.scrollToEnd()
+		} else {
+			m.clampScroll()
+		}
+		return m, m.tick()
+
+	case logAppendMsg:
+		if len(msg.lines) > 0 {
+			if !m.lastEndedWithNewline {
+				if len(m.lines) == 0 {
+					m.lines = append(m.lines, msg.lines[0])
+				} else {
+					m.lines[len(m.lines)-1] += msg.lines[0]
+				}
+				msg.lines = msg.lines[1:]
+			}
+			if len(msg.lines) > 0 {
+				m.lines = append(m.lines, msg.lines...)
+			}
+		}
+		m.lastModTime = msg.modTime
+		m.lastSize = msg.size
+		m.lastEndedWithNewline = msg.endsWithNewline
+		m.trimLines()
+		if m.tailMode {
+			m.scrollToEnd()
+		} else {
+			m.clampScroll()
 		}
 		return m, m.tick()
 
@@ -184,6 +230,19 @@ func getLogLevel(line string) int {
 	for i := 0; i < len(line)-3; i++ {
 		if line[i] == '[' && line[i+1] == 'L' && line[i+3] == ']' {
 			level := line[i+2]
+			if level >= '0' && level <= '5' {
+				return int(level - '0')
+			}
+		}
+	}
+
+	trimmed := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmed, "{") {
+		var payload struct {
+			Level string `json:"level"`
+		}
+		if err := json.Unmarshal([]byte(trimmed), &payload); err == nil && len(payload.Level) == 2 && payload.Level[0] == 'L' {
+			level := payload.Level[1]
 			if level >= '0' && level <= '5' {
 				return int(level - '0')
 			}
@@ -357,29 +416,71 @@ func (m *LogViewer) scrollToEnd() {
 	m.scrollPos = max
 }
 
+func (m *LogViewer) clampScroll() {
+	displayLines := m.getDisplayLines()
+	max := len(displayLines) - m.contentHeight()
+	if max < 0 {
+		max = 0
+	}
+	if m.scrollPos > max {
+		m.scrollPos = max
+	}
+	if m.scrollPos < 0 {
+		m.scrollPos = 0
+	}
+}
+
+func (m *LogViewer) trimLines() {
+	if len(m.lines) <= maxLogLines {
+		return
+	}
+	drop := len(m.lines) - maxLogLines
+	m.lines = m.lines[drop:]
+	if m.scrollPos >= drop {
+		m.scrollPos -= drop
+	} else {
+		m.scrollPos = 0
+	}
+}
+
+func (m *LogViewer) readFullFile(info os.FileInfo) tea.Msg {
+	data, err := os.ReadFile(m.logFile)
+	if err != nil {
+		return err
+	}
+
+	lines, endsWithNewline := splitLinesWithNewlineFlag(string(data))
+
+	return logUpdateMsg{
+		lines:           lines,
+		modTime:         info.ModTime(),
+		size:            info.Size(),
+		endsWithNewline: endsWithNewline,
+	}
+}
+
+func splitLinesWithNewlineFlag(data string) ([]string, bool) {
+	endsWithNewline := strings.HasSuffix(data, "\n")
+	if endsWithNewline {
+		data = strings.TrimSuffix(data, "\n")
+	}
+	if data == "" {
+		if endsWithNewline {
+			return []string{""}, true
+		}
+		return nil, false
+	}
+	return strings.Split(data, "\n"), endsWithNewline
+}
+
 // loadFile loads the log file contents.
 func (m *LogViewer) loadFile() tea.Cmd {
 	return func() tea.Msg {
-		data, err := os.ReadFile(m.logFile)
-		if err != nil {
-			return err
-		}
-
 		info, err := os.Stat(m.logFile)
 		if err != nil {
 			return err
 		}
-
-		lines := strings.Split(string(data), "\n")
-		// Remove last empty line if present
-		if len(lines) > 0 && lines[len(lines)-1] == "" {
-			lines = lines[:len(lines)-1]
-		}
-
-		return logUpdateMsg{
-			lines:   lines,
-			modTime: info.ModTime(),
-		}
+		return m.readFullFile(info)
 	}
 }
 
@@ -390,25 +491,42 @@ func (m *LogViewer) checkFileUpdate() tea.Cmd {
 		if err != nil {
 			return err
 		}
+		size := info.Size()
 
-		if info.ModTime().After(m.lastModTime) {
-			data, err := os.ReadFile(m.logFile)
-			if err != nil {
-				return err
-			}
-
-			lines := strings.Split(string(data), "\n")
-			if len(lines) > 0 && lines[len(lines)-1] == "" {
-				lines = lines[:len(lines)-1]
-			}
-
-			return logUpdateMsg{
-				lines:   lines,
-				modTime: info.ModTime(),
-			}
+		if size < m.lastSize {
+			return m.readFullFile(info)
 		}
 
-		return logTickMsg(time.Now())
+		if size == m.lastSize {
+			if info.ModTime().After(m.lastModTime) {
+				return m.readFullFile(info)
+			}
+			return logTickMsg(time.Now())
+		}
+
+		file, err := os.Open(m.logFile)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = file.Close() }()
+
+		if _, err := file.Seek(m.lastSize, io.SeekStart); err != nil {
+			return err
+		}
+
+		data, err := io.ReadAll(file)
+		if err != nil {
+			return err
+		}
+
+		lines, endsWithNewline := splitLinesWithNewlineFlag(string(data))
+
+		return logAppendMsg{
+			lines:           lines,
+			modTime:         info.ModTime(),
+			size:            size,
+			endsWithNewline: endsWithNewline,
+		}
 	}
 }
 

@@ -68,17 +68,21 @@ type TaskListUI struct {
 	pawDir        string
 	isGitRepo     bool
 	previewScroll int
+	previewLines  []string
+	summaryLines  []string
+	previewIndex  int
 }
 
 // NewTaskListUI creates a new task list UI.
 func NewTaskListUI(agentsDir, historyDir, projectDir, sessionName, pawDir string, isGitRepo bool) *TaskListUI {
 	return &TaskListUI{
-		agentsDir:   agentsDir,
-		historyDir:  historyDir,
-		projectDir:  projectDir,
-		sessionName: sessionName,
-		pawDir:      pawDir,
-		isGitRepo:   isGitRepo,
+		agentsDir:    agentsDir,
+		historyDir:   historyDir,
+		projectDir:   projectDir,
+		sessionName:  sessionName,
+		pawDir:       pawDir,
+		isGitRepo:    isGitRepo,
+		previewIndex: -1,
 	}
 }
 
@@ -244,11 +248,44 @@ func (m *TaskListUI) loadTasks() tea.Cmd {
 	}
 }
 
+func (m *TaskListUI) updatePreviewCache() {
+	if len(m.items) == 0 || m.cursor < 0 || m.cursor >= len(m.items) {
+		m.previewLines = nil
+		m.summaryLines = nil
+		m.previewIndex = -1
+		return
+	}
+
+	if m.previewIndex == m.cursor {
+		return
+	}
+
+	item := m.items[m.cursor]
+	content := item.Content
+	if content == "" {
+		content = "(no content)"
+	}
+
+	m.previewLines = strings.Split(content, "\n")
+	if item.Summary != "" {
+		m.summaryLines = strings.Split(item.Summary, "\n")
+	} else {
+		m.summaryLines = nil
+	}
+	m.previewIndex = m.cursor
+}
+
 // Update handles messages and updates the model.
 func (m *TaskListUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tasksLoadedMsg:
 		m.items = msg.items
+		if m.cursor >= len(m.items) {
+			m.cursor = max(0, len(m.items)-1)
+		}
+		m.previewScroll = 0
+		m.previewIndex = -1
+		m.updatePreviewCache()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -274,12 +311,14 @@ func (m *TaskListUI) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor > 0 {
 			m.cursor--
 			m.previewScroll = 0
+			m.updatePreviewCache()
 		}
 
 	case "down", "j":
 		if m.cursor < len(m.items)-1 {
 			m.cursor++
 			m.previewScroll = 0
+			m.updatePreviewCache()
 		}
 
 	case "c":
@@ -360,6 +399,9 @@ func (m *TaskListUI) View() tea.View {
 	if m.width == 0 || m.height == 0 {
 		return tea.NewView("Loading...")
 	}
+	if len(m.items) > 0 && m.previewIndex != m.cursor {
+		m.updatePreviewCache()
+	}
 
 	// Styles
 	titleStyle := lipgloss.NewStyle().
@@ -395,8 +437,21 @@ func (m *TaskListUI) View() tea.View {
 		Foreground(lipgloss.Color("250"))
 
 	// Layout: left panel (task list) + right panel (preview)
-	listWidth := m.width * 35 / 100         // 35% for task list
-	previewWidth := m.width - listWidth - 3 // Rest for preview (minus border)
+	listWidth := m.width * 35 / 100
+	if listWidth < 20 {
+		if m.width < 20 {
+			listWidth = m.width
+		} else {
+			listWidth = 20
+		}
+	}
+	if listWidth < 1 {
+		listWidth = 1
+	}
+	previewWidth := m.width - listWidth - 3
+	if previewWidth < 0 {
+		previewWidth = 0
+	}
 
 	var listBuilder strings.Builder
 	var previewBuilder strings.Builder
@@ -404,7 +459,7 @@ func (m *TaskListUI) View() tea.View {
 	// Title
 	listBuilder.WriteString(titleStyle.Render("Tasks"))
 	listBuilder.WriteString("\n")
-	listBuilder.WriteString(strings.Repeat("─", listWidth-1))
+	listBuilder.WriteString(strings.Repeat("─", max(0, listWidth-1)))
 	listBuilder.WriteString("\n")
 
 	// Task list
@@ -423,6 +478,7 @@ func (m *TaskListUI) View() tea.View {
 		end = len(m.items)
 	}
 
+	linesWritten := 0
 	for i := start; i < end; i++ {
 		item := m.items[i]
 
@@ -458,45 +514,53 @@ func (m *TaskListUI) View() tea.View {
 		// Truncate name if needed
 		name := item.Name
 		maxNameLen := listWidth - 6 // Account for cursor and emoji
+		if maxNameLen < 1 {
+			maxNameLen = 1
+		}
 		if len(name) > maxNameLen {
-			name = name[:maxNameLen-1] + "…"
+			if maxNameLen > 1 {
+				name = name[:maxNameLen-1] + "…"
+			} else {
+				name = "…"
+			}
 		}
 
 		line := fmt.Sprintf("%s%s %s", cursor, statusEmoji, style.Render(name))
 		listBuilder.WriteString(line)
 		listBuilder.WriteString("\n")
+		linesWritten++
 
 		// Show timestamp on next line if selected
 		if i == m.cursor {
 			timeStr := item.UpdatedAt.Format("01/02 15:04")
 			listBuilder.WriteString("    " + statusStyle.Render(timeStr) + "\n")
+			linesWritten++
 		}
 	}
 
 	// Pad remaining lines
-	renderedLines := (end - start) * 2 // Each item takes 2 lines when selected
-	for i := renderedLines; i < listHeight; i++ {
+	for i := linesWritten; i < listHeight; i++ {
 		listBuilder.WriteString("\n")
 	}
 
 	// Preview panel
 	previewBuilder.WriteString(titleStyle.Render("Preview"))
 	previewBuilder.WriteString("\n")
-	previewBuilder.WriteString(strings.Repeat("─", previewWidth-1))
+	previewBuilder.WriteString(strings.Repeat("─", max(0, previewWidth-1)))
 	previewBuilder.WriteString("\n")
 
 	if len(m.items) > 0 && m.cursor < len(m.items) {
 		item := m.items[m.cursor]
 
-		// Show task content
-		content := item.Content
-		if content == "" {
-			content = "(no content)"
+		previewHeight := m.height - 5
+		if previewHeight < 1 {
+			previewHeight = 1
 		}
 
-		// Wrap and truncate preview content
-		previewHeight := m.height - 5
-		previewLines := strings.Split(content, "\n")
+		previewLines := m.previewLines
+		if len(previewLines) == 0 {
+			previewLines = []string{"(no content)"}
+		}
 
 		// Apply scroll
 		if m.previewScroll >= len(previewLines) {
@@ -514,25 +578,39 @@ func (m *TaskListUI) View() tea.View {
 
 		for i := visibleStart; i < visibleEnd; i++ {
 			line := previewLines[i]
-			if len(line) > previewWidth-2 {
-				line = line[:previewWidth-3] + "…"
+			maxPreviewLen := previewWidth - 2
+			if maxPreviewLen < 1 {
+				line = ""
+			} else if len(line) > maxPreviewLen {
+				if maxPreviewLen > 1 {
+					line = line[:maxPreviewLen-1] + "…"
+				} else {
+					line = "…"
+				}
 			}
 			previewBuilder.WriteString(previewStyle.Render(line))
 			previewBuilder.WriteString("\n")
 		}
 
 		// Show summary separator and summary for done/history/cancelled tasks
-		if (item.Status == TaskItemHistory || item.Status == TaskItemDone || item.Status == TaskItemCancelled) && item.Summary != "" {
+		if (item.Status == TaskItemHistory || item.Status == TaskItemDone || item.Status == TaskItemCancelled) && len(m.summaryLines) > 0 {
 			if visibleEnd == len(previewLines) {
 				previewBuilder.WriteString("\n")
 				previewBuilder.WriteString(dimStyle.Render("─── Summary ───"))
 				previewBuilder.WriteString("\n")
-				summaryLines := strings.Split(item.Summary, "\n")
+				summaryLines := m.summaryLines
 				remainingHeight := previewHeight - (visibleEnd - visibleStart) - 2
 				for i := 0; i < remainingHeight && i < len(summaryLines); i++ {
 					line := summaryLines[i]
-					if len(line) > previewWidth-2 {
-						line = line[:previewWidth-3] + "…"
+					maxSummaryLen := previewWidth - 2
+					if maxSummaryLen < 1 {
+						line = ""
+					} else if len(line) > maxSummaryLen {
+						if maxSummaryLen > 1 {
+							line = line[:maxSummaryLen-1] + "…"
+						} else {
+							line = "…"
+						}
 					}
 					previewBuilder.WriteString(dimStyle.Render(line))
 					previewBuilder.WriteString("\n")
@@ -568,7 +646,7 @@ func (m *TaskListUI) View() tea.View {
 		}
 
 		// Pad list line
-		listLinePadded := listLine + strings.Repeat(" ", listWidth-lipgloss.Width(listLine))
+		listLinePadded := listLine + strings.Repeat(" ", max(0, listWidth-lipgloss.Width(listLine)))
 		combined.WriteString(listLinePadded)
 		combined.WriteString(" │ ")
 		combined.WriteString(previewLine)
