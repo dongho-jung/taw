@@ -193,9 +193,8 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Textarea height: default 8, min 5, max 15 (already set via MaxHeight)
-		// Options panel content: title(1) + margin(1) + 2 fields(2) = 4 lines
-		// With border: 4 + 2 = 6 total rendered height
-		const optionsPanelHeight = 6
+		// Options panel height: set to 8 (inner) + 2 (border) = 10 total to match textarea
+		const optionsPanelHeight = 10
 		const textareaDefaultHeight = 8
 		const textareaMinHeight = 5
 
@@ -205,8 +204,8 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		kanbanHeight := max(8, msg.Height-topSectionHeight-3) // -3 for help text + gap + statusline
 		m.kanban.SetSize(msg.Width, kanbanHeight)
 
-		// Options panel needs ~43 chars width (content + border + padding)
-		const optionsPanelWidth = 45
+		// Options panel needs ~47 chars width (content 43 + padding 4 + border ~2)
+		const optionsPanelWidth = 47
 		// Textarea gets remaining width with minimal gap (1 char)
 		newWidth := msg.Width - optionsPanelWidth - 1
 		if newWidth > 30 {
@@ -611,8 +610,9 @@ func (m *TaskInput) renderOptionsPanel() string {
 	panelStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Padding(0, 2). // No vertical padding - Options title provides spacing
-		Width(41)      // Wider to accommodate content
+		Padding(0, 2).  // No vertical padding - Options title provides spacing
+		Width(43).      // Wider to accommodate Model row without line wrapping
+		Height(8)       // Match textarea internal height (8 rows)
 
 	var content strings.Builder
 
@@ -782,7 +782,7 @@ func (m *TaskInput) detectClickedPanel(x, y int) FocusPanel {
 	// Options panel: same Y range as textarea, but to the right
 	// Kanban: starts after top section, takes remaining space
 
-	const optionsPanelWidth = 45
+	const optionsPanelWidth = 47
 	textareaHeight := 10 // 8 rows + 2 for border
 	textareaWidth := m.width - optionsPanelWidth - 1
 	if textareaWidth < 30 {
