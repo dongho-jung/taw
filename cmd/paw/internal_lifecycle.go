@@ -147,8 +147,8 @@ var endTaskCmd = &cobra.Command{
 				}
 			}
 
-			// Push changes
-			shouldPush := app.Config != nil && app.Config.OnComplete != config.OnCompleteConfirm
+			// Push changes (only for auto-pr mode; auto-merge handles merge locally without push)
+			shouldPush := app.Config != nil && app.Config.OnComplete == config.OnCompleteAutoPR
 			branchName := ""
 			skipReason := ""
 			if shouldPush {
@@ -416,26 +416,13 @@ var endTaskCmd = &cobra.Command{
 										mergeSuccess = false
 									}
 								}
-								// If merge succeeded (either directly or after conflict resolution), push
+								// If merge succeeded (either directly or after conflict resolution)
 								if mergeSuccess {
 									// Only stop merge spinner if we didn't have conflicts (already stopped above)
 									if !mergeConflictOccurred {
 										mergeSpinner.Stop(true, "")
 									}
-
-									// Push merged main
-									pushMainSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s to origin", mainBranch))
-									pushMainSpinner.Start()
-									logging.Debug("Pushing merged main to origin...")
-									if err := gitClient.Push(app.ProjectDir, "origin", mainBranch, false); err != nil {
-										logging.Warn("Failed to push merged main: %v", err)
-										mergeTimer.StopWithResult(false, "push failed")
-										pushMainSpinner.Stop(false, err.Error())
-										mergeSuccess = false
-									} else {
-										mergeTimer.StopWithResult(true, fmt.Sprintf("squash merged %s into %s", targetTask.Name, mainBranch))
-										pushMainSpinner.Stop(true, "")
-									}
+									mergeTimer.StopWithResult(true, fmt.Sprintf("squash merged %s into %s (local only)", targetTask.Name, mainBranch))
 								}
 
 								if mergeSuccess && app.Config != nil && app.Config.PostMergeHook != "" {
