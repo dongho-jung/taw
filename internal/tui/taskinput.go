@@ -92,7 +92,7 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 	ta.ShowLineNumbers = false
 	ta.Prompt = "" // Clear prompt to avoid extra characters on the left
 	ta.SetWidth(80)
-	ta.SetHeight(8)
+	ta.SetHeight(7)
 
 	// Enable real cursor for proper IME support (Korean input)
 	ta.VirtualCursor = false
@@ -178,18 +178,18 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Input box is fixed at 8 rows, calculate Kanban height from remaining space
-		// Reserve: input box (8) + borders (4) + options panel overhead (2) + help text (2) = ~16 lines
-		kanbanHeight := max(8, msg.Height-16)
+		// Input box is fixed at 7 rows, calculate Kanban height from remaining space
+		// Reserve: input box (7) + borders (4) + options panel overhead (2) + help text (2) = ~15 lines
+		kanbanHeight := max(8, msg.Height-15)
 		m.kanban.SetSize(msg.Width, kanbanHeight)
 
-		// Adjust textarea width only (height is fixed at 8)
+		// Adjust textarea width only (height is fixed at 7)
 		newWidth := min(msg.Width-50, 80) // Leave room for options panel
 		if newWidth > 40 {
 			m.textarea.SetWidth(newWidth)
 		}
-		// Keep textarea height fixed at 8 rows
-		m.textarea.SetHeight(8)
+		// Keep textarea height fixed at 7 rows
+		m.textarea.SetHeight(7)
 
 	case tea.KeyMsg:
 		keyStr := msg.String()
@@ -801,11 +801,11 @@ func (m *TaskInput) moveCursorToVisualColumn(targetCol int) {
 // detectClickedPanel determines which panel was clicked based on mouse position.
 func (m *TaskInput) detectClickedPanel(x, y int) FocusPanel {
 	// Calculate approximate box boundaries
-	// Textarea: starts at Y=0, ends at textareaEndY (around 10 rows including border)
+	// Textarea: starts at Y=0, ends at textareaEndY (around 9 rows including border)
 	// Options panel: same Y range as textarea, but to the right
 	// Kanban: starts after textarea, takes remaining space
 
-	textareaHeight := 10 // 8 rows + 2 for border
+	textareaHeight := 9 // 7 rows + 2 for border
 	textareaWidth := min(m.width-50, 80)
 	if textareaWidth < 40 {
 		textareaWidth = 40
