@@ -38,6 +38,13 @@ const optFieldCount = 2
 // cancelDoublePressTimeout is the time window for double-press cancel detection.
 const cancelDoublePressTimeout = 2 * time.Second
 
+// Textarea height constants
+const (
+	textareaMinHeight     = 5  // Minimum textarea height in lines
+	textareaDefaultHeight = 5  // Default starting height (will expand as needed)
+	textareaMaxHeightPct  = 50 // Maximum height as percentage of screen height
+)
+
 // TaskInput provides an inline text input for task content.
 type TaskInput struct {
 	textarea    textarea.Model
@@ -48,6 +55,10 @@ type TaskInput struct {
 	options     *config.TaskOptions
 	activeTasks []string // Active task names for dependency selection
 	isDark      bool     // Cached dark mode detection (must be detected before bubbletea starts)
+
+	// Dynamic textarea height
+	textareaHeight    int // Current textarea height (visible lines)
+	textareaMaxHeight int // Maximum textarea height (50% of screen)
 
 	// Inline options editing
 	focusPanel FocusPanel
@@ -106,9 +117,11 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 	ta.CharLimit = 0 // No limit
 	ta.ShowLineNumbers = false
 	ta.Prompt = "" // Clear prompt to avoid extra characters on the left
-	ta.MaxHeight = 15 // Max 15 lines
+	// MaxHeight will be set dynamically based on screen size (50% of screen)
+	// Start with a reasonable default that will be updated on WindowSizeMsg
+	ta.MaxHeight = 99
 	ta.SetWidth(80)
-	ta.SetHeight(8) // Default 8 lines (min 5, max 15)
+	ta.SetHeight(textareaDefaultHeight)
 
 	// Enable real cursor for proper IME support (Korean input)
 	ta.VirtualCursor = false
@@ -145,18 +158,20 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 	}
 
 	return &TaskInput{
-		textarea:       ta,
-		width:          80,
-		height:         15,
-		options:        opts,
-		activeTasks:    activeTasks,
-		isDark:         isDark,
-		focusPanel:     FocusPanelLeft,
-		optField:       OptFieldModel,
-		modelIdx:       modelIdx,
-		kanban:         NewKanbanView(isDark),
-		currentTip:     GetTip(),
-		lastTipRefresh: time.Now(),
+		textarea:          ta,
+		width:             80,
+		height:            15,
+		options:           opts,
+		activeTasks:       activeTasks,
+		isDark:            isDark,
+		textareaHeight:    textareaDefaultHeight,
+		textareaMaxHeight: 15, // Will be updated on WindowSizeMsg
+		focusPanel:        FocusPanelLeft,
+		optField:          OptFieldModel,
+		modelIdx:          modelIdx,
+		kanban:            NewKanbanView(isDark),
+		currentTip:        GetTip(),
+		lastTipRefresh:    time.Now(),
 	}
 }
 
@@ -176,6 +191,29 @@ func (m *TaskInput) tickCmd() tea.Cmd {
 	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
+}
+
+// updateTextareaHeight calculates and sets the appropriate textarea height based on content.
+// The height expands automatically as content grows, up to textareaMaxHeight (50% of screen).
+func (m *TaskInput) updateTextareaHeight() {
+	// Count content lines (newlines + 1)
+	content := m.textarea.Value()
+	contentLines := strings.Count(content, "\n") + 1
+
+	// Calculate required height: content lines, but within min/max bounds
+	requiredHeight := contentLines
+	if requiredHeight < textareaMinHeight {
+		requiredHeight = textareaMinHeight
+	}
+	if requiredHeight > m.textareaMaxHeight {
+		requiredHeight = m.textareaMaxHeight
+	}
+
+	// Only update if height changed
+	if requiredHeight != m.textareaHeight {
+		m.textareaHeight = requiredHeight
+		m.textarea.SetHeight(requiredHeight)
+	}
 }
 
 // Update handles messages and updates the model.
@@ -204,15 +242,20 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Textarea height: default 8, min 5, max 15 (already set via MaxHeight)
-		// Options panel height: set to 8 (inner) + 2 (border) = 10 total to match textarea
-		const optionsPanelHeight = 10
-		const textareaDefaultHeight = 8
-		const textareaMinHeight = 5
+		// Calculate max textarea height as 50% of screen height (minus overhead for help text, border, etc.)
+		// Overhead: help text (1) + textarea border (2) + kanban gap (1) = 4 lines
+		const uiOverhead = 4
+		maxAvailableHeight := (msg.Height - uiOverhead) * textareaMaxHeightPct / 100
+		m.textareaMaxHeight = max(textareaMinHeight, maxAvailableHeight)
 
-		// Calculate textarea height based on available space
-		// With border: internal + 2
-		topSectionHeight := max(textareaDefaultHeight, optionsPanelHeight-2) + 2
+		// Update textarea MaxHeight setting
+		m.textarea.MaxHeight = m.textareaMaxHeight
+
+		// Calculate required height based on current content
+		m.updateTextareaHeight()
+
+		// Calculate kanban height based on current textarea height
+		topSectionHeight := m.textareaHeight + 2 // +2 for border
 		kanbanHeight := max(8, msg.Height-topSectionHeight-3) // -3 for help text + gap + statusline
 		m.kanban.SetSize(msg.Width, kanbanHeight)
 
@@ -223,9 +266,6 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if newWidth > 30 {
 			m.textarea.SetWidth(newWidth)
 		}
-		// Set textarea height (respecting min 5, max 15)
-		textareaHeight := max(textareaMinHeight, textareaDefaultHeight)
-		m.textarea.SetHeight(textareaHeight)
 
 	case tea.KeyMsg:
 		keyStr := msg.String()
@@ -381,6 +421,9 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.focusPanel == FocusPanelLeft {
 		m.textarea, cmd = m.textarea.Update(msg)
 		cmds = append(cmds, cmd)
+
+		// Update textarea height dynamically based on content
+		m.updateTextareaHeight()
 	}
 
 	return m, tea.Batch(cmds...)
@@ -622,9 +665,9 @@ func (m *TaskInput) renderOptionsPanel() string {
 	panelStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Padding(0, 2).  // No vertical padding - Options title provides spacing
-		Width(43).      // Wider to accommodate Model row without line wrapping
-		Height(8)       // Match textarea internal height (8 rows)
+		Padding(0, 2).          // No vertical padding - Options title provides spacing
+		Width(43).              // Wider to accommodate Model row without line wrapping
+		Height(m.textareaHeight) // Dynamic height: match current textarea height
 
 	var content strings.Builder
 
@@ -797,12 +840,12 @@ func (m *TaskInput) moveCursorToVisualColumn(targetCol int) {
 // detectClickedPanel determines which panel was clicked based on mouse position.
 func (m *TaskInput) detectClickedPanel(x, y int) FocusPanel {
 	// Calculate approximate box boundaries
-	// Textarea: starts at Y=1 (after help text), height = 8 + 2 (border) = 10
+	// Textarea: starts at Y=1 (after help text), height = textareaHeight + 2 (border)
 	// Options panel: same Y range as textarea, but to the right
 	// Kanban: starts after top section, takes remaining space
 
 	const optionsPanelWidth = 47
-	textareaHeight := 10 // 8 rows + 2 for border
+	textareaHeightWithBorder := m.textareaHeight + 2 // Dynamic height + border
 	textareaWidth := m.width - optionsPanelWidth - 1
 	if textareaWidth < 30 {
 		textareaWidth = 30
@@ -810,7 +853,7 @@ func (m *TaskInput) detectClickedPanel(x, y int) FocusPanel {
 
 	// Account for help text line at Y=0
 	topSectionStart := 1
-	topSectionEnd := topSectionStart + textareaHeight
+	topSectionEnd := topSectionStart + textareaHeightWithBorder
 
 	// Check if click is in the top section (textarea or options)
 	if y >= topSectionStart && y < topSectionEnd {
@@ -850,8 +893,8 @@ func (m *TaskInput) detectKanbanColumn(x, y int) int {
 
 // getKanbanRelativeY converts absolute Y coordinate to kanban-relative row.
 func (m *TaskInput) getKanbanRelativeY(y int) int {
-	// Kanban starts after: help text (1) + textarea (10 with border) + gap (1)
-	const kanbanStartY = 12
+	// Kanban starts after: help text (1) + textarea (dynamic height + 2 border) + gap (1)
+	kanbanStartY := 1 + m.textareaHeight + 2 + 1
 	relY := y - kanbanStartY
 	if relY < 0 {
 		relY = 0
