@@ -63,16 +63,16 @@ on_complete: confirm
 	}
 }
 
-func TestFormatWorktreeHook_SingleLine(t *testing.T) {
-	result := formatWorktreeHook("npm install")
+func TestFormatHook_SingleLine(t *testing.T) {
+	result := formatHook("worktree_hook", "npm install")
 	expected := "worktree_hook: npm install\n"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
 }
 
-func TestFormatWorktreeHook_MultiLine(t *testing.T) {
-	result := formatWorktreeHook("npm install\nnpm run build")
+func TestFormatHook_MultiLine(t *testing.T) {
+	result := formatHook("worktree_hook", "npm install\nnpm run build")
 	expected := "worktree_hook: |\n  npm install\n  npm run build\n"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
@@ -81,7 +81,7 @@ func TestFormatWorktreeHook_MultiLine(t *testing.T) {
 
 func TestRoundTrip_SingleLineHook(t *testing.T) {
 	hook := "npm install"
-	formatted := formatWorktreeHook(hook)
+	formatted := formatHook("worktree_hook", hook)
 
 	// Prepend with required fields
 	content := "work_mode: worktree\non_complete: confirm\n" + formatted
@@ -98,7 +98,7 @@ func TestRoundTrip_SingleLineHook(t *testing.T) {
 
 func TestRoundTrip_MultiLineHook(t *testing.T) {
 	hook := "npm install\nnpm run build"
-	formatted := formatWorktreeHook(hook)
+	formatted := formatHook("worktree_hook", hook)
 
 	// Prepend with required fields
 	content := "work_mode: worktree\non_complete: confirm\n" + formatted
@@ -124,6 +124,75 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	if cfg.WorktreeHook != "" {
 		t.Errorf("WorktreeHook = %q, want empty", cfg.WorktreeHook)
+	}
+	if cfg.LogFormat != "text" {
+		t.Errorf("LogFormat = %q, want %q", cfg.LogFormat, "text")
+	}
+	if cfg.LogMaxSizeMB != 10 {
+		t.Errorf("LogMaxSizeMB = %d, want 10", cfg.LogMaxSizeMB)
+	}
+	if cfg.LogMaxBackups != 3 {
+		t.Errorf("LogMaxBackups = %d, want 3", cfg.LogMaxBackups)
+	}
+	if cfg.VerifyTimeout != 600 {
+		t.Errorf("VerifyTimeout = %d, want 600", cfg.VerifyTimeout)
+	}
+	if cfg.NonGitWorkspace != string(NonGitWorkspaceShared) {
+		t.Errorf("NonGitWorkspace = %q, want %q", cfg.NonGitWorkspace, NonGitWorkspaceShared)
+	}
+}
+
+func TestConfigNormalize_InvalidValues(t *testing.T) {
+	cfg := &Config{
+		WorkMode:   WorkMode("invalid"),
+		OnComplete: OnComplete("nope"),
+	}
+
+	warnings := cfg.Normalize()
+
+	if cfg.WorkMode != WorkModeWorktree {
+		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
+	}
+	if cfg.OnComplete != OnCompleteConfirm {
+		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteConfirm)
+	}
+	if len(warnings) != 2 {
+		t.Errorf("warnings len = %d, want 2", len(warnings))
+	}
+}
+
+func TestConfigNormalize_MainModeAutoMerge(t *testing.T) {
+	cfg := &Config{
+		WorkMode:   WorkModeMain,
+		OnComplete: OnCompleteAutoMerge,
+	}
+
+	warnings := cfg.Normalize()
+
+	if cfg.OnComplete != OnCompleteConfirm {
+		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteConfirm)
+	}
+	if len(warnings) != 1 {
+		t.Errorf("warnings len = %d, want 1", len(warnings))
+	}
+}
+
+func TestConfigNormalize_TrimsWhitespace(t *testing.T) {
+	cfg := &Config{
+		WorkMode:   WorkMode(" worktree "),
+		OnComplete: OnComplete(" auto-pr "),
+	}
+
+	warnings := cfg.Normalize()
+
+	if cfg.WorkMode != WorkModeWorktree {
+		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
+	}
+	if cfg.OnComplete != OnCompleteAutoPR {
+		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteAutoPR)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("warnings len = %d, want 0", len(warnings))
 	}
 }
 

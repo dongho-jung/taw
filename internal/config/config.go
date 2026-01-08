@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/dongho-jung/paw/internal/constants"
@@ -25,6 +26,14 @@ const (
 	OnCompleteConfirm   OnComplete = "confirm"    // Commit only (no push/PR/merge)
 	OnCompleteAutoMerge OnComplete = "auto-merge" // Auto commit + merge + cleanup
 	OnCompleteAutoPR    OnComplete = "auto-pr"    // Auto commit + create PR
+)
+
+// NonGitWorkspaceMode defines workspace behavior when git is not available.
+type NonGitWorkspaceMode string
+
+const (
+	NonGitWorkspaceShared NonGitWorkspaceMode = "shared"
+	NonGitWorkspaceCopy   NonGitWorkspaceMode = "copy"
 )
 
 // SlackConfig holds Slack notification settings.
@@ -49,15 +58,104 @@ type Config struct {
 	WorkMode      WorkMode             `yaml:"work_mode"`
 	OnComplete    OnComplete           `yaml:"on_complete"`
 	WorktreeHook  string               `yaml:"worktree_hook"`
+	PreTaskHook   string               `yaml:"pre_task_hook"`
+	PostTaskHook  string               `yaml:"post_task_hook"`
+	PreMergeHook  string               `yaml:"pre_merge_hook"`
+	PostMergeHook string               `yaml:"post_merge_hook"`
+	VerifyCommand string               `yaml:"verify_command"`
+	VerifyTimeout int                  `yaml:"verify_timeout_sec"`
+	VerifyRequired bool                `yaml:"verify_required"`
+	NonGitWorkspace string             `yaml:"non_git_workspace"`
 	Notifications *NotificationsConfig `yaml:"notifications"`
+	LogFormat     string               `yaml:"log_format"`
+	LogMaxSizeMB  int                  `yaml:"log_max_size_mb"`
+	LogMaxBackups int                  `yaml:"log_max_backups"`
+}
+
+// Normalize validates configuration values, applying safe defaults when needed.
+// It returns warnings for any corrections that were applied.
+func (c *Config) Normalize() []string {
+	if c == nil {
+		return nil
+	}
+
+	var warnings []string
+
+	c.WorkMode = WorkMode(strings.TrimSpace(string(c.WorkMode)))
+	c.OnComplete = OnComplete(strings.TrimSpace(string(c.OnComplete)))
+
+	if c.WorkMode == "" {
+		c.WorkMode = WorkModeWorktree
+	}
+	if c.OnComplete == "" {
+		c.OnComplete = OnCompleteConfirm
+	}
+
+	if !isValidWorkMode(c.WorkMode) {
+		warnings = append(warnings, fmt.Sprintf("invalid work_mode %q; defaulting to %q", c.WorkMode, WorkModeWorktree))
+		c.WorkMode = WorkModeWorktree
+	}
+
+	if !isValidOnComplete(c.OnComplete) {
+		warnings = append(warnings, fmt.Sprintf("invalid on_complete %q; defaulting to %q", c.OnComplete, OnCompleteConfirm))
+		c.OnComplete = OnCompleteConfirm
+	}
+
+	if c.WorkMode == WorkModeMain && (c.OnComplete == OnCompleteAutoMerge || c.OnComplete == OnCompleteAutoPR) {
+		warnings = append(warnings, fmt.Sprintf("on_complete %q is not supported in main mode; defaulting to %q", c.OnComplete, OnCompleteConfirm))
+		c.OnComplete = OnCompleteConfirm
+	}
+
+	if c.VerifyTimeout <= 0 {
+		c.VerifyTimeout = 600
+	}
+
+	c.NonGitWorkspace = strings.TrimSpace(c.NonGitWorkspace)
+	if c.NonGitWorkspace == "" {
+		c.NonGitWorkspace = string(NonGitWorkspaceShared)
+	}
+	if c.NonGitWorkspace != string(NonGitWorkspaceShared) && c.NonGitWorkspace != string(NonGitWorkspaceCopy) {
+		warnings = append(warnings, fmt.Sprintf("invalid non_git_workspace %q; defaulting to %q", c.NonGitWorkspace, NonGitWorkspaceShared))
+		c.NonGitWorkspace = string(NonGitWorkspaceShared)
+	}
+
+	c.LogFormat = strings.TrimSpace(c.LogFormat)
+	if c.LogFormat == "" {
+		c.LogFormat = "text"
+	}
+	if c.LogFormat != "text" && c.LogFormat != "jsonl" {
+		warnings = append(warnings, fmt.Sprintf("invalid log_format %q; defaulting to %q", c.LogFormat, "text"))
+		c.LogFormat = "text"
+	}
+	if c.LogMaxSizeMB <= 0 {
+		c.LogMaxSizeMB = 10
+	}
+	if c.LogMaxBackups < 0 {
+		c.LogMaxBackups = 3
+	}
+
+	return warnings
 }
 
 // DefaultConfig returns the default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		WorkMode:   WorkModeWorktree,
-		OnComplete: OnCompleteConfirm,
+		WorkMode:      WorkModeWorktree,
+		OnComplete:    OnCompleteConfirm,
+		LogFormat:     "text",
+		LogMaxSizeMB:  10,
+		LogMaxBackups: 3,
+		VerifyTimeout: 600,
+		NonGitWorkspace: string(NonGitWorkspaceShared),
 	}
+}
+
+func isValidWorkMode(mode WorkMode) bool {
+	return mode == WorkModeWorktree || mode == WorkModeMain
+}
+
+func isValidOnComplete(value OnComplete) bool {
+	return value == OnCompleteConfirm || value == OnCompleteAutoMerge || value == OnCompleteAutoPR
 }
 
 // Load reads the configuration from the given paw directory.
@@ -152,6 +250,36 @@ func parseConfig(content string) (*Config, error) {
 			cfg.OnComplete = OnComplete(value)
 		case "worktree_hook":
 			cfg.WorktreeHook = value
+		case "pre_task_hook":
+			cfg.PreTaskHook = value
+		case "post_task_hook":
+			cfg.PostTaskHook = value
+		case "pre_merge_hook":
+			cfg.PreMergeHook = value
+		case "post_merge_hook":
+			cfg.PostMergeHook = value
+		case "verify_command":
+			cfg.VerifyCommand = value
+		case "verify_timeout_sec":
+			if parsed, err := strconv.Atoi(value); err == nil {
+				cfg.VerifyTimeout = parsed
+			}
+		case "verify_required":
+			if parsed, err := strconv.ParseBool(value); err == nil {
+				cfg.VerifyRequired = parsed
+			}
+		case "non_git_workspace":
+			cfg.NonGitWorkspace = value
+		case "log_format":
+			cfg.LogFormat = value
+		case "log_max_size_mb":
+			if parsed, err := strconv.Atoi(value); err == nil {
+				cfg.LogMaxSizeMB = parsed
+			}
+		case "log_max_backups":
+			if parsed, err := strconv.Atoi(value); err == nil {
+				cfg.LogMaxBackups = parsed
+			}
 		}
 	}
 
@@ -353,30 +481,66 @@ work_mode: %s
 # - auto-pr: Auto commit + push + create pull request
 on_complete: %s
 
-# Hook to run after worktree creation (optional)
+# Non-git workspace: shared or copy
+non_git_workspace: %s
+
+# Hook to run after worktree/workspace creation (optional)
 # Single line example: worktree_hook: npm install
 # Multi-line example:
 #   worktree_hook: |
 #     npm install
 #     npm run build
-`, c.WorkMode, c.OnComplete)
+
+# Verification (optional)
+# verify_command: npm test
+verify_timeout_sec: %d
+verify_required: %t
+
+# Hooks (optional)
+# pre_task_hook: echo "pre task"
+# post_task_hook: echo "post task"
+# pre_merge_hook: echo "pre merge"
+# post_merge_hook: echo "post merge"
+
+# Log format: text or jsonl
+log_format: %s
+
+# Log rotation (size in MB, backups)
+log_max_size_mb: %d
+log_max_backups: %d
+`, c.WorkMode, c.OnComplete, c.NonGitWorkspace, c.VerifyTimeout, c.VerifyRequired, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups)
 
 	// Add worktree_hook if set
 	if c.WorktreeHook != "" {
-		content += formatWorktreeHook(c.WorktreeHook)
+		content += formatHook("worktree_hook", c.WorktreeHook)
+	}
+	if c.VerifyCommand != "" {
+		content += formatHook("verify_command", c.VerifyCommand)
+	}
+	if c.PreTaskHook != "" {
+		content += formatHook("pre_task_hook", c.PreTaskHook)
+	}
+	if c.PostTaskHook != "" {
+		content += formatHook("post_task_hook", c.PostTaskHook)
+	}
+	if c.PreMergeHook != "" {
+		content += formatHook("pre_merge_hook", c.PreMergeHook)
+	}
+	if c.PostMergeHook != "" {
+		content += formatHook("post_merge_hook", c.PostMergeHook)
 	}
 
 	return os.WriteFile(configPath, []byte(content), 0644)
 }
 
-// formatWorktreeHook formats the worktree hook for saving.
+// formatHook formats a hook command for saving.
 // Multi-line values use YAML-like '|' syntax.
-func formatWorktreeHook(hook string) string {
+func formatHook(key, hook string) string {
 	if strings.Contains(hook, "\n") {
 		// Multi-line: use | syntax with indentation
 		lines := strings.Split(hook, "\n")
 		var sb strings.Builder
-		sb.WriteString("worktree_hook: |\n")
+		sb.WriteString(fmt.Sprintf("%s: |\n", key))
 		for _, line := range lines {
 			sb.WriteString("  ")
 			sb.WriteString(line)
@@ -385,7 +549,7 @@ func formatWorktreeHook(hook string) string {
 		return sb.String()
 	}
 	// Single line
-	return fmt.Sprintf("worktree_hook: %s\n", hook)
+	return fmt.Sprintf("%s: %s\n", key, hook)
 }
 
 // Exists checks if a configuration file exists in the given paw directory.

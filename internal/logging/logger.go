@@ -10,9 +10,12 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,6 +56,21 @@ func (l Level) Name() string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+// LogFormat defines the log output format.
+type LogFormat string
+
+const (
+	LogFormatText  LogFormat = "text"
+	LogFormatJSONL LogFormat = "jsonl"
+)
+
+// Options configures logging behavior.
+type Options struct {
+	Format     LogFormat
+	MaxSizeMB  int
+	MaxBackups int
 }
 
 // Logger provides logging capabilities for PAW.
@@ -137,26 +155,34 @@ type fileLogger struct {
 	script string
 	task   string
 	debug  bool
+	format LogFormat
 	mu     sync.Mutex
 }
 
 // New creates a new Logger that writes to the specified file.
 func New(logPath string, debug bool) (Logger, error) {
+	opts := optionsFromEnv()
+	if err := rotateIfNeeded(logPath, opts); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to rotate log file: %v\n", err)
+	}
+
 	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
 	}
 
 	return &fileLogger{
-		file:  file,
-		debug: debug,
+		file:   file,
+		debug:  debug,
+		format: opts.Format,
 	}, nil
 }
 
 // NewStdout creates a logger that only outputs to stdout/stderr.
 func NewStdout(debug bool) Logger {
 	return &fileLogger{
-		debug: debug,
+		debug:  debug,
+		format: LogFormatText,
 	}
 }
 
@@ -180,32 +206,118 @@ func (l *fileLogger) getContext() string {
 	return l.script
 }
 
-// getCaller returns the caller function name (skipping internal logging frames)
-func getCaller(skip int) string {
-	pc, _, _, ok := runtime.Caller(skip)
-	if !ok {
-		return "unknown"
+func isLoggingFrame(fn string) bool {
+	return strings.Contains(fn, "internal/logging.")
+}
+
+type logEntry struct {
+	Timestamp string `json:"ts"`
+	Level     string `json:"level"`
+	LevelName string `json:"level_name,omitempty"`
+	Script    string `json:"script,omitempty"`
+	Task      string `json:"task,omitempty"`
+	Context   string `json:"context,omitempty"`
+	Caller    string `json:"caller,omitempty"`
+	Message   string `json:"msg"`
+}
+
+// getCaller returns the caller function name (skipping internal logging frames).
+func getCaller() string {
+	pcs := make([]uintptr, 16)
+	n := runtime.Callers(2, pcs)
+	frames := runtime.CallersFrames(pcs[:n])
+
+	for {
+		frame, more := frames.Next()
+		if frame.Function == "" {
+			break
+		}
+		if !isLoggingFrame(frame.Function) {
+			name := frame.Function
+			// Extract just the function name from the full path
+			if idx := strings.LastIndex(name, "/"); idx >= 0 {
+				name = name[idx+1:]
+			}
+			// Shorten the package path
+			if idx := strings.Index(name, "."); idx >= 0 {
+				name = name[idx+1:]
+			}
+			return name
+		}
+		if !more {
+			break
+		}
 	}
-	fn := runtime.FuncForPC(pc)
-	if fn == nil {
-		return "unknown"
+	return "unknown"
+}
+
+func optionsFromEnv() Options {
+	opts := Options{
+		Format:     LogFormatText,
+		MaxSizeMB:  10,
+		MaxBackups: 3,
 	}
-	name := fn.Name()
-	// Extract just the function name from the full path
-	if idx := strings.LastIndex(name, "/"); idx >= 0 {
-		name = name[idx+1:]
+
+	if value := strings.TrimSpace(os.Getenv("PAW_LOG_FORMAT")); value != "" {
+		switch strings.ToLower(value) {
+		case string(LogFormatJSONL):
+			opts.Format = LogFormatJSONL
+		default:
+			opts.Format = LogFormatText
+		}
 	}
-	// Shorten the package path
-	if idx := strings.Index(name, "."); idx >= 0 {
-		name = name[idx+1:]
+
+	if value := strings.TrimSpace(os.Getenv("PAW_LOG_MAX_SIZE_MB")); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			opts.MaxSizeMB = parsed
+		}
 	}
-	return name
+
+	if value := strings.TrimSpace(os.Getenv("PAW_LOG_MAX_BACKUPS")); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed >= 0 {
+			opts.MaxBackups = parsed
+		}
+	}
+
+	return opts
+}
+
+func rotateIfNeeded(logPath string, opts Options) error {
+	if opts.MaxSizeMB <= 0 || opts.MaxBackups <= 0 {
+		return nil
+	}
+
+	info, err := os.Stat(logPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	maxBytes := int64(opts.MaxSizeMB) * 1024 * 1024
+	if info.Size() < maxBytes {
+		return nil
+	}
+
+	for i := opts.MaxBackups - 1; i >= 1; i-- {
+		src := fmt.Sprintf("%s.%d", logPath, i)
+		dst := fmt.Sprintf("%s.%d", logPath, i+1)
+		if _, err := os.Stat(src); err == nil {
+			_ = os.Rename(src, dst)
+		}
+	}
+
+	base := filepath.Base(logPath)
+	dir := filepath.Dir(logPath)
+	rotated := filepath.Join(dir, base+".1")
+	return os.Rename(logPath, rotated)
 }
 
 // logWithLevel writes a log entry with the specified level
 func (l *fileLogger) logWithLevel(level Level, format string, args ...interface{}) {
 	// Debug level only logged when debug mode is enabled
-	if level == LevelDebug && !l.debug {
+	if (level == LevelDebug || level == LevelTrace) && !l.debug {
 		return
 	}
 
@@ -217,10 +329,32 @@ func (l *fileLogger) logWithLevel(level Level, format string, args ...interface{
 	}
 
 	msg := fmt.Sprintf(format, args...)
-	timestamp := time.Now().Format("06-01-02 15:04:05.0")
 	context := l.getContext()
-	caller := getCaller(3) // Skip logWithLevel, the public method, and the caller
+	caller := getCaller()
 
+	if l.format == LogFormatJSONL {
+		entry := logEntry{
+			Timestamp: time.Now().Format(time.RFC3339Nano),
+			Level:     level.String(),
+			LevelName: level.Name(),
+			Script:    l.script,
+			Task:      l.task,
+			Context:   context,
+			Caller:    caller,
+			Message:   msg,
+		}
+		data, err := json.Marshal(entry)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to marshal log entry: %v\n", err)
+			return
+		}
+		if _, err := l.file.Write(append(data, '\n')); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to write to log file: %v\n", err)
+		}
+		return
+	}
+
+	timestamp := time.Now().Format("06-01-02 15:04:05.0")
 	// Format: [timestamp] [level] [context] [caller] message
 	line := fmt.Sprintf("[%s] [%s] [%s] [%s] %s\n", timestamp, level.String(), context, caller, msg)
 	if _, err := l.file.WriteString(line); err != nil {
@@ -229,22 +363,10 @@ func (l *fileLogger) logWithLevel(level Level, format string, args ...interface{
 }
 
 func (l *fileLogger) Trace(format string, args ...interface{}) {
-	// Trace is only logged when debug mode is enabled
 	if !l.debug {
 		return
 	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if l.file != nil {
-		msg := fmt.Sprintf(format, args...)
-		timestamp := time.Now().Format("06-01-02 15:04:05.0")
-		context := l.getContext()
-		caller := getCaller(2)
-		line := fmt.Sprintf("[%s] [L0] [%s] [%s] %s\n", timestamp, context, caller, msg)
-		_, _ = l.file.WriteString(line)
-	}
+	l.logWithLevel(LevelTrace, format, args...)
 }
 
 func (l *fileLogger) Debug(format string, args ...interface{}) {
@@ -252,19 +374,11 @@ func (l *fileLogger) Debug(format string, args ...interface{}) {
 		return
 	}
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	msg := fmt.Sprintf(format, args...)
-	caller := getCaller(2)
+	caller := getCaller()
 	fmt.Fprintf(os.Stderr, "[L1] [%s] %s\n", caller, msg)
 
-	if l.file != nil {
-		timestamp := time.Now().Format("06-01-02 15:04:05.0")
-		context := l.getContext()
-		line := fmt.Sprintf("[%s] [L1] [%s] [%s] %s\n", timestamp, context, caller, msg)
-		_, _ = l.file.WriteString(line)
-	}
+	l.logWithLevel(LevelDebug, "%s", msg)
 }
 
 func (l *fileLogger) Log(format string, args ...interface{}) {
@@ -279,48 +393,21 @@ func (l *fileLogger) Warn(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintf(os.Stderr, "Warning: %s\n", msg)
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if l.file != nil {
-		timestamp := time.Now().Format("06-01-02 15:04:05.0")
-		context := l.getContext()
-		caller := getCaller(2)
-		line := fmt.Sprintf("[%s] [L3] [%s] [%s] %s\n", timestamp, context, caller, msg)
-		_, _ = l.file.WriteString(line)
-	}
+	l.logWithLevel(LevelWarn, "%s", msg)
 }
 
 func (l *fileLogger) Error(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintf(os.Stderr, "Error: %s\n", msg)
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if l.file != nil {
-		timestamp := time.Now().Format("06-01-02 15:04:05.0")
-		context := l.getContext()
-		caller := getCaller(2)
-		line := fmt.Sprintf("[%s] [L4] [%s] [%s] %s\n", timestamp, context, caller, msg)
-		_, _ = l.file.WriteString(line)
-	}
+	l.logWithLevel(LevelError, "%s", msg)
 }
 
 func (l *fileLogger) Fatal(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintf(os.Stderr, "FATAL: %s\n", msg)
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if l.file != nil {
-		timestamp := time.Now().Format("06-01-02 15:04:05.0")
-		context := l.getContext()
-		caller := getCaller(2)
-		line := fmt.Sprintf("[%s] [L5] [%s] [%s] %s\n", timestamp, context, caller, msg)
-		_, _ = l.file.WriteString(line)
-	}
+	l.logWithLevel(LevelFatal, "%s", msg)
 }
 
 func (l *fileLogger) StartTimer(operation string) *Timer {
