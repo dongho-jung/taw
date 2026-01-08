@@ -20,12 +20,19 @@ var checkCmd = &cobra.Command{
 	RunE:  runCheck,
 }
 
+var checkFix bool
+
+func init() {
+	checkCmd.Flags().BoolVar(&checkFix, "fix", false, "Attempt to install missing dependencies (Homebrew only)")
+}
+
 // checkResult holds the result of a single dependency check.
 type checkResult struct {
 	name     string
 	ok       bool
 	message  string
 	required bool
+	fix      func() error
 }
 
 // runCheck runs all dependency checks and prints the results.
@@ -34,6 +41,49 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	fmt.Println("====================")
 	fmt.Println()
 
+	results := collectCheckResults()
+
+	// Print results
+	hasErrors := false
+	for _, r := range results {
+		printResult(r)
+		if r.required && !r.ok {
+			hasErrors = true
+		}
+	}
+
+	if checkFix {
+		fixResults := applyFixes(results)
+		if len(fixResults) > 0 {
+			fmt.Println()
+			fmt.Println("Fixes:")
+			for _, r := range fixResults {
+				printResult(r)
+			}
+		}
+
+		fmt.Println()
+		fmt.Println("Recheck:")
+		results = collectCheckResults()
+		hasErrors = false
+		for _, r := range results {
+			printResult(r)
+			if r.required && !r.ok {
+				hasErrors = true
+			}
+		}
+	}
+
+	fmt.Println()
+	if hasErrors {
+		fmt.Println("❌ Some required dependencies are missing. Please install them before using PAW.")
+		return fmt.Errorf("required dependencies missing")
+	}
+	fmt.Println("✅ All required dependencies are available.")
+	return nil
+}
+
+func collectCheckResults() []checkResult {
 	results := []checkResult{
 		checkTmux(),
 		checkClaude(),
@@ -48,22 +98,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		results = append(results, checkSounds())
 	}
 
-	// Print results
-	hasErrors := false
-	for _, r := range results {
-		printResult(r)
-		if r.required && !r.ok {
-			hasErrors = true
-		}
-	}
-
-	fmt.Println()
-	if hasErrors {
-		fmt.Println("❌ Some required dependencies are missing. Please install them before using PAW.")
-		return fmt.Errorf("required dependencies missing")
-	}
-	fmt.Println("✅ All required dependencies are available.")
-	return nil
+	return results
 }
 
 // printResult prints a single check result with appropriate formatting.
@@ -93,6 +128,11 @@ func checkTmux() checkResult {
 	if err != nil {
 		result.ok = false
 		result.message = "not installed"
+		if brewAvailable() {
+			result.fix = func() error {
+				return brewInstall("tmux")
+			}
+		}
 		return result
 	}
 
@@ -150,6 +190,11 @@ func checkGh() checkResult {
 	if err != nil {
 		result.ok = false
 		result.message = "not installed - needed for PR creation"
+		if brewAvailable() {
+			result.fix = func() error {
+				return brewInstall("gh")
+			}
+		}
 		return result
 	}
 
@@ -251,4 +296,35 @@ func checkSounds() checkResult {
 	result.ok = true
 	result.message = "all available"
 	return result
+}
+
+func applyFixes(results []checkResult) []checkResult {
+	var fixes []checkResult
+	for _, r := range results {
+		if r.ok || r.fix == nil {
+			continue
+		}
+		fixResult := checkResult{name: r.name + " fix", required: false}
+		if err := r.fix(); err != nil {
+			fixResult.ok = false
+			fixResult.message = err.Error()
+		} else {
+			fixResult.ok = true
+			fixResult.message = "applied"
+		}
+		fixes = append(fixes, fixResult)
+	}
+	return fixes
+}
+
+func brewAvailable() bool {
+	_, err := exec.LookPath("brew")
+	return err == nil
+}
+
+func brewInstall(pkg string) error {
+	cmd := exec.Command("brew", "install", pkg)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
