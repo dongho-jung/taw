@@ -15,8 +15,8 @@ import (
 
 var checkCmd = &cobra.Command{
 	Use:   "check",
-	Short: "Check dependencies and system requirements",
-	Long:  "Verify that all required and optional dependencies are installed and configured correctly.",
+	Short: "Check dependencies and project health",
+	Long:  "Verify required dependencies and project/session health for the current directory.",
 	RunE:  runCheck,
 }
 
@@ -37,23 +37,18 @@ type checkResult struct {
 
 // runCheck runs all dependency checks and prints the results.
 func runCheck(cmd *cobra.Command, args []string) error {
-	fmt.Println("PAW Dependency Check")
-	fmt.Println("====================")
+	fmt.Println("PAW Check")
+	fmt.Println("=========")
 	fmt.Println()
 
-	results := collectCheckResults()
+	depResults := collectCheckResults()
+	projectResults := collectProjectResults()
 
-	// Print results
-	hasErrors := false
-	for _, r := range results {
-		printResult(r)
-		if r.required && !r.ok {
-			hasErrors = true
-		}
-	}
+	printCheckSections(depResults, projectResults)
+	hasErrors := hasRequiredErrors(depResults, projectResults)
 
 	if checkFix {
-		fixResults := applyFixes(results)
+		fixResults := applyFixes(append([]checkResult{}, append(depResults, projectResults...)...))
 		if len(fixResults) > 0 {
 			fmt.Println()
 			fmt.Println("Fixes:")
@@ -64,14 +59,10 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 		fmt.Println()
 		fmt.Println("Recheck:")
-		results = collectCheckResults()
-		hasErrors = false
-		for _, r := range results {
-			printResult(r)
-			if r.required && !r.ok {
-				hasErrors = true
-			}
-		}
+		depResults = collectCheckResults()
+		projectResults = collectProjectResults()
+		printCheckSections(depResults, projectResults)
+		hasErrors = hasRequiredErrors(depResults, projectResults)
 	}
 
 	fmt.Println()
@@ -81,6 +72,39 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("✅ All required dependencies are available.")
 	return nil
+}
+
+func printCheckSections(depResults, projectResults []checkResult) {
+	fmt.Println("Dependencies")
+	fmt.Println("------------")
+	for _, r := range depResults {
+		printResult(r)
+	}
+
+	if len(projectResults) == 0 {
+		return
+	}
+
+	fmt.Println()
+	fmt.Println("Project")
+	fmt.Println("-------")
+	for _, r := range projectResults {
+		printResult(r)
+	}
+}
+
+func hasRequiredErrors(depResults, projectResults []checkResult) bool {
+	for _, r := range depResults {
+		if r.required && !r.ok {
+			return true
+		}
+	}
+	for _, r := range projectResults {
+		if r.required && !r.ok {
+			return true
+		}
+	}
+	return false
 }
 
 func collectCheckResults() []checkResult {
@@ -171,6 +195,11 @@ func checkGit() checkResult {
 	if err != nil {
 		result.ok = false
 		result.message = "not installed - needed for worktree mode"
+		if brewAvailable() {
+			result.fix = func() error {
+				return brewInstall("git")
+			}
+		}
 		return result
 	}
 

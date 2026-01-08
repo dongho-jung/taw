@@ -1544,10 +1544,10 @@ func loadTaskOptions(agentDir string) *config.TaskOptions {
 
 func buildHistoryMetadata(app *app.App, t *task.Task, opts *config.TaskOptions, gitClient git.Client, workDir string, verify *service.VerificationMetadata, hooks []service.HookMetadata) *service.HistoryMetadata {
 	meta := &service.HistoryMetadata{
-		TaskName:    t.Name,
-		SessionName: app.SessionName,
-		ProjectDir:  app.ProjectDir,
-		TaskOptions: opts,
+		TaskName:     t.Name,
+		SessionName:  app.SessionName,
+		ProjectDir:   app.ProjectDir,
+		TaskOptions:  opts,
 		Verification: verify,
 		Hooks:        hooks,
 	}

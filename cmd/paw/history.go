@@ -32,10 +32,10 @@ type historyOptions struct {
 }
 
 var (
-	historyTask     string
-	historySince    string
-	historyQuery    string
-	historyLimit    int
+	historyTask      string
+	historySince     string
+	historyQuery     string
+	historyLimit     int
 	historyNoSummary bool
 )
 

@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/dongho-jung/paw/internal/app"
 	"github.com/dongho-jung/paw/internal/config"
 	"github.com/dongho-jung/paw/internal/constants"
@@ -18,62 +16,20 @@ import (
 	"github.com/dongho-jung/paw/internal/tmux"
 )
 
-type doctorCheck struct {
-	name     string
-	ok       bool
-	message  string
-	required bool
-	fix      func() error
-}
-
-var doctorFix bool
-
-var doctorCmd = &cobra.Command{
-	Use:   "doctor",
-	Short: "Diagnose project and session health",
-	RunE:  runDoctor,
-}
-
-func init() {
-	doctorCmd.Flags().BoolVar(&doctorFix, "fix", false, "Attempt safe fixes where possible")
-}
-
-func runDoctor(cmd *cobra.Command, args []string) error {
-	application, err := buildAppFromCwd()
+func collectProjectResults() []checkResult {
+	appCtx, err := buildAppFromCwd()
 	if err != nil {
-		return err
-	}
-
-	results := doctorChecks(application)
-	printDoctorResults(results)
-
-	if doctorFix {
-		fixResults := applyDoctorFixes(results)
-		if len(fixResults) > 0 {
-			fmt.Println()
-			fmt.Println("Fixes:")
-			printDoctorResults(fixResults)
-		}
-
-		results = doctorChecks(application)
-		if len(results) > 0 {
-			fmt.Println()
-			fmt.Println("Recheck:")
-			printDoctorResults(results)
+		return []checkResult{
+			{
+				name:     "project",
+				ok:       false,
+				required: false,
+				message:  err.Error(),
+			},
 		}
 	}
 
-	hasErrors := false
-	for _, r := range results {
-		if r.required && !r.ok {
-			hasErrors = true
-			break
-		}
-	}
-	if hasErrors {
-		return fmt.Errorf("doctor found required issues")
-	}
-	return nil
+	return projectChecks(appCtx)
 }
 
 func buildAppFromCwd() (*app.App, error) {
@@ -103,14 +59,13 @@ func buildAppFromCwd() (*app.App, error) {
 	return application, nil
 }
 
-func doctorChecks(appCtx *app.App) []doctorCheck {
+func projectChecks(appCtx *app.App) []checkResult {
 	pawDirExists := pathExists(appCtx.PawDir)
-
-	results := []doctorCheck{
+	results := []checkResult{
 		{
 			name:     ".paw directory",
 			ok:       pawDirExists,
-			required: true,
+			required: false,
 			message:  boolMessage(pawDirExists, appCtx.PawDir, "missing (run paw to initialize)"),
 			fix: func() error {
 				return appCtx.Initialize()
@@ -124,7 +79,7 @@ func doctorChecks(appCtx *app.App) []doctorCheck {
 
 	configPath := filepath.Join(appCtx.PawDir, constants.ConfigFileName)
 	configExists := pathExists(configPath)
-	results = append(results, doctorCheck{
+	results = append(results, checkResult{
 		name:     "config",
 		ok:       configExists,
 		required: false,
@@ -137,7 +92,7 @@ func doctorChecks(appCtx *app.App) []doctorCheck {
 
 	claudeDir := filepath.Join(appCtx.PawDir, constants.ClaudeLink)
 	claudeExists := pathExists(claudeDir)
-	results = append(results, doctorCheck{
+	results = append(results, checkResult{
 		name:     "claude settings",
 		ok:       claudeExists,
 		required: false,
@@ -149,7 +104,7 @@ func doctorChecks(appCtx *app.App) []doctorCheck {
 
 	historyDir := filepath.Join(appCtx.PawDir, constants.HistoryDirName)
 	historyExists := pathExists(historyDir)
-	results = append(results, doctorCheck{
+	results = append(results, checkResult{
 		name:     "history directory",
 		ok:       historyExists,
 		required: false,
@@ -161,7 +116,7 @@ func doctorChecks(appCtx *app.App) []doctorCheck {
 
 	agentsDir := filepath.Join(appCtx.PawDir, constants.AgentsDirName)
 	agentsExists := pathExists(agentsDir)
-	results = append(results, doctorCheck{
+	results = append(results, checkResult{
 		name:     "agents directory",
 		ok:       agentsExists,
 		required: false,
@@ -173,18 +128,25 @@ func doctorChecks(appCtx *app.App) []doctorCheck {
 
 	if configExists {
 		cfg, err := config.Load(appCtx.PawDir)
-		if err == nil {
+		if err != nil {
+			results = append(results, checkResult{
+				name:     "config values",
+				ok:       false,
+				required: false,
+				message:  fmt.Sprintf("load failed: %v", err),
+			})
+		} else {
 			appCtx.Config = cfg
 			warnings := cfg.Normalize()
 			if len(warnings) > 0 {
-				results = append(results, doctorCheck{
+				results = append(results, checkResult{
 					name:     "config values",
 					ok:       false,
 					required: false,
 					message:  fmt.Sprintf("normalize warnings: %s", stringsJoin(warnings)),
 				})
 			} else {
-				results = append(results, doctorCheck{
+				results = append(results, checkResult{
 					name:     "config values",
 					ok:       true,
 					required: false,
@@ -200,7 +162,7 @@ func doctorChecks(appCtx *app.App) []doctorCheck {
 	return results
 }
 
-func worktreeChecks(appCtx *app.App) []doctorCheck {
+func worktreeChecks(appCtx *app.App) []checkResult {
 	if !appCtx.IsGitRepo || appCtx.Config == nil || appCtx.Config.WorkMode != config.WorkModeWorktree {
 		return nil
 	}
@@ -208,7 +170,7 @@ func worktreeChecks(appCtx *app.App) []doctorCheck {
 	mgr := task.NewManager(appCtx.AgentsDir, appCtx.ProjectDir, appCtx.PawDir, appCtx.IsGitRepo, appCtx.Config)
 	corrupted, err := mgr.FindCorruptedTasks()
 	if err != nil {
-		return []doctorCheck{
+		return []checkResult{
 			{
 				name:     "worktree health",
 				ok:       false,
@@ -219,7 +181,7 @@ func worktreeChecks(appCtx *app.App) []doctorCheck {
 	}
 
 	if len(corrupted) == 0 {
-		return []doctorCheck{
+		return []checkResult{
 			{
 				name:     "worktree health",
 				ok:       true,
@@ -229,7 +191,7 @@ func worktreeChecks(appCtx *app.App) []doctorCheck {
 		}
 	}
 
-	return []doctorCheck{
+	return []checkResult{
 		{
 			name:     "worktree health",
 			ok:       false,
@@ -239,18 +201,14 @@ func worktreeChecks(appCtx *app.App) []doctorCheck {
 	}
 }
 
-func sessionChecks(appCtx *app.App) []doctorCheck {
-	if _, err := os.Stat(appCtx.PawDir); err != nil {
-		return nil
-	}
-
+func sessionChecks(appCtx *app.App) []checkResult {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		return nil
 	}
 
 	tm := tmux.New(appCtx.SessionName)
 	if !tm.HasSession(appCtx.SessionName) {
-		return []doctorCheck{
+		return []checkResult{
 			{
 				name:     "tmux session",
 				ok:       false,
@@ -265,7 +223,7 @@ func sessionChecks(appCtx *app.App) []doctorCheck {
 
 	orphaned, err := mgr.FindOrphanedWindows()
 	if err != nil {
-		return []doctorCheck{
+		return []checkResult{
 			{
 				name:     "tmux session",
 				ok:       false,
@@ -277,7 +235,7 @@ func sessionChecks(appCtx *app.App) []doctorCheck {
 
 	stopped, err := mgr.FindStoppedTasks()
 	if err != nil {
-		return []doctorCheck{
+		return []checkResult{
 			{
 				name:     "tmux session",
 				ok:       false,
@@ -289,7 +247,7 @@ func sessionChecks(appCtx *app.App) []doctorCheck {
 
 	incomplete, err := mgr.FindIncompleteTasks(appCtx.SessionName)
 	if err != nil {
-		return []doctorCheck{
+		return []checkResult{
 			{
 				name:     "tmux session",
 				ok:       false,
@@ -302,7 +260,7 @@ func sessionChecks(appCtx *app.App) []doctorCheck {
 	msg := fmt.Sprintf("orphaned=%d stopped=%d incomplete=%d", len(orphaned), len(stopped), len(incomplete))
 	ok := len(orphaned) == 0 && len(stopped) == 0 && len(incomplete) == 0
 
-	return []doctorCheck{
+	return []checkResult{
 		{
 			name:     "tmux session",
 			ok:       ok,
@@ -310,52 +268,6 @@ func sessionChecks(appCtx *app.App) []doctorCheck {
 			message:  msg,
 		},
 	}
-}
-
-func printDoctorResults(results []doctorCheck) {
-	for _, r := range results {
-		printDoctorResult(r)
-	}
-}
-
-func printDoctorResult(r doctorCheck) {
-	var icon string
-	if r.ok {
-		icon = "[OK]"
-	} else if r.required {
-		icon = "[ERR]"
-	} else {
-		icon = "[WARN]"
-	}
-
-	optionalSuffix := ""
-	if !r.required && !r.ok {
-		optionalSuffix = " (optional)"
-	}
-
-	fmt.Printf("%s %s: %s%s\n", icon, r.name, r.message, optionalSuffix)
-}
-
-func applyDoctorFixes(results []doctorCheck) []doctorCheck {
-	var fixes []doctorCheck
-	for _, r := range results {
-		if r.ok || r.fix == nil {
-			continue
-		}
-		fixCheck := doctorCheck{
-			name:     r.name + " fix",
-			required: false,
-		}
-		if err := r.fix(); err != nil {
-			fixCheck.ok = false
-			fixCheck.message = err.Error()
-		} else {
-			fixCheck.ok = true
-			fixCheck.message = "applied"
-		}
-		fixes = append(fixes, fixCheck)
-	}
-	return fixes
 }
 
 func pathExists(path string) bool {
