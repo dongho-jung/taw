@@ -136,6 +136,8 @@ paw/                           # This repository
     ├── input-history          # Task input history (JSON, for Ctrl+R search)
     ├── templates.yaml         # Task templates (YAML, for ⌃T template selector)
     ├── PROMPT.md              # Project prompt (user-customizable)
+    ├── bin                    # Symlink to current paw binary (updated on attach)
+    ├── .version               # PAW version (for upgrade detection on attach)
     ├── .is-git-repo           # Git mode marker (exists only in git repos)
     ├── .claude/               # Claude settings (copied from embed)
     │   └── settings.local.json

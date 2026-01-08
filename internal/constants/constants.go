@@ -196,21 +196,23 @@ const (
 
 // Directory and file names
 const (
-	PawDirName       = ".paw"
-	AgentsDirName    = "agents"
-	HistoryDirName   = "history"
+	PawDirName        = ".paw"
+	AgentsDirName     = "agents"
+	HistoryDirName    = "history"
 	WindowMapFileName = "window-map.json"
-	ConfigFileName   = "config"
-	LogFileName      = "log"
-	MemoryFileName   = "memory"
-	PromptFileName   = "PROMPT.md"
-	TaskFileName     = "task"
-	TabLockDirName   = ".tab-lock"
-	WindowIDFileName = "window_id"
-	PRFileName       = ".pr"
-	GitRepoMarker    = ".is-git-repo"
-	GlobalPromptLink = ".global-prompt"
-	ClaudeLink       = ".claude"
+	ConfigFileName    = "config"
+	LogFileName       = "log"
+	MemoryFileName    = "memory"
+	PromptFileName    = "PROMPT.md"
+	TaskFileName      = "task"
+	TabLockDirName    = ".tab-lock"
+	WindowIDFileName  = "window_id"
+	PRFileName        = ".pr"
+	GitRepoMarker     = ".is-git-repo"
+	GlobalPromptLink  = ".global-prompt"
+	ClaudeLink        = ".claude"
+	BinSymlinkName    = "bin"     // Symlink to current paw binary (updated on attach)
+	VersionFileName   = ".version" // Stores PAW version for upgrade detection
 )
 
 // Tmux related constants

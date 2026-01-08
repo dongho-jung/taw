@@ -200,9 +200,74 @@ func runMain(cmd *cobra.Command, args []string) error {
 	return startNewSession(application, tm)
 }
 
+// updateBinSymlink creates or updates the .paw/bin symlink to point to the current paw binary.
+// This allows running agents to use the new binary through the symlink when PAW is upgraded.
+func updateBinSymlink(pawDir string) (string, error) {
+	// Get current executable path
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Resolve symlinks to get actual path
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve executable path: %w", err)
+	}
+
+	symlink := filepath.Join(pawDir, constants.BinSymlinkName)
+
+	// Check if symlink exists and points to the same binary
+	if target, err := os.Readlink(symlink); err == nil {
+		if target == exe {
+			// Symlink already points to current binary
+			return symlink, nil
+		}
+	}
+
+	// Remove existing symlink/file if exists
+	_ = os.Remove(symlink)
+
+	// Create new symlink
+	if err := os.Symlink(exe, symlink); err != nil {
+		return "", fmt.Errorf("failed to create symlink: %w", err)
+	}
+
+	return symlink, nil
+}
+
+// saveVersion saves the current PAW version to .paw/.version
+func saveVersion(pawDir string) error {
+	versionFile := filepath.Join(pawDir, constants.VersionFileName)
+	return os.WriteFile(versionFile, []byte(Version), 0644)
+}
+
+// checkVersionChanged checks if PAW version has changed since session was started.
+// Returns true if version changed (upgrade detected), false otherwise.
+func checkVersionChanged(pawDir string) bool {
+	versionFile := filepath.Join(pawDir, constants.VersionFileName)
+	data, err := os.ReadFile(versionFile)
+	if err != nil {
+		// Version file doesn't exist (old session), consider it changed
+		return true
+	}
+	savedVersion := strings.TrimSpace(string(data))
+	return savedVersion != Version
+}
+
 // startNewSession creates a new tmux session
 func startNewSession(app *app.App, tm tmux.Client) error {
 	logging.Debug("Starting new tmux session...")
+
+	// Create/update bin symlink for hook compatibility
+	if _, err := updateBinSymlink(app.PawDir); err != nil {
+		logging.Warn("Failed to create bin symlink: %v", err)
+	}
+
+	// Save current version
+	if err := saveVersion(app.PawDir); err != nil {
+		logging.Warn("Failed to save version: %v", err)
+	}
 
 	// Clean up merged tasks before starting new session
 	mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)
@@ -298,6 +363,25 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 // attachToSession attaches to an existing session
 func attachToSession(app *app.App, tm tmux.Client) error {
 	logging.Debug("Running pre-attach cleanup and recovery...")
+
+	// Check if PAW version has changed and update symlink
+	versionChanged := checkVersionChanged(app.PawDir)
+	if versionChanged {
+		logging.Log("PAW version changed, updating bin symlink...")
+		if _, err := updateBinSymlink(app.PawDir); err != nil {
+			logging.Warn("Failed to update bin symlink: %v", err)
+		} else {
+			logging.Log("Bin symlink updated to current version")
+		}
+
+		// Save new version
+		if err := saveVersion(app.PawDir); err != nil {
+			logging.Warn("Failed to save version: %v", err)
+		}
+
+		// Notify user about the upgrade
+		fmt.Printf("🔄 PAW upgraded to %s\n", Version)
+	}
 
 	// Run cleanup and recovery before attaching
 	mgr := task.NewManager(app.AgentsDir, app.ProjectDir, app.PawDir, app.IsGitRepo, app.Config)

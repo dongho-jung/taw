@@ -1857,6 +1857,8 @@ var resumeAgentCmd = &cobra.Command{
 
 		// Get paw binary path
 		pawBin, _ := os.Executable()
+		// Use symlink path for PAW_BIN so running agents can use updated binary
+		pawBinSymlink := filepath.Join(app.PawDir, constants.BinSymlinkName)
 
 		// Build start-agent script with --continue flag
 		worktreeDirExport := ""
@@ -1878,7 +1880,7 @@ export SESSION_NAME='%s'
 # Continue the previous Claude session (--continue auto-selects last session)
 exec claude --continue --dangerously-skip-permissions
 `, taskName, app.PawDir, app.ProjectDir, worktreeDirExport, windowID,
-			app.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBin, sessionName)
+			app.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName)
 
 		startAgentScriptPath := filepath.Join(t.AgentDir, "start-agent")
 		if err := os.WriteFile(startAgentScriptPath, []byte(startAgentContent), 0755); err != nil {

@@ -585,6 +585,8 @@ var handleTaskCmd = &cobra.Command{
 
 		// Get paw binary path for end-task script
 		pawBin, _ := os.Executable()
+		// Use symlink path for PAW_BIN so running agents can use updated binary
+		pawBinSymlink := filepath.Join(app.PawDir, constants.BinSymlinkName)
 
 		// Build user prompt with context
 		var userPrompt strings.Builder
@@ -682,7 +684,7 @@ export SESSION_NAME='%s'
 # Continue the previous Claude session (--continue auto-selects last session)
 exec claude --continue --dangerously-skip-permissions%s
 `, taskName, app.PawDir, app.ProjectDir, worktreeDirExport, windowID,
-				app.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBin, sessionName, modelFlag)
+				app.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName, modelFlag)
 			logging.Log("Session resume: using --continue flag for task %s", taskName)
 		} else {
 			// New session: start fresh with system prompt
@@ -705,7 +707,7 @@ exec claude --dangerously-skip-permissions%s --system-prompt "$(base64 -d <<'__P
 __PROMPT_END__
 )"
 `, taskName, app.PawDir, app.ProjectDir, worktreeDirExport, windowID,
-				app.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBin, sessionName,
+				app.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName,
 				modelFlag, encodedPrompt)
 		}
 
