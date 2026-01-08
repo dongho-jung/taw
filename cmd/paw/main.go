@@ -19,6 +19,7 @@ import (
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/task"
 	"github.com/dongho-jung/paw/internal/tmux"
+	"github.com/dongho-jung/paw/internal/tui"
 )
 
 var (
@@ -47,6 +48,9 @@ It manages tasks in tmux sessions with optional git worktree isolation.`,
 var showVersion bool
 
 func init() {
+	// Set version for TUI display
+	tui.SetVersion(Version)
+
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(cleanCmd)

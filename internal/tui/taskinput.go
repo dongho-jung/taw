@@ -30,11 +30,9 @@ type OptField int
 const (
 	OptFieldModel OptField = iota
 	OptFieldUltrathink
-	OptFieldDependsOnTask
-	OptFieldDependsOnCondition
 )
 
-const optFieldCount = 4
+const optFieldCount = 2
 
 // cancelDoublePressTimeout is the time window for double-press cancel detection.
 const cancelDoublePressTimeout = 2 * time.Second
@@ -54,8 +52,6 @@ type TaskInput struct {
 	focusPanel FocusPanel
 	optField   OptField
 	modelIdx   int
-	condIdx    int
-	depTaskIdx int // Index into activeTasks (0 = none, 1+ = task index)
 
 	mouseSelecting  bool
 	selectAnchorRow int
@@ -105,8 +101,9 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 	ta.CharLimit = 0 // No limit
 	ta.ShowLineNumbers = false
 	ta.Prompt = "" // Clear prompt to avoid extra characters on the left
+	ta.MaxHeight = 15 // Max 15 lines
 	ta.SetWidth(80)
-	ta.SetHeight(6) // Match options panel height
+	ta.SetHeight(8) // Default 8 lines (min 5, max 15)
 
 	// Enable real cursor for proper IME support (Korean input)
 	ta.VirtualCursor = false
@@ -152,8 +149,6 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 		focusPanel:  FocusPanelLeft,
 		optField:    OptFieldModel,
 		modelIdx:    modelIdx,
-		condIdx:     0,
-		depTaskIdx:  0, // 0 = no dependency
 		kanban:      NewKanbanView(isDark),
 	}
 }
@@ -197,15 +192,17 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Options panel content: title(1) + margin(1) + 4 fields(4) = 6 lines
-		// With border: 6 + 2 = 8 total rendered height
-		// Textarea should match: 8 - 2 (border) = 6 internal height
-		const optionsPanelHeight = 8   // Total rendered height of options panel
-		const optionsContentHeight = 6 // Internal content height (excluding border)
+		// Textarea height: default 8, min 5, max 15 (already set via MaxHeight)
+		// Options panel content: title(1) + margin(1) + 2 fields(2) = 4 lines
+		// With border: 4 + 2 = 6 total rendered height
+		const optionsPanelHeight = 6
+		const textareaDefaultHeight = 8
+		const textareaMinHeight = 5
 
-		// Calculate Kanban height from remaining space
-		// Reserve: options panel height + help text (1) + gap (1) + tmux statusline (1)
-		kanbanHeight := max(8, msg.Height-optionsPanelHeight-3)
+		// Calculate textarea height based on available space
+		// With border: internal + 2
+		topSectionHeight := max(textareaDefaultHeight, optionsPanelHeight-2) + 2
+		kanbanHeight := max(8, msg.Height-topSectionHeight-3) // -3 for help text + gap + statusline
 		m.kanban.SetSize(msg.Width, kanbanHeight)
 
 		// Options panel needs ~43 chars width (content + border + padding)
@@ -215,8 +212,9 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if newWidth > 30 {
 			m.textarea.SetWidth(newWidth)
 		}
-		// Set textarea height to match options panel (subtract 2 for border)
-		m.textarea.SetHeight(optionsContentHeight)
+		// Set textarea height (respecting min 5, max 15)
+		textareaHeight := max(textareaMinHeight, textareaDefaultHeight)
+		m.textarea.SetHeight(textareaHeight)
 
 	case tea.KeyMsg:
 		keyStr := msg.String()
@@ -422,17 +420,6 @@ func (m *TaskInput) handleOptionLeft() {
 	case OptFieldUltrathink:
 		// Left moves to [on] which is visually on the left
 		m.options.Ultrathink = true
-	case OptFieldDependsOnTask:
-		// Cycle through active tasks
-		if len(m.activeTasks) > 0 && m.depTaskIdx > 0 {
-			m.depTaskIdx--
-			m.updateDependsOn()
-		}
-	case OptFieldDependsOnCondition:
-		if m.condIdx > 0 {
-			m.condIdx--
-			m.updateDependsOn()
-		}
 	}
 }
 
@@ -448,50 +435,13 @@ func (m *TaskInput) handleOptionRight() {
 	case OptFieldUltrathink:
 		// Right moves to [off] which is visually on the right
 		m.options.Ultrathink = false
-	case OptFieldDependsOnTask:
-		// Cycle through active tasks
-		if len(m.activeTasks) > 0 && m.depTaskIdx < len(m.activeTasks) {
-			m.depTaskIdx++
-			m.updateDependsOn()
-		}
-	case OptFieldDependsOnCondition:
-		conditions := []config.DependsOnCondition{
-			config.DependsOnNone,
-			config.DependsOnSuccess,
-			config.DependsOnFailure,
-			config.DependsOnAlways,
-		}
-		if m.condIdx < len(conditions)-1 {
-			m.condIdx++
-			m.updateDependsOn()
-		}
-	}
-}
-
-// updateDependsOn updates the dependency options based on current state.
-func (m *TaskInput) updateDependsOn() {
-	conditions := []config.DependsOnCondition{
-		config.DependsOnNone,
-		config.DependsOnSuccess,
-		config.DependsOnFailure,
-		config.DependsOnAlways,
-	}
-
-	// depTaskIdx: 0 = none, 1+ = index into activeTasks
-	if m.condIdx == 0 || m.depTaskIdx == 0 || len(m.activeTasks) == 0 {
-		m.options.DependsOn = nil
-	} else {
-		taskName := m.activeTasks[m.depTaskIdx-1]
-		m.options.DependsOn = &config.TaskDependency{
-			TaskName:  taskName,
-			Condition: conditions[m.condIdx],
-		}
 	}
 }
 
 // applyOptionInputValues applies current selection values to options.
+// Currently a no-op since Model and Ultrathink are applied immediately.
 func (m *TaskInput) applyOptionInputValues() {
-	m.updateDependsOn()
+	// No-op: Model and Ultrathink are applied directly when changed
 }
 
 // isCancelPending returns true if we're waiting for the second ESC/Ctrl+C press.
@@ -531,20 +481,34 @@ func (m *TaskInput) View() tea.View {
 		rightPanel,
 	)
 
-	// Build content with help text at top-right
+	// Build content with version+tip at top-left and help text at top-right
 	var sb strings.Builder
+
+	// Version and tip style (same dim color as help text)
+	versionStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("39")).
+		Bold(true)
+	tipStyle := helpStyle
+
+	// Left side: PAW {version} Tip: {tip}
+	versionText := versionStyle.Render("PAW " + Version)
+	tipText := tipStyle.Render(" Tip: " + GetTip())
+	leftContent := versionText + tipText
+	leftWidth := lipgloss.Width(leftContent)
 
 	// Show cancel pending hint if waiting for second press, otherwise show normal help text
 	if m.isCancelPending() {
-		// Cancel pending state - show prominent hint
+		// Cancel pending state - show prominent hint on the right
 		cancelHintStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")). // Orange/yellow for visibility
 			Bold(true)
 		cancelHint := cancelHintStyle.Render("Press Esc again to cancel")
 		hintWidth := lipgloss.Width(cancelHint)
-		if m.width > hintWidth {
-			padding := strings.Repeat(" ", max(0, m.width-hintWidth))
-			sb.WriteString(padding)
+
+		sb.WriteString(leftContent)
+		gap := m.width - leftWidth - hintWidth
+		if gap > 0 {
+			sb.WriteString(strings.Repeat(" ", gap))
 		}
 		sb.WriteString(cancelHint)
 	} else {
@@ -559,12 +523,14 @@ func (m *TaskInput) View() tea.View {
 			helpText = "↑/↓: Scroll  |  ⌥Tab: Input  |  Alt+Enter: Submit  |  Esc×2: Cancel"
 		}
 
-		// Add help text at top-right (right-aligned)
+		// Add version+tip on left, help text on right
 		helpRendered := helpStyle.Render(helpText)
 		helpWidth := lipgloss.Width(helpRendered)
-		if m.width > helpWidth {
-			padding := strings.Repeat(" ", max(0, m.width-helpWidth))
-			sb.WriteString(padding)
+
+		sb.WriteString(leftContent)
+		gap := m.width - leftWidth - helpWidth
+		if gap > 0 {
+			sb.WriteString(strings.Repeat(" ", gap))
 		}
 		sb.WriteString(helpRendered)
 	}
@@ -714,82 +680,6 @@ func (m *TaskInput) renderOptionsPanel() string {
 		content.WriteString("\n")
 	}
 
-	// Depends on task field (dropdown selector)
-	{
-		isSelected := isFocused && m.optField == OptFieldDependsOnTask
-		label := labelStyle.Render("Depends on:")
-		if isSelected {
-			label = selectedLabelStyle.Render("Depends on:")
-		}
-		content.WriteString(label)
-
-		if len(m.activeTasks) == 0 {
-			content.WriteString(dimStyle.Render("(no tasks)"))
-		} else {
-			// Build options: [none] task1 task2 ...
-			options := make([]string, 0, len(m.activeTasks)+1)
-			options = append(options, "-") // none option
-			options = append(options, m.activeTasks...)
-
-			var parts []string
-			for i, opt := range options {
-				text := opt
-				if len(text) > 10 {
-					text = text[:9] + "…" // Truncate long names
-				}
-				if i == m.depTaskIdx {
-					if isSelected {
-						text = selectedValueStyle.Render("[" + text + "]")
-					} else {
-						text = valueStyle.Render("[" + text + "]")
-					}
-				} else {
-					text = dimStyle.Render(" " + text + " ")
-				}
-				parts = append(parts, text)
-			}
-			content.WriteString(strings.Join(parts, ""))
-		}
-		content.WriteString("\n")
-	}
-
-	// Depends on condition field
-	{
-		isSelected := isFocused && m.optField == OptFieldDependsOnCondition
-		label := labelStyle.Render("Run when:")
-		if isSelected {
-			label = selectedLabelStyle.Render("Run when:")
-		}
-		content.WriteString(label)
-
-		conditions := []struct {
-			val   config.DependsOnCondition
-			label string
-		}{
-			{config.DependsOnNone, "-"},
-			{config.DependsOnSuccess, "ok"},
-			{config.DependsOnFailure, "fail"},
-			{config.DependsOnAlways, "any"},
-		}
-
-		var parts []string
-		for i, cond := range conditions {
-			text := cond.label
-			if i == m.condIdx {
-				if isSelected {
-					text = selectedValueStyle.Render("[" + text + "]")
-				} else {
-					text = valueStyle.Render("[" + text + "]")
-				}
-			} else {
-				text = dimStyle.Render(" " + text + " ")
-			}
-			parts = append(parts, text)
-		}
-		content.WriteString(strings.Join(parts, ""))
-		content.WriteString("\n")
-	}
-
 	return panelStyle.Render(content.String())
 }
 
@@ -888,12 +778,12 @@ func (m *TaskInput) moveCursorToVisualColumn(targetCol int) {
 // detectClickedPanel determines which panel was clicked based on mouse position.
 func (m *TaskInput) detectClickedPanel(x, y int) FocusPanel {
 	// Calculate approximate box boundaries
-	// Textarea: starts at Y=1 (after help text), height = 6 + 2 (border) = 8
+	// Textarea: starts at Y=1 (after help text), height = 8 + 2 (border) = 10
 	// Options panel: same Y range as textarea, but to the right
 	// Kanban: starts after top section, takes remaining space
 
 	const optionsPanelWidth = 45
-	textareaHeight := 8 // 6 rows + 2 for border
+	textareaHeight := 10 // 8 rows + 2 for border
 	textareaWidth := m.width - optionsPanelWidth - 1
 	if textareaWidth < 30 {
 		textareaWidth = 30
@@ -941,8 +831,8 @@ func (m *TaskInput) detectKanbanColumn(x, y int) int {
 
 // getKanbanRelativeY converts absolute Y coordinate to kanban-relative row.
 func (m *TaskInput) getKanbanRelativeY(y int) int {
-	// Kanban starts after: help text (1) + options panel (8) + gap (1)
-	const kanbanStartY = 10
+	// Kanban starts after: help text (1) + textarea (10 with border) + gap (1)
+	const kanbanStartY = 12
 	relY := y - kanbanStartY
 	if relY < 0 {
 		relY = 0
