@@ -271,4 +271,9 @@ Use `paw history` to list entries and `paw history show <index|task|file>` to vi
 
 ## CLI utilities
 
+- `paw attach` - Attach to a running PAW session from anywhere.
+  ```bash
+  paw attach           # List and select from running sessions
+  paw attach myproject # Attach directly to 'myproject' session
+  ```
 - `paw check --fix` attempts Homebrew installs for missing dependencies and repairs missing PAW files/folders.
