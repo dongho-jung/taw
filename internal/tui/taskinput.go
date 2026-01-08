@@ -61,6 +61,10 @@ type TaskInput struct {
 	selectAnchorRow int
 	selectAnchorCol int
 
+	// Kanban mouse selection
+	kanbanSelecting  bool
+	kanbanSelectY    int // Y position relative to kanban area
+
 	// Kanban view for tasks across all sessions
 	kanban *KanbanView
 
@@ -196,8 +200,8 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		const optionsContentHeight = 6 // Internal content height (excluding border)
 
 		// Calculate Kanban height from remaining space
-		// Reserve: options panel height + help text (1) + gap (1)
-		kanbanHeight := max(8, msg.Height-optionsPanelHeight-2)
+		// Reserve: options panel height + help text (1) + gap (1) + tmux statusline (1)
+		kanbanHeight := max(8, msg.Height-optionsPanelHeight-3)
 		m.kanban.SetSize(msg.Width, kanbanHeight)
 
 		// Options panel needs ~43 chars width (content + border + padding)
@@ -213,9 +217,16 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		keyStr := msg.String()
 
-		if keyStr == "ctrl+c" && m.focusPanel == FocusPanelLeft && m.textarea.HasSelection() {
-			_ = m.textarea.CopySelection()
-			return m, nil
+		// Handle Ctrl+C for copying selection (textarea or kanban)
+		if keyStr == "ctrl+c" {
+			if m.focusPanel == FocusPanelLeft && m.textarea.HasSelection() {
+				_ = m.textarea.CopySelection()
+				return m, nil
+			}
+			if m.focusPanel == FocusPanelKanban && m.kanban.HasSelection() {
+				_ = m.kanban.CopySelection()
+				return m, nil
+			}
 		}
 
 		// Global keys (work in both panels)
@@ -287,6 +298,10 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Handle textarea mouse selection if clicking in textarea
 			if clickedPanel == FocusPanelLeft {
+				// Clear Kanban selection when clicking textarea
+				m.kanban.ClearSelection()
+				m.kanbanSelecting = false
+
 				if row, col, ok := m.handleTextareaMouse(msg.X, msg.Y); ok {
 					m.mouseSelecting = true
 					m.selectAnchorRow = row
@@ -295,25 +310,47 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			// Handle Kanban column selection
+			// Handle Kanban mouse selection
 			if clickedPanel == FocusPanelKanban {
+				// Clear textarea selection when clicking kanban
+				m.textarea.ClearSelection()
+				m.mouseSelecting = false
+
 				col := m.detectKanbanColumn(msg.X, msg.Y)
 				m.kanban.SetFocusedColumn(col)
+
+				// Start Kanban text selection
+				kanbanY := m.getKanbanRelativeY(msg.Y)
+				m.kanbanSelecting = true
+				m.kanbanSelectY = kanbanY
+				m.kanban.StartSelection(kanbanY)
 			}
 		}
 
 	case tea.MouseMotionMsg:
-		if msg.Button == tea.MouseLeft && m.mouseSelecting {
-			if row, col, ok := m.handleTextareaMouse(msg.X, msg.Y); ok {
-				m.textarea.SetSelection(m.selectAnchorRow, m.selectAnchorCol, row, col)
+		if msg.Button == tea.MouseLeft {
+			if m.mouseSelecting {
+				if row, col, ok := m.handleTextareaMouse(msg.X, msg.Y); ok {
+					m.textarea.SetSelection(m.selectAnchorRow, m.selectAnchorCol, row, col)
+				}
+			}
+			if m.kanbanSelecting {
+				kanbanY := m.getKanbanRelativeY(msg.Y)
+				m.kanban.ExtendSelection(kanbanY)
 			}
 		}
 
 	case tea.MouseReleaseMsg:
-		if msg.Button == tea.MouseLeft && m.mouseSelecting {
-			m.mouseSelecting = false
-			if !m.textarea.HasSelection() {
-				m.textarea.ClearSelection()
+		if msg.Button == tea.MouseLeft {
+			if m.mouseSelecting {
+				m.mouseSelecting = false
+				if !m.textarea.HasSelection() {
+					m.textarea.ClearSelection()
+				}
+			}
+			if m.kanbanSelecting {
+				m.kanbanSelecting = false
+				m.kanban.EndSelection()
 			}
 		}
 
@@ -609,7 +646,7 @@ func (m *TaskInput) renderOptionsPanel() string {
 	} else {
 		content.WriteString(titleDimStyle.Render("Options"))
 	}
-	content.WriteString("\n")
+	// Note: MarginBottom(1) on titleStyle already provides spacing, no explicit \n needed
 
 	// Model field
 	{
@@ -891,6 +928,17 @@ func (m *TaskInput) detectKanbanColumn(x, y int) int {
 		return col
 	}
 	return -1
+}
+
+// getKanbanRelativeY converts absolute Y coordinate to kanban-relative row.
+func (m *TaskInput) getKanbanRelativeY(y int) int {
+	// Kanban starts after: help text (1) + options panel (8) + gap (1)
+	const kanbanStartY = 10
+	relY := y - kanbanStartY
+	if relY < 0 {
+		relY = 0
+	}
+	return relY
 }
 
 // switchFocusTo switches focus to the specified panel.

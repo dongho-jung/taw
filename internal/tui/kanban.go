@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/service"
@@ -28,6 +30,13 @@ type KanbanView struct {
 	scrollOffset int
 	focused      bool
 	focusedCol   int // -1 = none, 0-3 = specific column
+
+	// Text selection state
+	selecting     bool
+	selectStartY  int // Start row (relative to kanban top)
+	selectEndY    int // End row (relative to kanban top)
+	selectedText  string
+	renderedLines []string // Cache of rendered text lines for selection
 }
 
 // NewKanbanView creates a new Kanban view.
@@ -184,6 +193,14 @@ func (k *KanbanView) Render() string {
 		board = lipgloss.JoinHorizontal(lipgloss.Top, board, " ", scrollbar)
 	}
 
+	// Apply selection highlighting and cache text for copying
+	if k.HasSelection() {
+		board = k.applySelectionHighlight(board)
+	}
+
+	// Cache rendered text for copy functionality (strip ANSI codes for plain text)
+	k.cacheTextForCopy(board)
+
 	return board
 }
 
@@ -303,4 +320,104 @@ func (k *KanbanView) ContentHeight() int {
 // renderScrollbar renders a vertical scrollbar for the kanban view.
 func (k *KanbanView) renderScrollbar(visibleHeight int) string {
 	return renderVerticalScrollbar(k.ContentHeight(), visibleHeight, k.scrollOffset, k.isDark)
+}
+
+// StartSelection starts text selection at the given row.
+func (k *KanbanView) StartSelection(y int) {
+	k.selecting = true
+	k.selectStartY = y
+	k.selectEndY = y
+}
+
+// ExtendSelection extends the selection to the given row.
+func (k *KanbanView) ExtendSelection(y int) {
+	if k.selecting {
+		k.selectEndY = y
+	}
+}
+
+// EndSelection finalizes the selection.
+func (k *KanbanView) EndSelection() {
+	k.selecting = false
+}
+
+// ClearSelection clears the current selection.
+func (k *KanbanView) ClearSelection() {
+	k.selecting = false
+	k.selectStartY = 0
+	k.selectEndY = 0
+	k.selectedText = ""
+}
+
+// HasSelection returns true if there's an active selection.
+func (k *KanbanView) HasSelection() bool {
+	return k.selectStartY != k.selectEndY || k.selecting
+}
+
+// GetSelectionRange returns the selection range (min, max row).
+func (k *KanbanView) GetSelectionRange() (int, int) {
+	minY := k.selectStartY
+	maxY := k.selectEndY
+	if minY > maxY {
+		minY, maxY = maxY, minY
+	}
+	return minY, maxY
+}
+
+// IsRowSelected returns true if the given row is within the selection.
+func (k *KanbanView) IsRowSelected(row int) bool {
+	minY, maxY := k.GetSelectionRange()
+	return row >= minY && row <= maxY
+}
+
+// CacheRenderedText stores the plain text version of each row for copying.
+func (k *KanbanView) CacheRenderedText(lines []string) {
+	k.renderedLines = lines
+}
+
+// CopySelection copies the selected text to clipboard and returns it.
+func (k *KanbanView) CopySelection() error {
+	if !k.HasSelection() || len(k.renderedLines) == 0 {
+		return nil
+	}
+
+	minY, maxY := k.GetSelectionRange()
+	var selectedLines []string
+	for i := minY; i <= maxY && i < len(k.renderedLines); i++ {
+		if i >= 0 {
+			selectedLines = append(selectedLines, k.renderedLines[i])
+		}
+	}
+
+	k.selectedText = strings.Join(selectedLines, "\n")
+	return clipboard.WriteAll(k.selectedText)
+}
+
+// applySelectionHighlight applies selection highlight to the rendered board.
+func (k *KanbanView) applySelectionHighlight(board string) string {
+	lines := strings.Split(board, "\n")
+	minY, maxY := k.GetSelectionRange()
+
+	// Selection highlight style (inverted colors for visibility)
+	highlightStyle := lipgloss.NewStyle().
+		Reverse(true)
+
+	for i := range lines {
+		if i >= minY && i <= maxY {
+			// Apply highlight to selected lines
+			lines[i] = highlightStyle.Render(lines[i])
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// cacheTextForCopy caches plain text version of rendered lines for copy functionality.
+func (k *KanbanView) cacheTextForCopy(board string) {
+	lines := strings.Split(board, "\n")
+	k.renderedLines = make([]string, len(lines))
+	for i, line := range lines {
+		// Strip ANSI codes to get plain text
+		k.renderedLines[i] = ansi.Strip(line)
+	}
 }
