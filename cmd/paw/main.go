@@ -47,6 +47,7 @@ It manages tasks in tmux sessions with optional git worktree isolation.`,
 var showVersion bool
 
 func init() {
+	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(cleanCmd)
 	rootCmd.AddCommand(setupCmd)
