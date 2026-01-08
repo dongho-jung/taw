@@ -1,7 +1,6 @@
 package constants
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -290,26 +289,32 @@ func TestTruncateForWindowName(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
+		expected string
 	}{
 		{
-			name:  "short name unchanged",
-			input: "my-task",
+			name:     "short name converted to camelCase",
+			input:    "my-task",
+			expected: "myTask",
 		},
 		{
-			name:  "exact length unchanged",
-			input: "exactly12chr",
+			name:     "single word unchanged",
+			input:    "task",
+			expected: "task",
 		},
 		{
-			name:  "long name truncated",
-			input: "this-is-a-very-long-task-name",
+			name:     "long name truncated",
+			input:    "this-is-a-very-long-task-name",
+			expected: "thisIsAVeryLongTaskN", // 20 chars, truncated at MaxWindowNameLen (20)
 		},
 		{
-			name:  "empty string unchanged",
-			input: "",
+			name:     "empty string unchanged",
+			input:    "",
+			expected: "",
 		},
 		{
-			name:  "unicode name truncated by bytes",
-			input: "한글태스크",
+			name:     "kebab-case converted",
+			input:    "cancel-task-twice",
+			expected: "cancelTaskTwice",
 		},
 	}
 
@@ -319,12 +324,8 @@ func TestTruncateForWindowName(t *testing.T) {
 			if len(result) > MaxWindowNameLen {
 				t.Errorf("TruncateForWindowName(%q) length = %d, want <= %d", tt.input, len(result), MaxWindowNameLen)
 			}
-			if !strings.Contains(result, WindowTokenSep) {
-				t.Errorf("TruncateForWindowName(%q) missing token separator", tt.input)
-			}
-			suffix := WindowTokenSep + ShortTaskID(tt.input)
-			if !strings.HasSuffix(result, suffix) {
-				t.Errorf("TruncateForWindowName(%q) = %q, want suffix %q", tt.input, result, suffix)
+			if result != tt.expected {
+				t.Errorf("TruncateForWindowName(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}
@@ -335,12 +336,59 @@ func TestTruncateForWindowNameUsesCamelCase(t *testing.T) {
 	input := "cancel-task-twice"
 	result := TruncateForWindowName(input)
 
-	// The result should contain camelCase base (cancelTaskTwice or truncated)
-	// Since MaxWindowNameLen is 20 and suffix is 5 chars (~xxxx), base can be 15 chars
-	// "cancelTaskTwice" is 15 chars, so it fits exactly
+	// The result should be exactly "cancelTaskTwice" (15 chars)
+	expected := "cancelTaskTwice"
+	if result != expected {
+		t.Errorf("TruncateForWindowName(%q) = %q, expected %q", input, result, expected)
+	}
+}
 
-	if !strings.HasPrefix(result, "cancelTaskTwice~") {
-		t.Errorf("TruncateForWindowName(%q) = %q, expected camelCase prefix 'cancelTaskTwice~'", input, result)
+func TestMatchesWindowToken(t *testing.T) {
+	tests := []struct {
+		name      string
+		extracted string
+		taskName  string
+		want      bool
+	}{
+		{
+			name:      "new format matches",
+			extracted: "cancelTaskTwice",
+			taskName:  "cancel-task-twice",
+			want:      true,
+		},
+		{
+			name:      "old hash format matches",
+			extracted: "cancelTaskTwice~" + ShortTaskID("cancel-task-twice"),
+			taskName:  "cancel-task-twice",
+			want:      true,
+		},
+		{
+			name:      "legacy format matches",
+			extracted: "cancel-task-twice",
+			taskName:  "cancel-task-twice",
+			want:      true,
+		},
+		{
+			name:      "different task does not match",
+			extracted: "otherTask",
+			taskName:  "cancel-task-twice",
+			want:      false,
+		},
+		{
+			name:      "partial match does not match",
+			extracted: "cancelTask",
+			taskName:  "cancel-task-twice",
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MatchesWindowToken(tt.extracted, tt.taskName)
+			if got != tt.want {
+				t.Errorf("MatchesWindowToken(%q, %q) = %v, want %v", tt.extracted, tt.taskName, got, tt.want)
+			}
+		})
 	}
 }
 

@@ -286,9 +286,6 @@ func startNewSession(app *app.App, tm tmux.Client) error {
 	_ = tm.SendKeysLiteral(app.SessionName+":"+constants.NewWindowName, newTaskCmd)
 	_ = tm.SendKeys(app.SessionName+":"+constants.NewWindowName, "Enter")
 
-	// Set iTerm tab title before attaching
-	setTerminalTitle("[paw] " + app.SessionName)
-
 	// Attach to session
 	return tm.AttachSession(app.SessionName)
 }
@@ -395,8 +392,17 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 	}
 
 	logging.Debug("Attaching to session: %s", app.SessionName)
-	// Set iTerm tab title before attaching
-	setTerminalTitle("[paw] " + app.SessionName)
+
+	// Re-apply tmux config to ensure terminal title is set
+	// This is needed when re-attaching because the tmux server might have been started
+	// in a previous session where the options were set differently
+	if err := reapplyTmuxConfig(app, tm); err != nil {
+		logging.Debug("Failed to re-apply tmux config: %v", err)
+	}
+
+	// Also set terminal title option on re-attach
+	_ = tm.SetOption("set-titles", "on", true)
+	_ = tm.SetOption("set-titles-string", "[paw] "+app.SessionName, true)
 
 	// Attach to session
 	return tm.AttachSession(app.SessionName)
@@ -434,6 +440,12 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	// Note: "None" is not a valid tmux key, so we use an obscure key instead
 	_ = tm.SetOption("prefix", "M-F12", true)
 	_ = tm.SetOption("prefix2", "M-F12", true)
+
+	// Setup terminal title (for iTerm2 tab naming)
+	// This makes tmux set the terminal title, which works better than OSC sequences
+	// because iTerm otherwise shows the running command (tmux -f /var/...)
+	_ = tm.SetOption("set-titles", "on", true)
+	_ = tm.SetOption("set-titles-string", "[paw] "+app.SessionName, true)
 
 	// Setup status bar
 	_ = tm.SetOption("status", "on", true)
@@ -490,14 +502,6 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	}
 
 	return nil
-}
-
-// setTerminalTitle sets the terminal (iTerm) tab title using OSC escape sequences.
-// This works with iTerm2 and other terminals that support OSC 0/1/2.
-func setTerminalTitle(title string) {
-	// OSC 0 sets both window and tab title
-	// Format: ESC ] 0 ; <title> BEL
-	fmt.Printf("\x1b]0;%s\x07", title)
 }
 
 // updateGitignore adds .paw gitignore rules if not already present

@@ -117,21 +117,15 @@ func LegacyTruncateForWindowName(name string) string {
 	return name
 }
 
-// WindowToken builds a window-safe token with a short stable ID suffix.
-// The base name is converted to camelCase for display.
+// WindowToken builds a window-safe token for a task name.
+// The name is converted to camelCase for display and truncated if needed.
 func WindowToken(name string) string {
-	id := ShortTaskID(name)
-	suffix := WindowTokenSep + id
-	maxBase := MaxWindowNameLen - len(suffix)
-	if maxBase < 1 {
-		maxBase = 1
-	}
 	// Convert to camelCase for display
 	base := ToCamelCase(name)
-	if len(base) > maxBase {
-		base = base[:maxBase]
+	if len(base) > MaxWindowNameLen {
+		base = base[:MaxWindowNameLen]
 	}
-	return base + suffix
+	return base
 }
 
 // ShortTaskID returns a stable short ID for a task name.
@@ -141,8 +135,27 @@ func ShortTaskID(name string) string {
 }
 
 // MatchesWindowToken returns true if the extracted window token matches the task name.
+// Supports: new format (camelCase), legacy format (plain truncation), and old hash format (camelCase~xxxx).
 func MatchesWindowToken(extracted, taskName string) bool {
-	return extracted == TruncateForWindowName(taskName) || extracted == LegacyTruncateForWindowName(taskName)
+	return extracted == TruncateForWindowName(taskName) ||
+		extracted == LegacyTruncateForWindowName(taskName) ||
+		extracted == oldHashWindowToken(taskName)
+}
+
+// oldHashWindowToken builds the old window token format with hash suffix.
+// Used for backward compatibility with existing windows.
+func oldHashWindowToken(name string) string {
+	id := ShortTaskID(name)
+	suffix := WindowTokenSep + id
+	maxBase := MaxWindowNameLen - len(suffix)
+	if maxBase < 1 {
+		maxBase = 1
+	}
+	base := ToCamelCase(name)
+	if len(base) > maxBase {
+		base = base[:maxBase]
+	}
+	return base + suffix
 }
 
 // Display limits
