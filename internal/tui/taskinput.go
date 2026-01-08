@@ -60,6 +60,9 @@ type TaskInput struct {
 
 	// Kanban view for tasks across all sessions
 	kanban *KanbanView
+
+	// Double-press cancel detection
+	cancelPressTime time.Time
 }
 
 // tickMsg is used for periodic Kanban refresh.
@@ -199,8 +202,16 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global keys (work in both panels)
 		switch keyStr {
 		case "esc", "ctrl+c":
-			m.cancelled = true
-			return m, tea.Quit
+			// Double-press detection: require pressing twice within 2 seconds
+			now := time.Now()
+			if !m.cancelPressTime.IsZero() && now.Sub(m.cancelPressTime) <= 2*time.Second {
+				// Second press within 2 seconds - cancel
+				m.cancelled = true
+				return m, tea.Quit
+			}
+			// First press or timeout - record time and wait for second press
+			m.cancelPressTime = now
+			return m, nil
 
 		// Submit: Alt+Enter or F5
 		case "alt+enter", "f5":
@@ -451,11 +462,11 @@ func (m *TaskInput) View() tea.View {
 	var helpText string
 	switch m.focusPanel {
 	case FocusPanelLeft:
-		helpText = "Alt+Enter/F5: Submit  |  ⌥Tab: Options  |  Esc: Cancel"
+		helpText = "Alt+Enter/F5: Submit  |  ⌥Tab: Options  |  Esc×2: Cancel"
 	case FocusPanelRight:
 		helpText = "↑/↓: Navigate  |  ←/→: Change  |  ⌥Tab: Tasks  |  Alt+Enter: Submit"
 	case FocusPanelKanban:
-		helpText = "↑/↓: Scroll  |  ⌥Tab: Input  |  Alt+Enter: Submit  |  Esc: Cancel"
+		helpText = "↑/↓: Scroll  |  ⌥Tab: Input  |  Alt+Enter: Submit  |  Esc×2: Cancel"
 	}
 
 	// Build content with help text at top-right
