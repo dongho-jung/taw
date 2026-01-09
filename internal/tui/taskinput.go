@@ -379,7 +379,7 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textarea.ClearSelection()
 				m.mouseSelecting = false
 
-				col := m.detectKanbanColumn(msg.X, msg.Y)
+				col := m.detectKanbanColumn(msg.X)
 				m.kanban.SetFocusedColumn(col)
 
 				// Start Kanban text selection
@@ -608,7 +608,10 @@ func (m *TaskInput) View() tea.View {
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
-	v.MouseMode = tea.MouseModeCellMotion
+	// Use AllMotion for better tmux mouse passthrough compatibility
+	// CellMotion was causing tmux to intercept mouse events and use its own copy-mode
+	// (line-by-line selection at window level instead of cell-based TUI selection)
+	v.MouseMode = tea.MouseModeAllMotion
 
 	// Set real cursor based on focus
 	if m.focusPanel == FocusPanelLeft {
@@ -878,8 +881,9 @@ func (m *TaskInput) detectClickedPanel(x, y int) FocusPanel {
 	}
 
 	// Below top section = kanban (if visible)
-	// Kanban is visible when height > 20 and width >= 40 (minimum width for Kanban to render)
-	if m.height > 20 && m.width >= 40 {
+	// Kanban is visible when height > 20 and width >= 70 (minColumnWidth*4 + columnGap)
+	// This must match the condition in KanbanView.Render()
+	if m.height > 20 && m.width >= 70 {
 		return FocusPanelKanban
 	}
 
@@ -889,7 +893,7 @@ func (m *TaskInput) detectClickedPanel(x, y int) FocusPanel {
 
 // detectKanbanColumn determines which Kanban column was clicked based on X position.
 // Returns column index (0-3) or -1 if outside column area.
-func (m *TaskInput) detectKanbanColumn(x, y int) int {
+func (m *TaskInput) detectKanbanColumn(x int) int {
 	colWidth := m.kanban.ColumnWidth()
 	if colWidth <= 0 {
 		return -1
@@ -907,7 +911,7 @@ func (m *TaskInput) detectKanbanColumn(x, y int) int {
 // getKanbanRelativeY converts absolute Y coordinate to kanban-relative row.
 func (m *TaskInput) getKanbanRelativeY(y int) int {
 	// Kanban starts after: help text (1) + textarea (dynamic height + 2 border)
-	// Note: there's no gap between textarea and kanban (see View: "no extra gap")
+	// Y=0: help, Y=1 to Y=(textareaHeight+2): topSection, Y=(textareaHeight+3): kanban starts
 	kanbanStartY := 1 + m.textareaHeight + 2
 	relY := y - kanbanStartY
 	if relY < 0 {
