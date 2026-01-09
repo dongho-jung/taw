@@ -2,9 +2,92 @@ package git
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
+
+// runGitCmd runs a git command with a clean environment to avoid parent repo influence.
+func runGitCmd(dir string, args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	// Filter out git environment variables to ensure isolation from parent repository
+	var cleanEnv []string
+	gitVars := map[string]bool{
+		"GIT_DIR":                           true,
+		"GIT_WORK_TREE":                     true,
+		"GIT_INDEX_FILE":                    true,
+		"GIT_OBJECT_DIRECTORY":              true,
+		"GIT_ALTERNATE_OBJECT_DIRECTORIES":  true,
+		"GIT_CEILING_DIRECTORIES":           true,
+	}
+	for _, env := range os.Environ() {
+		// Keep all non-git environment variables
+		keep := true
+		for gitVar := range gitVars {
+			if len(env) >= len(gitVar) && env[:len(gitVar)] == gitVar && (len(env) == len(gitVar) || env[len(gitVar)] == '=') {
+				keep = false
+				break
+			}
+		}
+		if keep {
+			cleanEnv = append(cleanEnv, env)
+		}
+	}
+	cmd.Env = cleanEnv
+	return cmd
+}
+
+// setupGitRepo creates a temporary git repository for testing.
+func setupGitRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	// Initialize git repo with clean environment (no parent repo influence)
+	output, err := runGitCmd(dir, "init").CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to init git repo: %v\nOutput: %s", err, output)
+	}
+
+	// Configure git user (required for commits)
+	if err := runGitCmd(dir, "config", "user.name", "Test User").Run(); err != nil {
+		t.Fatalf("Failed to config user.name: %v", err)
+	}
+	if err := runGitCmd(dir, "config", "user.email", "test@example.com").Run(); err != nil {
+		t.Fatalf("Failed to config user.email: %v", err)
+	}
+
+	// Disable git hooks to avoid triggering pre-commit hooks during tests
+	if err := runGitCmd(dir, "config", "core.hooksPath", "/dev/null").Run(); err != nil {
+		t.Fatalf("Failed to config core.hooksPath: %v", err)
+	}
+
+	return dir
+}
+
+// createCommit creates a file and commits it to the repository.
+func createCommit(t *testing.T, dir, filename, content, message string) {
+	t.Helper()
+
+	// Create file
+	filePath := filepath.Join(dir, filename)
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	// Add file
+	if err := runGitCmd(dir, "add", filename).Run(); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+
+	// Commit
+	output, err := runGitCmd(dir, "commit", "-m", message).CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to commit: %v\nOutput: %s", err, output)
+	}
+}
 
 func TestNew(t *testing.T) {
 	client := New()
@@ -287,4 +370,455 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// Git client operation tests
+
+func TestIsGitRepo(t *testing.T) {
+	client := New()
+
+	// Test with git repo
+	gitDir := setupGitRepo(t)
+	if !client.IsGitRepo(gitDir) {
+		t.Error("IsGitRepo() = false for git repository, want true")
+	}
+
+	// Test with non-git directory
+	nonGitDir := t.TempDir()
+	if client.IsGitRepo(nonGitDir) {
+		t.Error("IsGitRepo() = true for non-git directory, want false")
+	}
+}
+
+func TestGetRepoRoot(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	root, err := client.GetRepoRoot(gitDir)
+	if err != nil {
+		t.Fatalf("GetRepoRoot() error = %v", err)
+	}
+
+	if root == "" {
+		t.Error("GetRepoRoot() returned empty string")
+	}
+}
+
+func TestGetMainBranch(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit (needed for branch to exist)
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	mainBranch := client.GetMainBranch(gitDir)
+	if mainBranch == "" {
+		t.Error("GetMainBranch() returned empty string")
+	}
+}
+
+func TestBranchOperations(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Test BranchExists - should not exist yet
+	if client.BranchExists(gitDir, "feature") {
+		t.Error("BranchExists('feature') = true before creation, want false")
+	}
+
+	// Test BranchCreate
+	if err := client.BranchCreate(gitDir, "feature", ""); err != nil {
+		t.Fatalf("BranchCreate() error = %v", err)
+	}
+
+	// Test BranchExists - should exist now
+	if !client.BranchExists(gitDir, "feature") {
+		t.Error("BranchExists('feature') = false after creation, want true")
+	}
+
+	// Test GetCurrentBranch
+	currentBranch, err := client.GetCurrentBranch(gitDir)
+	if err != nil {
+		t.Fatalf("GetCurrentBranch() error = %v", err)
+	}
+	if currentBranch == "" {
+		t.Error("GetCurrentBranch() returned empty string")
+	}
+
+	// Test BranchDelete
+	if err := client.BranchDelete(gitDir, "feature", false); err != nil {
+		t.Fatalf("BranchDelete() error = %v", err)
+	}
+
+	// Verify deletion
+	if client.BranchExists(gitDir, "feature") {
+		t.Error("BranchExists('feature') = true after deletion, want false")
+	}
+}
+
+func TestGetHeadCommit(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	hash, err := client.GetHeadCommit(gitDir)
+	if err != nil {
+		t.Fatalf("GetHeadCommit() error = %v", err)
+	}
+
+	if len(hash) != 40 { // Git SHA-1 hash length
+		t.Errorf("GetHeadCommit() returned hash with length %d, want 40", len(hash))
+	}
+}
+
+func TestHasChanges(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// No changes initially
+	if client.HasChanges(gitDir) {
+		t.Error("HasChanges() = true with no changes, want false")
+	}
+
+	// Create a new file (untracked)
+	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+
+	// Should have changes now
+	if !client.HasChanges(gitDir) {
+		t.Error("HasChanges() = false with untracked file, want true")
+	}
+}
+
+func TestHasStagedChanges(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// No staged changes initially
+	if client.HasStagedChanges(gitDir) {
+		t.Error("HasStagedChanges() = true with no staged changes, want false")
+	}
+
+	// Create and stage a file
+	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	runGitCmd(gitDir, "add", "new.txt").Run()
+
+	// Should have staged changes now
+	if !client.HasStagedChanges(gitDir) {
+		t.Error("HasStagedChanges() = false with staged file, want true")
+	}
+}
+
+func TestHasUntrackedFiles(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// No untracked files initially
+	if client.HasUntrackedFiles(gitDir) {
+		t.Error("HasUntrackedFiles() = true with no untracked files, want false")
+	}
+
+	// Create a new file
+	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+
+	// Should have untracked files now
+	if !client.HasUntrackedFiles(gitDir) {
+		t.Error("HasUntrackedFiles() = false with untracked file, want true")
+	}
+}
+
+func TestGetUntrackedFiles(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Create untracked files
+	os.WriteFile(filepath.Join(gitDir, "file1.txt"), []byte("content"), 0644)
+	os.WriteFile(filepath.Join(gitDir, "file2.txt"), []byte("content"), 0644)
+
+	files, err := client.GetUntrackedFiles(gitDir)
+	if err != nil {
+		t.Fatalf("GetUntrackedFiles() error = %v", err)
+	}
+
+	if len(files) != 2 {
+		t.Errorf("GetUntrackedFiles() returned %d files, want 2", len(files))
+	}
+}
+
+func TestAddAndCommit(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Create a new file
+	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+
+	// Test Add
+	if err := client.Add(gitDir, "new.txt"); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+
+	// Test Commit
+	if err := client.Commit(gitDir, "Add new file"); err != nil {
+		t.Fatalf("Commit() error = %v", err)
+	}
+
+	// Verify commit was created
+	hash, err := client.GetHeadCommit(gitDir)
+	if err != nil {
+		t.Fatalf("GetHeadCommit() error = %v", err)
+	}
+	if hash == "" {
+		t.Error("No commit hash after commit")
+	}
+}
+
+func TestAddAll(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Create multiple new files
+	os.WriteFile(filepath.Join(gitDir, "file1.txt"), []byte("content1"), 0644)
+	os.WriteFile(filepath.Join(gitDir, "file2.txt"), []byte("content2"), 0644)
+
+	// Test AddAll
+	if err := client.AddAll(gitDir); err != nil {
+		t.Fatalf("AddAll() error = %v", err)
+	}
+
+	// Verify files are staged
+	if !client.HasStagedChanges(gitDir) {
+		t.Error("HasStagedChanges() = false after AddAll, want true")
+	}
+}
+
+func TestGetDiffStat(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Create and stage a file
+	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content\n"), 0644)
+	client.Add(gitDir, "new.txt")
+
+	// Test GetDiffStat
+	stat, err := client.GetDiffStat(gitDir)
+	if err != nil {
+		t.Fatalf("GetDiffStat() error = %v", err)
+	}
+
+	if stat == "" {
+		t.Error("GetDiffStat() returned empty string")
+	}
+}
+
+func TestStatus(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Create a new file
+	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+
+	// Test Status
+	status, err := client.Status(gitDir)
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+
+	if status == "" {
+		t.Error("Status() returned empty string with untracked file")
+	}
+}
+
+func TestCheckout(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Create and switch to a new branch
+	client.BranchCreate(gitDir, "feature", "")
+
+	// Test Checkout
+	if err := client.Checkout(gitDir, "feature"); err != nil {
+		t.Fatalf("Checkout() error = %v", err)
+	}
+
+	// Verify we're on the feature branch
+	currentBranch, _ := client.GetCurrentBranch(gitDir)
+	if currentBranch != "feature" {
+		t.Errorf("Current branch = %q after checkout, want %q", currentBranch, "feature")
+	}
+}
+
+func TestBranchMerged(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit on main
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	mainBranch, _ := client.GetCurrentBranch(gitDir)
+
+	// Create feature branch
+	client.BranchCreate(gitDir, "feature", "")
+	client.Checkout(gitDir, "feature")
+	createCommit(t, gitDir, "feature.txt", "feature content", "Add feature")
+
+	// Switch back to main and merge
+	client.Checkout(gitDir, mainBranch)
+	runGitCmd(gitDir, "merge", "feature", "--no-edit").Run()
+
+	// Test BranchMerged
+	if !client.BranchMerged(gitDir, "feature", mainBranch) {
+		t.Error("BranchMerged() = false for merged branch, want true")
+	}
+}
+
+func TestGetBranchCommits(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit on main
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	mainBranch, _ := client.GetCurrentBranch(gitDir)
+
+	// Create feature branch and add commits
+	client.BranchCreate(gitDir, "feature", "")
+	client.Checkout(gitDir, "feature")
+	createCommit(t, gitDir, "feature1.txt", "content1", "Feature commit 1")
+	createCommit(t, gitDir, "feature2.txt", "content2", "Feature commit 2")
+
+	// Test GetBranchCommits
+	commits, err := client.GetBranchCommits(gitDir, "feature", mainBranch, 0)
+	if err != nil {
+		t.Fatalf("GetBranchCommits() error = %v", err)
+	}
+
+	if len(commits) != 2 {
+		t.Errorf("GetBranchCommits() returned %d commits, want 2", len(commits))
+	}
+
+	// Check commit subjects
+	if commits[0].Subject != "Feature commit 2" {
+		t.Errorf("Commit 0 subject = %q, want %q", commits[0].Subject, "Feature commit 2")
+	}
+	if commits[1].Subject != "Feature commit 1" {
+		t.Errorf("Commit 1 subject = %q, want %q", commits[1].Subject, "Feature commit 1")
+	}
+}
+
+func TestHasOngoingMerge(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// No ongoing merge initially
+	if client.HasOngoingMerge(gitDir) {
+		t.Error("HasOngoingMerge() = true with no merge, want false")
+	}
+}
+
+func TestHasOngoingRebase(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// No ongoing rebase initially
+	if client.HasOngoingRebase(gitDir) {
+		t.Error("HasOngoingRebase() = true with no rebase, want false")
+	}
+}
+
+func TestIsFileStaged(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Create a new file
+	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+
+	// File should not be staged initially
+	staged, err := client.IsFileStaged(gitDir, "new.txt")
+	if err != nil {
+		t.Fatalf("IsFileStaged() error = %v", err)
+	}
+	if staged {
+		t.Error("IsFileStaged() = true for unstaged file, want false")
+	}
+
+	// Stage the file
+	client.Add(gitDir, "new.txt")
+
+	// File should be staged now
+	staged, err = client.IsFileStaged(gitDir, "new.txt")
+	if err != nil {
+		t.Fatalf("IsFileStaged() error = %v", err)
+	}
+	if !staged {
+		t.Error("IsFileStaged() = false for staged file, want true")
+	}
+}
+
+func TestResetPath(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Create and stage a file
+	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	client.Add(gitDir, "new.txt")
+
+	// Verify file is staged
+	staged, _ := client.IsFileStaged(gitDir, "new.txt")
+	if !staged {
+		t.Fatal("Setup failed: file should be staged")
+	}
+
+	// Test ResetPath
+	if err := client.ResetPath(gitDir, "new.txt"); err != nil {
+		t.Fatalf("ResetPath() error = %v", err)
+	}
+
+	// Verify file is no longer staged
+	staged, _ = client.IsFileStaged(gitDir, "new.txt")
+	if staged {
+		t.Error("IsFileStaged() = true after reset, want false")
+	}
 }
