@@ -241,6 +241,17 @@ func (m *TaskInput) updateTextareaHeight() {
 		m.textareaHeight = requiredHeight
 		m.textarea.SetHeight(requiredHeight)
 	}
+
+	// Always adjust viewport position based on content vs visible height
+	// This prevents the "first line cut off" issue when expanding height
+	if contentLines <= m.textareaHeight {
+		// Content fits in viewport - always show from top (no scrolling needed)
+		m.textarea.GotoTop()
+	} else {
+		// Content exceeds viewport - ensure cursor is visible with proper scrolling
+		// This allows scrolling but prevents last line from reaching the top
+		m.textarea.EnsureCursorVisible()
+	}
 }
 
 // Update handles messages and updates the model.

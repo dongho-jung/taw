@@ -1110,11 +1110,27 @@ func (m *Model) repositionView() {
 	} else if row > maximum {
 		m.viewport.LineDown(row - maximum)
 	}
+
+	// Limit maximum scroll offset to prevent last line from reaching the top
+	// Maximum offset = max(0, totalLines - viewportHeight)
+	// This ensures the last line stays at the bottom of the viewport
+	totalLines := len(m.value)
+	maxOffset := max(0, totalLines-m.viewport.Height())
+	if m.viewport.YOffset > maxOffset {
+		// Adjust offset to keep last line at bottom
+		diff := m.viewport.YOffset - maxOffset
+		m.viewport.LineUp(diff)
+	}
 }
 
 // EnsureCursorVisible updates the viewport to keep the cursor within view.
 func (m *Model) EnsureCursorVisible() {
 	m.repositionView()
+}
+
+// GotoTop scrolls the viewport to the top.
+func (m *Model) GotoTop() {
+	m.viewport.GotoTop()
 }
 
 // Width returns the width of the textarea.
@@ -1304,7 +1320,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.deleteWordRight()
 		case key.Matches(msg, m.KeyMap.InsertNewline):
 			m.deleteSelection()
-			if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
+			// Check against maxLines (maximum number of lines), not MaxHeight (viewport height)
+			// MaxHeight is the visible height, users should be able to add more lines with scrolling
+			if len(m.value) >= maxLines {
 				return m, nil
 			}
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
