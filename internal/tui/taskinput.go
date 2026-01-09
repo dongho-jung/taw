@@ -270,9 +270,17 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		kanbanHeight := max(8, msg.Height-topSectionHeight-3) // -3 for help text + gap + statusline
 		m.kanban.SetSize(msg.Width, kanbanHeight)
 
-		// Calculate widths for alignment with Kanban columns:
+		// Calculate widths for alignment with Kanban columns.
+		// Adaptive layout: switches between normal and narrow mode based on terminal width.
+		//
+		// Normal mode (wide terminal):
 		// - Textarea right border aligns with Done column right border (3rd column)
-		// - Options right border aligns with Warning column right border (4th column = screen edge)
+		// - Options right border aligns with Warning column right border (4th column)
+		//
+		// Narrow mode (narrow terminal, when single column < minOptionsPanelWidth):
+		// - Textarea right border aligns with Waiting column right border (2nd column)
+		// - Options left border aligns with Done column left border (3rd column)
+		// - Options right border aligns with Warning column right border (4th column)
 		const kanbanColumnGap = 8 // Same as kanban.go: 4 columns × 2 chars border
 		const minOptionsInnerWidth = 37
 		const optionsPaddingBorder = 6 // padding(4) + border(2)
@@ -282,18 +290,27 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		kanbanColWidth := (msg.Width - kanbanColumnGap) / 4
 		kanbanColDisplayWidth := kanbanColWidth + 2 // +2 for border
 
-		// Target: textarea spans 3 columns, options spans 1 column
-		// Done right = 3 * kanbanColDisplayWidth
-		// Warning right = 4 * kanbanColDisplayWidth = screen width (approximately)
-		doneRight := 3 * kanbanColDisplayWidth
+		// Detect narrow terminal: switch layout when single column is too narrow for options
+		isNarrow := kanbanColDisplayWidth < minOptionsPanelWidth
 
-		// Options width = 1 kanban column (to align with Warning)
-		// But ensure minimum width for content
-		m.optionsPanelWidth = max(minOptionsPanelWidth, kanbanColDisplayWidth)
+		var textareaDisplayWidth int
+		if isNarrow {
+			// Narrow mode: textarea spans 2 columns (Working + Waiting)
+			// Waiting right = 2 * kanbanColDisplayWidth
+			textareaDisplayWidth = 2 * kanbanColDisplayWidth
+			// Options spans 2 columns (Done + Warning)
+			m.optionsPanelWidth = 2 * kanbanColDisplayWidth
+		} else {
+			// Normal mode: textarea spans 3 columns (Working + Waiting + Done)
+			// Done right = 3 * kanbanColDisplayWidth
+			textareaDisplayWidth = 3 * kanbanColDisplayWidth
+			// Options spans 1 column (Warning)
+			// But ensure minimum width for content
+			m.optionsPanelWidth = max(minOptionsPanelWidth, kanbanColDisplayWidth)
+		}
 
-		// Textarea display width = Done right position
+		// Textarea display width = calculated above based on mode
 		// SetWidth sets content+padding width, border adds 2 more
-		textareaDisplayWidth := doneRight
 		textareaContentWidth := textareaDisplayWidth - 2 // -2 for border
 		if textareaContentWidth > 30 {
 			m.textarea.SetWidth(textareaContentWidth)
@@ -900,12 +917,23 @@ func (m *TaskInput) detectClickedPanel(x, y int) FocusPanel {
 	// Options panel: same Y range as textarea, but to the right
 	// Kanban: starts after top section, takes remaining space
 
-	// Calculate textarea width to match kanban columns alignment
+	// Calculate textarea width using same adaptive logic as WindowSizeMsg handler
 	const kanbanColumnGap = 8
+	const minOptionsPanelWidth = 43
 	kanbanColWidth := (m.width - kanbanColumnGap) / 4
 	kanbanColDisplayWidth := kanbanColWidth + 2
 	textareaHeightWithBorder := m.textareaHeight + 2 // Dynamic height + border
-	textareaWidth := 3 * kanbanColDisplayWidth       // Spans 3 kanban columns
+
+	// Detect narrow terminal and calculate textarea width accordingly
+	isNarrow := kanbanColDisplayWidth < minOptionsPanelWidth
+	var textareaWidth int
+	if isNarrow {
+		// Narrow mode: textarea spans 2 columns (Working + Waiting)
+		textareaWidth = 2 * kanbanColDisplayWidth
+	} else {
+		// Normal mode: textarea spans 3 columns (Working + Waiting + Done)
+		textareaWidth = 3 * kanbanColDisplayWidth
+	}
 	if textareaWidth < 30 {
 		textareaWidth = 30
 	}
