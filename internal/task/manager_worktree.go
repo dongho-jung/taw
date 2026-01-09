@@ -1,0 +1,243 @@
+package task
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
+	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/git"
+	"github.com/dongho-jung/paw/internal/logging"
+)
+
+// checkWorktreeStatus checks the status of a task's worktree.
+func (m *Manager) checkWorktreeStatus(task *Task) CorruptedReason {
+	worktreeDir := task.GetWorktreeDir()
+
+	// Check if worktree directory exists
+	info, err := os.Stat(worktreeDir)
+	if os.IsNotExist(err) {
+		// Check if branch exists
+		if m.gitClient.BranchExists(m.projectDir, task.Name) {
+			return CorruptMissingWorktree
+		}
+		return "" // No worktree and no branch - task might be cleaned up
+	}
+
+	if !info.IsDir() {
+		return CorruptInvalidGit
+	}
+
+	// Check if .git file exists
+	gitFile := filepath.Join(worktreeDir, ".git")
+	if _, err := os.Stat(gitFile); os.IsNotExist(err) {
+		return CorruptInvalidGit
+	}
+
+	// Check if worktree is registered in git
+	worktrees, err := m.gitClient.WorktreeList(m.projectDir)
+	if err != nil {
+		logging.Warn("checkWorktreeStatus: worktree list failed task=%s err=%v", task.Name, err)
+		return CorruptNotInGit
+	}
+
+	registered := false
+	for _, wt := range worktrees {
+		if wt.Path == worktreeDir || strings.HasSuffix(wt.Path, "/"+filepath.Base(worktreeDir)) {
+			registered = true
+			break
+		}
+	}
+
+	if !registered {
+		return CorruptNotInGit
+	}
+
+	// Check if branch exists
+	if !m.gitClient.BranchExists(m.projectDir, task.Name) {
+		return CorruptMissingBranch
+	}
+
+	return "" // OK
+}
+
+// CleanupTask cleans up a task's resources.
+func (m *Manager) CleanupTask(task *Task) error {
+	if m.shouldUseWorktree() {
+		worktreeDir := task.GetWorktreeDir()
+
+		// Remove worktree
+		if _, err := os.Stat(worktreeDir); err == nil {
+			if err := m.gitClient.WorktreeRemove(m.projectDir, worktreeDir, true); err != nil {
+				logging.Trace("WorktreeRemove failed, trying force remove: %v", err)
+				// Try force remove if normal remove fails
+				if removeErr := os.RemoveAll(worktreeDir); removeErr != nil {
+					logging.Warn("Force remove worktree failed: %v", removeErr)
+				}
+			}
+		}
+
+		// Prune worktrees (error is non-fatal)
+		if err := m.gitClient.WorktreePrune(m.projectDir); err != nil {
+			logging.Trace("WorktreePrune failed: %v", err)
+		}
+
+		// Delete branch (error is non-fatal)
+		if m.gitClient.BranchExists(m.projectDir, task.Name) {
+			if err := m.gitClient.BranchDelete(m.projectDir, task.Name, true); err != nil {
+				logging.Trace("BranchDelete failed: %v", err)
+			}
+		}
+	}
+
+	// Remove agent directory
+	return task.Remove()
+}
+
+// PruneWorktrees removes stale worktree entries from git's database.
+// This should be called before any git operations to prevent errors
+// when worktree directories have been deleted but git still references them.
+func (m *Manager) PruneWorktrees() {
+	if !m.shouldUseWorktree() {
+		return
+	}
+
+	if err := m.gitClient.WorktreePrune(m.projectDir); err != nil {
+		logging.Trace("WorktreePrune failed: %v", err)
+	}
+}
+
+// SetupWorktree creates a git worktree for the task.
+func (m *Manager) SetupWorktree(task *Task) error {
+	if !m.shouldUseWorktree() {
+		return nil
+	}
+
+	worktreeDir := task.GetWorktreeDir()
+	task.WorktreeDir = worktreeDir
+
+	// Stash any uncommitted changes (error is non-fatal)
+	stashHash, err := m.gitClient.StashCreate(m.projectDir)
+	if err != nil {
+		logging.Warn("SetupWorktree: stash create failed: %v", err)
+		stashHash = ""
+	}
+
+	// Get untracked files (error is non-fatal)
+	untrackedFiles, err := m.gitClient.GetUntrackedFiles(m.projectDir)
+	if err != nil {
+		logging.Warn("SetupWorktree: failed to list untracked files: %v", err)
+		untrackedFiles = nil
+	}
+
+	// Create worktree with new branch
+	if err := m.gitClient.WorktreeAdd(m.projectDir, worktreeDir, task.Name, true); err != nil {
+		return fmt.Errorf("failed to create worktree: %w", err)
+	}
+
+	// Apply stash to worktree if there were changes (error is non-fatal)
+	if stashHash != "" {
+		if err := m.gitClient.StashApply(worktreeDir, stashHash); err != nil {
+			logging.Warn("SetupWorktree: stash apply failed: %v", err)
+		}
+	}
+
+	// Copy untracked files to worktree (error is non-fatal)
+	if len(untrackedFiles) > 0 {
+		if err := git.CopyUntrackedFiles(untrackedFiles, m.projectDir, worktreeDir); err != nil {
+			logging.Warn("SetupWorktree: failed to copy untracked files: %v", err)
+		}
+	}
+
+	// Create .claude symlink in worktree (error is non-fatal)
+	claudeLink := filepath.Join(worktreeDir, constants.ClaudeLink)
+	claudeTarget := filepath.Join(m.pawDir, constants.ClaudeLink)
+	if err := os.Symlink(claudeTarget, claudeLink); err != nil && !os.IsExist(err) {
+		logging.Warn("SetupWorktree: failed to create claude symlink: %v", err)
+	} else {
+		// Protect .claude symlink from being committed (multi-layered defense)
+
+		// Layer 1: Add to .git/info/exclude (worktree-specific exclusion)
+		if err := git.AddToExcludeFile(worktreeDir, constants.ClaudeLink); err != nil {
+			logging.Warn("SetupWorktree: failed to add .claude to exclude file: %v", err)
+		} else {
+			logging.Debug("SetupWorktree: added .claude to .git/info/exclude")
+		}
+
+		// Layer 2: Mark as assume-unchanged (git index protection)
+		if err := m.gitClient.UpdateIndexAssumeUnchanged(worktreeDir, constants.ClaudeLink); err != nil {
+			logging.Warn("SetupWorktree: failed to mark .claude as assume-unchanged: %v", err)
+		} else {
+			logging.Debug("SetupWorktree: marked .claude as assume-unchanged")
+		}
+	}
+
+	// Execute worktree hook if configured (error is non-fatal)
+	if m.config.WorktreeHook != "" {
+		m.executeWorktreeHook(worktreeDir)
+	}
+
+	return nil
+}
+
+// SetupWorkspace creates an isolated workspace copy for non-git tasks.
+func (m *Manager) SetupWorkspace(task *Task) error {
+	if !m.shouldUseWorkspace() {
+		return nil
+	}
+
+	workspaceDir := task.GetWorktreeDir()
+	task.WorktreeDir = workspaceDir
+
+	if _, err := os.Stat(workspaceDir); err == nil {
+		return nil
+	}
+
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		return fmt.Errorf("failed to create workspace directory: %w", err)
+	}
+
+	if err := copyWorkspace(m.projectDir, workspaceDir); err != nil {
+		return fmt.Errorf("failed to copy workspace: %w", err)
+	}
+
+	if m.config.WorktreeHook != "" {
+		m.executeWorktreeHook(workspaceDir)
+	}
+
+	return nil
+}
+
+// executeWorktreeHook runs the configured worktree hook in the given directory.
+func (m *Manager) executeWorktreeHook(worktreeDir string) {
+	hook := m.config.WorktreeHook
+	logging.Debug("Executing worktree hook: %s", hook)
+
+	cmd := exec.Command("sh", "-c", hook)
+	cmd.Dir = worktreeDir
+	cmd.Env = os.Environ()
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		logging.Warn("Worktree hook failed: %v\n%s", err, string(output))
+		return
+	}
+
+	logging.Debug("Worktree hook completed successfully")
+	if len(output) > 0 {
+		logging.Trace("Worktree hook output: %s", string(output))
+	}
+}
+
+// GetWorkingDirectory returns the working directory for a task.
+func (m *Manager) GetWorkingDirectory(task *Task) string {
+	if m.shouldUseWorktree() {
+		return task.GetWorktreeDir()
+	}
+	if m.shouldUseWorkspace() {
+		return task.GetWorktreeDir()
+	}
+	return m.projectDir
+}
