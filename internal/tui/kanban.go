@@ -33,13 +33,13 @@ type KanbanView struct {
 	focusedCol   int // -1 = none, 0-3 = specific column
 
 	// Text selection state (column-aware)
-	selecting      bool
-	hasSelection   bool   // True if a selection was made (persists until ClearSelection)
-	selectColumn   int    // Column being selected (0-3), -1 if none
-	selectStartX   int    // Start X position (relative to column)
-	selectStartY   int    // Start row (relative to kanban top)
-	selectEndX     int    // End X position (relative to column)
-	selectEndY     int    // End row (relative to kanban top)
+	selecting     bool
+	hasSelection  bool // True if a selection was made (persists until ClearSelection)
+	selectColumn  int  // Column being selected (0-3), -1 if none
+	selectStartX  int  // Start X position (relative to column)
+	selectStartY  int  // Start row (relative to kanban top)
+	selectEndX    int  // End X position (relative to column)
+	selectEndY    int  // End row (relative to kanban top)
 	selectedText  string
 	renderedLines []string // Cache of rendered text lines for selection
 }
@@ -52,6 +52,11 @@ func NewKanbanView(isDark bool) *KanbanView {
 		focusedCol:   -1, // No column focused initially
 		selectColumn: -1, // No column selected initially
 	}
+}
+
+// SetDarkMode updates the cached theme for adaptive rendering.
+func (k *KanbanView) SetDarkMode(isDark bool) {
+	k.isDark = isDark
 }
 
 // SetSize sets the view dimensions.
@@ -549,8 +554,8 @@ func (k *KanbanView) applySelectionHighlight(board string) string {
 	colStartX := k.selectColumn * colWidth
 	// Content area excludes border(1) and padding(1) on each side
 	// Structure: │ content │  (border + padding + content + padding + border)
-	contentStartX := colStartX + 2  // Skip left border and padding
-	contentEndX := colStartX + colWidth - 2  // Exclude right padding and border
+	contentStartX := colStartX + 2          // Skip left border and padding
+	contentEndX := colStartX + colWidth - 2 // Exclude right padding and border
 
 	// Selection highlight style with background color
 	highlightStyle := lipgloss.NewStyle().

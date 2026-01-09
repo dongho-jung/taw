@@ -53,7 +53,8 @@ type TaskInput struct {
 	height      int
 	options     *config.TaskOptions
 	activeTasks []string // Active task names for dependency selection
-	isDark      bool     // Cached dark mode detection (must be detected before bubbletea starts)
+	theme       config.Theme
+	isDark      bool // Cached dark mode detection (must be detected before bubbletea starts)
 
 	// Dynamic textarea height
 	textareaHeight    int // Current textarea height (visible lines)
@@ -114,7 +115,8 @@ func NewTaskInput() *TaskInput {
 func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 	// Detect dark mode BEFORE bubbletea starts
 	// Uses config theme setting if available, otherwise auto-detects
-	isDark := DetectDarkMode()
+	theme := loadThemeFromConfig()
+	isDark := detectDarkMode(theme)
 
 	ta := textarea.New()
 	ta.Placeholder = "Describe your task here... and press Alt+Enter\n\nExamples:\n- Add user authentication\n- Fix bug in login form"
@@ -132,7 +134,40 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 	ta.VirtualCursor = false
 
 	// Custom styling using v2 API - assign directly to Styles field
-	// Use detected isDark value for proper theme-aware styling
+	applyTaskInputTextareaTheme(&ta, isDark)
+
+	opts := config.DefaultTaskOptions()
+
+	// Find model index
+	modelIdx := 0
+	for i, m := range config.ValidModels() {
+		if m == opts.Model {
+			modelIdx = i
+			break
+		}
+	}
+
+	return &TaskInput{
+		textarea:          ta,
+		width:             80,
+		height:            15,
+		options:           opts,
+		activeTasks:       activeTasks,
+		theme:             theme,
+		isDark:            isDark,
+		textareaHeight:    textareaDefaultHeight,
+		textareaMaxHeight: 15, // Will be updated on WindowSizeMsg
+		optionsPanelWidth: 43, // Default, will be updated on WindowSizeMsg for alignment
+		focusPanel:        FocusPanelLeft,
+		optField:          OptFieldModel,
+		modelIdx:          modelIdx,
+		kanban:            NewKanbanView(isDark),
+		currentTip:        GetTip(),
+		lastTipRefresh:    time.Now(),
+	}
+}
+
+func applyTaskInputTextareaTheme(ta *textarea.Model, isDark bool) {
 	ta.Styles = textarea.DefaultStyles(isDark)
 	// Accent color: darker blue for light bg (good contrast), bright cyan for dark bg
 	lightDark := lipgloss.LightDark(isDark)
@@ -155,46 +190,26 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 	ta.Styles.Blurred.CursorLine = lipgloss.NewStyle()
 	ta.Styles.Focused.Prompt = lipgloss.NewStyle()
 	ta.Styles.Blurred.Prompt = lipgloss.NewStyle()
+}
 
-	opts := config.DefaultTaskOptions()
-
-	// Find model index
-	modelIdx := 0
-	for i, m := range config.ValidModels() {
-		if m == opts.Model {
-			modelIdx = i
-			break
-		}
+func (m *TaskInput) applyTheme(isDark bool) {
+	if m.isDark == isDark {
+		return
 	}
-
-	return &TaskInput{
-		textarea:          ta,
-		width:             80,
-		height:            15,
-		options:           opts,
-		activeTasks:       activeTasks,
-		isDark:            isDark,
-		textareaHeight:    textareaDefaultHeight,
-		textareaMaxHeight: 15, // Will be updated on WindowSizeMsg
-		optionsPanelWidth: 43, // Default, will be updated on WindowSizeMsg for alignment
-		focusPanel:        FocusPanelLeft,
-		optField:          OptFieldModel,
-		modelIdx:          modelIdx,
-		kanban:            NewKanbanView(isDark),
-		currentTip:        GetTip(),
-		lastTipRefresh:    time.Now(),
-	}
+	m.isDark = isDark
+	m.kanban.SetDarkMode(isDark)
+	applyTaskInputTextareaTheme(&m.textarea, isDark)
 }
 
 // Init initializes the task input.
 func (m *TaskInput) Init() tea.Cmd {
 	// Refresh Kanban data on init
 	m.kanban.Refresh()
-
-	return tea.Batch(
-		textarea.Blink,
-		m.tickCmd(),
-	)
+	cmds := []tea.Cmd{textarea.Blink, m.tickCmd()}
+	if m.theme == config.ThemeAuto {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
+	return tea.Batch(cmds...)
 }
 
 // tickCmd returns a command that triggers a tick after 5 seconds.
@@ -249,6 +264,14 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cancelPressTime = time.Time{}
 		return m, nil
 
+	case tea.BackgroundColorMsg:
+		if m.theme == config.ThemeAuto {
+			isDark := msg.IsDark()
+			setCachedDarkMode(isDark)
+			m.applyTheme(isDark)
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -266,7 +289,7 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateTextareaHeight()
 
 		// Calculate kanban height based on current textarea height
-		topSectionHeight := m.textareaHeight + 2 // +2 for border
+		topSectionHeight := m.textareaHeight + 2              // +2 for border
 		kanbanHeight := max(8, msg.Height-topSectionHeight-3) // -3 for help text + gap + statusline
 		m.kanban.SetSize(msg.Width, kanbanHeight)
 
@@ -283,7 +306,7 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// - Options right border aligns with Warning column right border (4th column)
 		const kanbanColumnGap = 8 // Same as kanban.go: 4 columns × 2 chars border
 		const minOptionsInnerWidth = 37
-		const optionsPaddingBorder = 6 // padding(4) + border(2)
+		const optionsPaddingBorder = 6                                           // padding(4) + border(2)
 		const minOptionsPanelWidth = minOptionsInnerWidth + optionsPaddingBorder // 43
 
 		// Calculate kanban column display width (must match kanban.go calculation)

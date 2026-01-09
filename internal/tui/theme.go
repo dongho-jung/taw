@@ -4,6 +4,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/lipgloss/v2"
@@ -11,6 +12,14 @@ import (
 	"github.com/dongho-jung/paw/internal/config"
 	"github.com/dongho-jung/paw/internal/constants"
 )
+
+const (
+	darkModeUnknown int32 = iota
+	darkModeLight
+	darkModeDark
+)
+
+var cachedDarkMode atomic.Int32
 
 // DetectDarkMode returns whether the terminal is in dark mode.
 // It checks the theme config setting first:
@@ -21,18 +30,42 @@ import (
 // This function should be called BEFORE bubbletea starts, as
 // lipgloss.HasDarkBackground() reads from stdin.
 func DetectDarkMode() bool {
-	// Try to load theme from config
 	theme := loadThemeFromConfig()
+	return detectDarkMode(theme)
+}
 
+func detectDarkMode(theme config.Theme) bool {
 	switch theme {
 	case config.ThemeLight:
 		return false
 	case config.ThemeDark:
 		return true
 	default:
+		if isDark, ok := cachedDarkModeValue(); ok {
+			return isDark
+		}
 		// Auto-detect with improved reliability
 		return detectDarkModeWithRetry()
 	}
+}
+
+func cachedDarkModeValue() (bool, bool) {
+	switch cachedDarkMode.Load() {
+	case darkModeDark:
+		return true, true
+	case darkModeLight:
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+func setCachedDarkMode(isDark bool) {
+	if isDark {
+		cachedDarkMode.Store(darkModeDark)
+		return
+	}
+	cachedDarkMode.Store(darkModeLight)
 }
 
 // detectDarkModeWithRetry performs dark mode detection with multiple attempts

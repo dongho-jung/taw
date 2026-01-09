@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 
+	"github.com/dongho-jung/paw/internal/config"
 	"github.com/dongho-jung/paw/internal/tui/textarea"
 )
 
@@ -36,25 +37,27 @@ type TemplateEditorResult struct {
 
 // TemplateEditor provides a form for creating/editing templates.
 type TemplateEditor struct {
-	mode          TemplateEditorMode
-	originalName  string // For edit mode - the original name
-	nameInput     string
-	contentArea   textarea.Model
-	focusedField  TemplateEditorField
-	width         int
-	height        int
-	done          bool
-	saved         bool
-	cancelled     bool
-	isDark        bool
-	nameCursor    int
+	mode         TemplateEditorMode
+	originalName string // For edit mode - the original name
+	nameInput    string
+	contentArea  textarea.Model
+	focusedField TemplateEditorField
+	width        int
+	height       int
+	done         bool
+	saved        bool
+	cancelled    bool
+	theme        config.Theme
+	isDark       bool
+	nameCursor   int
 }
 
 // NewTemplateEditor creates a new template editor.
 func NewTemplateEditor(mode TemplateEditorMode, name, content string) *TemplateEditor {
 	// Detect dark mode BEFORE bubbletea starts
 	// Uses config theme setting if available, otherwise auto-detects
-	isDark := DetectDarkMode()
+	theme := loadThemeFromConfig()
+	isDark := detectDarkMode(theme)
 
 	ta := textarea.New()
 	ta.Placeholder = "Enter template content..."
@@ -66,21 +69,7 @@ func NewTemplateEditor(mode TemplateEditorMode, name, content string) *TemplateE
 	ta.VirtualCursor = false
 
 	// Custom styling
-	ta.Styles = textarea.DefaultStyles(true)
-	ta.Styles.Focused.Base = lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("39")).
-		Padding(0, 1)
-	ta.Styles.Blurred.Base = lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		Padding(0, 1)
-	ta.Styles.Blurred.Text = ta.Styles.Focused.Text
-	ta.Styles.Blurred.Placeholder = ta.Styles.Focused.Placeholder
-	ta.Styles.Focused.CursorLine = lipgloss.NewStyle()
-	ta.Styles.Blurred.CursorLine = lipgloss.NewStyle()
-	ta.Styles.Focused.Prompt = lipgloss.NewStyle()
-	ta.Styles.Blurred.Prompt = lipgloss.NewStyle()
+	applyTemplateEditorTextareaTheme(&ta, isDark)
 
 	// Set initial content
 	if content != "" {
@@ -96,14 +85,45 @@ func NewTemplateEditor(mode TemplateEditorMode, name, content string) *TemplateE
 		nameInput:    name,
 		contentArea:  ta,
 		focusedField: TemplateEditorFieldName,
+		theme:        theme,
 		isDark:       isDark,
 		nameCursor:   len(name),
 	}
 }
 
+func applyTemplateEditorTextareaTheme(ta *textarea.Model, isDark bool) {
+	ta.Styles = textarea.DefaultStyles(isDark)
+	ta.Styles.Focused.Base = lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("39")).
+		Padding(0, 1)
+	ta.Styles.Blurred.Base = lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(0, 1)
+	ta.Styles.Blurred.Text = ta.Styles.Focused.Text
+	ta.Styles.Blurred.Placeholder = ta.Styles.Focused.Placeholder
+	ta.Styles.Focused.CursorLine = lipgloss.NewStyle()
+	ta.Styles.Blurred.CursorLine = lipgloss.NewStyle()
+	ta.Styles.Focused.Prompt = lipgloss.NewStyle()
+	ta.Styles.Blurred.Prompt = lipgloss.NewStyle()
+}
+
+func (m *TemplateEditor) applyTheme(isDark bool) {
+	if m.isDark == isDark {
+		return
+	}
+	m.isDark = isDark
+	applyTemplateEditorTextareaTheme(&m.contentArea, isDark)
+}
+
 // Init initializes the template editor.
 func (m *TemplateEditor) Init() tea.Cmd {
-	return textarea.Blink
+	cmds := []tea.Cmd{textarea.Blink}
+	if m.theme == config.ThemeAuto {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles messages and updates the model.
@@ -127,6 +147,13 @@ func (m *TemplateEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.contentArea.SetWidth(contentWidth)
 		m.contentArea.SetHeight(contentHeight)
+	case tea.BackgroundColorMsg:
+		if m.theme == config.ThemeAuto {
+			isDark := msg.IsDark()
+			setCachedDarkMode(isDark)
+			m.applyTheme(isDark)
+		}
+		return m, nil
 
 	case tea.KeyMsg:
 		keyStr := msg.String()
