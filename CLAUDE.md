@@ -65,21 +65,21 @@ go tool cover -html=coverage.out -o coverage.html
 
 | Package | Coverage | Notes |
 |---------|----------|-------|
-| internal/constants | 100.0% | Name/window helpers fully covered |
 | internal/tui/textarea/internal/* | 100.0% | Memoization and runeutil fully covered |
-| internal/logging | 92.6% | Core logging behavior covered |
-| internal/config | 85.4% | Config parsing/saving and hook formatting |
-| internal/app | 79.7% | App context and environment handling |
+| internal/constants | 96.1% | Name/window helpers covered |
+| internal/config | 86.0% | Config parsing/saving, templates, and hook formatting |
+| internal/app | 79.0% | App context and environment handling |
+| internal/logging | 76.0% | Core logging behavior covered |
 | internal/embed | 75.0% | Embedded asset loading |
-| internal/service | 55.0% | History and task discovery services |
-| internal/claude | 35.0% | CLI client command construction tested |
+| internal/git | 46.7% | Git operations tested with isolated repos |
+| internal/service | 33.5% | History and task discovery services |
 | internal/notify | 32.1% | Slack/ntfy helpers covered; macOS paths limited |
-| internal/task | 28.9% | Manager logic partially covered |
-| internal/git | 6.1% | Git CLI wrappers minimally covered |
+| internal/claude | 31.3% | CLI client command construction tested |
+| internal/task | 24.5% | Manager logic partially covered |
+| internal/tui | 10.7% | Interactive UI components partially tested |
 | internal/github | 6.1% | gh CLI command construction only |
-| cmd/paw | 3.8% | Cobra command handlers |
+| cmd/paw | 4.4% | Cobra command handlers |
 | internal/tmux | 3.1% | Struct defaults and constants only |
-| internal/tui | 0% | Interactive UI components |
 | cmd/paw-notify | 0% | macOS-only CGO binary |
 
 ## Directory structure
