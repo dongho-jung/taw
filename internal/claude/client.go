@@ -42,6 +42,11 @@ type Client interface {
 	// IsClaudeRunning checks if Claude is running in the specified pane.
 	// Returns true if Claude is running, false if the pane shows a shell.
 	IsClaudeRunning(tm tmux.Client, target string) bool
+
+	// ScrollToFirstSpinner waits for the first ⏺ spinner line to appear and
+	// clears the scrollback history. This effectively hides the Claude banner
+	// and initial command from the scrollback.
+	ScrollToFirstSpinner(tm tmux.Client, target string, timeout time.Duration) error
 }
 
 // claudeClient implements the Client interface.
@@ -496,6 +501,51 @@ func (c *claudeClient) IsClaudeRunning(tm tmux.Client, target string) bool {
 	// This is a conservative approach - better to assume running than to restart unnecessarily
 	logging.Debug("IsClaudeRunning: pane %s shows command %q, assuming Claude subprocess", target, cmd)
 	return true
+}
+
+// ScrollToFirstSpinner waits for the first ⏺ spinner line to appear in the pane content,
+// then clears the scrollback history to prevent scrolling back to the banner and initial command.
+// This creates a cleaner view where the pane content starts from Claude's first output.
+func (c *claudeClient) ScrollToFirstSpinner(tm tmux.Client, target string, timeout time.Duration) error {
+	logging.Trace("ScrollToFirstSpinner: waiting for spinner in pane %s", target)
+
+	pollInterval := 500 * time.Millisecond
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		content, err := tm.CapturePane(target, 100)
+		if err != nil {
+			logging.Trace("ScrollToFirstSpinner: capture failed: %v", err)
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		// Look for the first ⏺ character (spinner indicator)
+		lines := strings.Split(content, "\n")
+		spinnerLine := -1
+		for i, line := range lines {
+			if strings.Contains(line, "⏺") {
+				spinnerLine = i
+				break
+			}
+		}
+
+		if spinnerLine >= 0 {
+			logging.Debug("ScrollToFirstSpinner: found spinner at line %d", spinnerLine)
+
+			// Clear scrollback history - this removes the banner and initial command
+			// from the scrollable history, so users can't scroll back to see them
+			if err := tm.ClearHistory(target); err != nil {
+				logging.Trace("ScrollToFirstSpinner: failed to clear history: %v", err)
+			}
+
+			return nil
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	return fmt.Errorf("timeout waiting for spinner in pane %s", target)
 }
 
 // BuildSystemPrompt builds the system prompt from global and project prompts.

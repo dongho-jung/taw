@@ -806,6 +806,16 @@ __PROMPT_END__
 			}
 
 			logging.Log("Task started successfully: name=%s, windowID=%s", taskName, windowID)
+
+			// Wait for Claude's first output (⏺ spinner) and clear scrollback history
+			// This prevents scrolling back to the banner and initial command
+			go func() {
+				if err := claudeClient.ScrollToFirstSpinner(tm, agentPane, 30*time.Second); err != nil {
+					logging.Trace("Failed to scroll to first spinner: %v", err)
+				} else {
+					logging.Debug("Scrollback trimmed to first spinner for task: %s", taskName)
+				}
+			}()
 		}
 
 		// Start wait watcher to handle window status + notifications when user input is needed

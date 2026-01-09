@@ -51,6 +51,10 @@ func (m *mockClaudeClient) IsClaudeRunning(tm tmux.Client, target string) bool {
 	return true
 }
 
+func (m *mockClaudeClient) ScrollToFirstSpinner(tm tmux.Client, target string, timeout time.Duration) error {
+	return nil
+}
+
 func TestHistoryService_SaveCompleted(t *testing.T) {
 	// Create temp directory
 	tmpDir, err := os.MkdirTemp("", "paw-history-test-*")
