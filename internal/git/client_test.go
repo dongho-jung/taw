@@ -489,7 +489,7 @@ func TestHasChanges(t *testing.T) {
 	}
 
 	// Create a new file (untracked)
-	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	_ = os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
 
 	// Should have changes now
 	if !client.HasChanges(gitDir) {
@@ -510,8 +510,8 @@ func TestHasStagedChanges(t *testing.T) {
 	}
 
 	// Create and stage a file
-	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
-	runGitCmd(gitDir, "add", "new.txt").Run()
+	_ = os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	_ = runGitCmd(gitDir, "add", "new.txt").Run()
 
 	// Should have staged changes now
 	if !client.HasStagedChanges(gitDir) {
@@ -532,7 +532,7 @@ func TestHasUntrackedFiles(t *testing.T) {
 	}
 
 	// Create a new file
-	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	_ = os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
 
 	// Should have untracked files now
 	if !client.HasUntrackedFiles(gitDir) {
@@ -548,8 +548,8 @@ func TestGetUntrackedFiles(t *testing.T) {
 	createCommit(t, gitDir, "README.md", "test", "Initial commit")
 
 	// Create untracked files
-	os.WriteFile(filepath.Join(gitDir, "file1.txt"), []byte("content"), 0644)
-	os.WriteFile(filepath.Join(gitDir, "file2.txt"), []byte("content"), 0644)
+	_ = os.WriteFile(filepath.Join(gitDir, "file1.txt"), []byte("content"), 0644)
+	_ = os.WriteFile(filepath.Join(gitDir, "file2.txt"), []byte("content"), 0644)
 
 	files, err := client.GetUntrackedFiles(gitDir)
 	if err != nil {
@@ -569,7 +569,7 @@ func TestAddAndCommit(t *testing.T) {
 	createCommit(t, gitDir, "README.md", "test", "Initial commit")
 
 	// Create a new file
-	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	_ = os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
 
 	// Test Add
 	if err := client.Add(gitDir, "new.txt"); err != nil {
@@ -599,8 +599,8 @@ func TestAddAll(t *testing.T) {
 	createCommit(t, gitDir, "README.md", "test", "Initial commit")
 
 	// Create multiple new files
-	os.WriteFile(filepath.Join(gitDir, "file1.txt"), []byte("content1"), 0644)
-	os.WriteFile(filepath.Join(gitDir, "file2.txt"), []byte("content2"), 0644)
+	_ = os.WriteFile(filepath.Join(gitDir, "file1.txt"), []byte("content1"), 0644)
+	_ = os.WriteFile(filepath.Join(gitDir, "file2.txt"), []byte("content2"), 0644)
 
 	// Test AddAll
 	if err := client.AddAll(gitDir); err != nil {
@@ -621,8 +621,8 @@ func TestGetDiffStat(t *testing.T) {
 	createCommit(t, gitDir, "README.md", "test", "Initial commit")
 
 	// Create and stage a file
-	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content\n"), 0644)
-	client.Add(gitDir, "new.txt")
+	_ = os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content\n"), 0644)
+	_ = client.Add(gitDir, "new.txt")
 
 	// Test GetDiffStat
 	stat, err := client.GetDiffStat(gitDir)
@@ -643,7 +643,7 @@ func TestStatus(t *testing.T) {
 	createCommit(t, gitDir, "README.md", "test", "Initial commit")
 
 	// Create a new file
-	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	_ = os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
 
 	// Test Status
 	status, err := client.Status(gitDir)
@@ -664,7 +664,7 @@ func TestCheckout(t *testing.T) {
 	createCommit(t, gitDir, "README.md", "test", "Initial commit")
 
 	// Create and switch to a new branch
-	client.BranchCreate(gitDir, "feature", "")
+	_ = client.BranchCreate(gitDir, "feature", "")
 
 	// Test Checkout
 	if err := client.Checkout(gitDir, "feature"); err != nil {
@@ -688,13 +688,13 @@ func TestBranchMerged(t *testing.T) {
 	mainBranch, _ := client.GetCurrentBranch(gitDir)
 
 	// Create feature branch
-	client.BranchCreate(gitDir, "feature", "")
-	client.Checkout(gitDir, "feature")
+	_ = client.BranchCreate(gitDir, "feature", "")
+	_ = client.Checkout(gitDir, "feature")
 	createCommit(t, gitDir, "feature.txt", "feature content", "Add feature")
 
 	// Switch back to main and merge
-	client.Checkout(gitDir, mainBranch)
-	runGitCmd(gitDir, "merge", "feature", "--no-edit").Run()
+	_ = client.Checkout(gitDir, mainBranch)
+	_ = runGitCmd(gitDir, "merge", "feature", "--no-edit").Run()
 
 	// Test BranchMerged
 	if !client.BranchMerged(gitDir, "feature", mainBranch) {
@@ -712,8 +712,8 @@ func TestGetBranchCommits(t *testing.T) {
 	mainBranch, _ := client.GetCurrentBranch(gitDir)
 
 	// Create feature branch and add commits
-	client.BranchCreate(gitDir, "feature", "")
-	client.Checkout(gitDir, "feature")
+	_ = client.BranchCreate(gitDir, "feature", "")
+	_ = client.Checkout(gitDir, "feature")
 	createCommit(t, gitDir, "feature1.txt", "content1", "Feature commit 1")
 	createCommit(t, gitDir, "feature2.txt", "content2", "Feature commit 2")
 
@@ -770,7 +770,7 @@ func TestIsFileStaged(t *testing.T) {
 	createCommit(t, gitDir, "README.md", "test", "Initial commit")
 
 	// Create a new file
-	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	_ = os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
 
 	// File should not be staged initially
 	staged, err := client.IsFileStaged(gitDir, "new.txt")
@@ -782,7 +782,7 @@ func TestIsFileStaged(t *testing.T) {
 	}
 
 	// Stage the file
-	client.Add(gitDir, "new.txt")
+	_ = client.Add(gitDir, "new.txt")
 
 	// File should be staged now
 	staged, err = client.IsFileStaged(gitDir, "new.txt")
@@ -802,8 +802,8 @@ func TestResetPath(t *testing.T) {
 	createCommit(t, gitDir, "README.md", "test", "Initial commit")
 
 	// Create and stage a file
-	os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
-	client.Add(gitDir, "new.txt")
+	_ = os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	_ = client.Add(gitDir, "new.txt")
 
 	// Verify file is staged
 	staged, _ := client.IsFileStaged(gitDir, "new.txt")
