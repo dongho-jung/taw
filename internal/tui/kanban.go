@@ -398,14 +398,20 @@ func (k *KanbanView) applySelectionHighlight(board string) string {
 	lines := strings.Split(board, "\n")
 	minY, maxY := k.GetSelectionRange()
 
-	// Selection highlight style (inverted colors for visibility)
+	// Selection highlight style with background color
+	// Note: Reverse(true) doesn't work with already-styled text because
+	// existing ANSI codes reset the reverse attribute. Using background
+	// color provides consistent highlighting regardless of existing styles.
 	highlightStyle := lipgloss.NewStyle().
-		Reverse(true)
+		Background(lipgloss.Color("39")). // Blue background
+		Foreground(lipgloss.Color("231")) // White text for contrast
 
 	for i := range lines {
 		if i >= minY && i <= maxY {
-			// Apply highlight to selected lines
-			lines[i] = highlightStyle.Render(lines[i])
+			// Strip existing ANSI codes before applying highlight
+			// This ensures the highlight renders consistently
+			plainText := ansi.Strip(lines[i])
+			lines[i] = highlightStyle.Render(plainText)
 		}
 	}
 
