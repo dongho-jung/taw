@@ -173,3 +173,117 @@ func TestTextareaSelection_DragSelection(t *testing.T) {
 		t.Error("Selected text should not be empty")
 	}
 }
+
+func TestKanbanSelection_PersistsAfterEndSelection(t *testing.T) {
+	kv := NewKanbanView(true)
+	kv.SetSize(300, 20) // Set size for column width calculation
+
+	// Test 1: Single-row selection should persist after EndSelection
+	t.Run("Single row selection persists", func(t *testing.T) {
+		kv.ClearSelection()
+
+		// Simulate click on column 0, row 2, x position 5
+		kv.StartSelection(0, 5, 2)
+		if !kv.HasSelection() {
+			t.Error("Should have selection during active drag")
+		}
+
+		// Simulate release without moving (single row selection)
+		kv.EndSelection()
+		if !kv.HasSelection() {
+			t.Error("Single-row selection should persist after EndSelection")
+		}
+
+		minY, maxY := kv.GetSelectionRange()
+		if minY != 2 || maxY != 2 {
+			t.Errorf("Expected selection range [2, 2], got [%d, %d]", minY, maxY)
+		}
+	})
+
+	// Test 2: Multi-row selection should persist after EndSelection
+	t.Run("Multi row selection persists", func(t *testing.T) {
+		kv.ClearSelection()
+
+		// Simulate click on column 1, row 2, drag to row 5
+		kv.StartSelection(1, 5, 2)
+		kv.ExtendSelection(10, 5)
+		kv.EndSelection()
+
+		if !kv.HasSelection() {
+			t.Error("Multi-row selection should persist after EndSelection")
+		}
+
+		minY, maxY := kv.GetSelectionRange()
+		if minY != 2 || maxY != 5 {
+			t.Errorf("Expected selection range [2, 5], got [%d, %d]", minY, maxY)
+		}
+	})
+
+	// Test 3: Row 0 selection should work correctly
+	t.Run("Row 0 selection works", func(t *testing.T) {
+		kv.ClearSelection()
+
+		// Select row 0 (first row) in column 2
+		kv.StartSelection(2, 0, 0)
+		kv.EndSelection()
+
+		if !kv.HasSelection() {
+			t.Error("Row 0 selection should persist after EndSelection")
+		}
+
+		minY, maxY := kv.GetSelectionRange()
+		if minY != 0 || maxY != 0 {
+			t.Errorf("Expected selection range [0, 0], got [%d, %d]", minY, maxY)
+		}
+	})
+
+	// Test 4: ClearSelection should clear the selection
+	t.Run("ClearSelection clears selection", func(t *testing.T) {
+		kv.StartSelection(0, 5, 3)
+		kv.EndSelection()
+
+		if !kv.HasSelection() {
+			t.Error("Should have selection before clear")
+		}
+
+		kv.ClearSelection()
+		if kv.HasSelection() {
+			t.Error("Should not have selection after ClearSelection")
+		}
+	})
+
+	// Test 5: Reverse selection (drag upward)
+	t.Run("Reverse selection works", func(t *testing.T) {
+		kv.ClearSelection()
+
+		// Simulate click on row 5, drag to row 2 (upward)
+		kv.StartSelection(0, 10, 5)
+		kv.ExtendSelection(5, 2)
+		kv.EndSelection()
+
+		if !kv.HasSelection() {
+			t.Error("Reverse selection should persist")
+		}
+
+		minY, maxY := kv.GetSelectionRange()
+		if minY != 2 || maxY != 5 {
+			t.Errorf("Expected selection range [2, 5], got [%d, %d]", minY, maxY)
+		}
+	})
+
+	// Test 6: Column tracking
+	t.Run("Column tracking works", func(t *testing.T) {
+		kv.ClearSelection()
+
+		// Select in column 2
+		kv.StartSelection(2, 5, 3)
+		if kv.SelectionColumn() != 2 {
+			t.Errorf("Expected selection column 2, got %d", kv.SelectionColumn())
+		}
+
+		kv.ClearSelection()
+		if kv.SelectionColumn() != -1 {
+			t.Errorf("Expected selection column -1 after clear, got %d", kv.SelectionColumn())
+		}
+	})
+}

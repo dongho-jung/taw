@@ -69,9 +69,11 @@ type TaskInput struct {
 	selectAnchorRow int
 	selectAnchorCol int
 
-	// Kanban mouse selection
-	kanbanSelecting  bool
-	kanbanSelectY    int // Y position relative to kanban area
+	// Kanban mouse selection (column-aware)
+	kanbanSelecting bool
+	kanbanSelectCol int // Column being selected (0-3)
+	kanbanSelectX   int // X position relative to column
+	kanbanSelectY   int // Y position relative to kanban area
 
 	// Kanban view for tasks across all sessions
 	kanban *KanbanView
@@ -382,11 +384,14 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				col := m.detectKanbanColumn(msg.X)
 				m.kanban.SetFocusedColumn(col)
 
-				// Start Kanban text selection
+				// Start Kanban text selection (column-aware)
 				kanbanY := m.getKanbanRelativeY(msg.Y)
+				kanbanX := m.getKanbanRelativeX(msg.X, col)
 				m.kanbanSelecting = true
+				m.kanbanSelectCol = col
+				m.kanbanSelectX = kanbanX
 				m.kanbanSelectY = kanbanY
-				m.kanban.StartSelection(kanbanY)
+				m.kanban.StartSelection(col, kanbanX, kanbanY)
 			}
 		}
 
@@ -401,7 +406,9 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.kanbanSelecting {
 			kanbanY := m.getKanbanRelativeY(msg.Y)
-			m.kanban.ExtendSelection(kanbanY)
+			// Use the same column as when selection started (don't allow cross-column selection)
+			kanbanX := m.getKanbanRelativeX(msg.X, m.kanbanSelectCol)
+			m.kanban.ExtendSelection(kanbanX, kanbanY)
 		}
 
 	case tea.MouseReleaseMsg:
@@ -923,6 +930,28 @@ func (m *TaskInput) getKanbanRelativeY(y int) int {
 		relY = 0
 	}
 	return relY
+}
+
+// getKanbanRelativeX converts absolute X coordinate to column-relative position.
+// col is the column index (0-3). Returns X position relative to the column's start.
+func (m *TaskInput) getKanbanRelativeX(x, col int) int {
+	if col < 0 || col > 3 {
+		return 0
+	}
+	colWidth := m.kanban.ColumnWidth()
+	if colWidth <= 0 {
+		return 0
+	}
+	// Each column starts at col * colWidth
+	colStartX := col * colWidth
+	relX := x - colStartX
+	if relX < 0 {
+		relX = 0
+	}
+	if relX > colWidth {
+		relX = colWidth
+	}
+	return relX
 }
 
 // switchFocusTo switches focus to the specified panel.

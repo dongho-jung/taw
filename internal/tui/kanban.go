@@ -31,20 +31,26 @@ type KanbanView struct {
 	focused      bool
 	focusedCol   int // -1 = none, 0-3 = specific column
 
-	// Text selection state
-	selecting     bool
-	selectStartY  int // Start row (relative to kanban top)
-	selectEndY    int // End row (relative to kanban top)
-	selectedText  string
-	renderedLines []string // Cache of rendered text lines for selection
+	// Text selection state (column-aware)
+	selecting      bool
+	hasSelection   bool   // True if a selection was made (persists until ClearSelection)
+	selectColumn   int    // Column being selected (0-3), -1 if none
+	selectStartX   int    // Start X position (relative to column)
+	selectStartY   int    // Start row (relative to kanban top)
+	selectEndX     int    // End X position (relative to column)
+	selectEndY     int    // End row (relative to kanban top)
+	selectedText   string
+	renderedLines  []string // Cache of rendered text lines for selection
+	columnContents [][]string // Per-column content lines (for column-aware copy)
 }
 
 // NewKanbanView creates a new Kanban view.
 func NewKanbanView(isDark bool) *KanbanView {
 	return &KanbanView{
-		isDark:     isDark,
-		service:    service.NewTaskDiscoveryService(),
-		focusedCol: -1, // No column focused initially
+		isDark:       isDark,
+		service:      service.NewTaskDiscoveryService(),
+		focusedCol:   -1, // No column focused initially
+		selectColumn: -1, // No column selected initially
 	}
 }
 
@@ -325,16 +331,23 @@ func (k *KanbanView) renderScrollbar(visibleHeight int) string {
 	return renderVerticalScrollbar(k.ContentHeight(), visibleHeight, k.scrollOffset, k.isDark)
 }
 
-// StartSelection starts text selection at the given row.
-func (k *KanbanView) StartSelection(y int) {
+// StartSelection starts text selection at the given position within a column.
+// col is the column index (0-3), x is the position within the column, y is the row.
+func (k *KanbanView) StartSelection(col, x, y int) {
 	k.selecting = true
+	k.hasSelection = true
+	k.selectColumn = col
+	k.selectStartX = x
 	k.selectStartY = y
+	k.selectEndX = x
 	k.selectEndY = y
 }
 
-// ExtendSelection extends the selection to the given row.
-func (k *KanbanView) ExtendSelection(y int) {
+// ExtendSelection extends the selection to the given position.
+// x is clamped to the same column where selection started.
+func (k *KanbanView) ExtendSelection(x, y int) {
 	if k.selecting {
+		k.selectEndX = x
 		k.selectEndY = y
 	}
 }
@@ -347,17 +360,22 @@ func (k *KanbanView) EndSelection() {
 // ClearSelection clears the current selection.
 func (k *KanbanView) ClearSelection() {
 	k.selecting = false
+	k.hasSelection = false
+	k.selectColumn = -1
+	k.selectStartX = 0
 	k.selectStartY = 0
+	k.selectEndX = 0
 	k.selectEndY = 0
 	k.selectedText = ""
 }
 
 // HasSelection returns true if there's an active selection.
+// Returns true during active dragging (selecting) or when a selection was made (hasSelection).
 func (k *KanbanView) HasSelection() bool {
-	return k.selectStartY != k.selectEndY || k.selecting
+	return k.hasSelection
 }
 
-// GetSelectionRange returns the selection range (min, max row).
+// GetSelectionRange returns the selection range (min row, max row).
 func (k *KanbanView) GetSelectionRange() (int, int) {
 	minY := k.selectStartY
 	maxY := k.selectEndY
@@ -365,6 +383,48 @@ func (k *KanbanView) GetSelectionRange() (int, int) {
 		minY, maxY = maxY, minY
 	}
 	return minY, maxY
+}
+
+// GetSelectionXRange returns the X selection range for a given row.
+// Returns (startX, endX) accounting for selection direction.
+func (k *KanbanView) GetSelectionXRange(row int) (int, int) {
+	minY, maxY := k.GetSelectionRange()
+	if row < minY || row > maxY {
+		return 0, 0
+	}
+
+	// Determine if selection goes forward or backward
+	forward := k.selectStartY < k.selectEndY || (k.selectStartY == k.selectEndY && k.selectStartX <= k.selectEndX)
+
+	if minY == maxY {
+		// Single row selection
+		startX, endX := k.selectStartX, k.selectEndX
+		if startX > endX {
+			startX, endX = endX, startX
+		}
+		return startX, endX
+	}
+
+	// Multi-row selection
+	if forward {
+		if row == minY {
+			return k.selectStartX, 9999 // Start row: from startX to end
+		} else if row == maxY {
+			return 0, k.selectEndX // End row: from start to endX
+		}
+	} else {
+		if row == minY {
+			return 0, k.selectEndX // End row (in reverse): from start to endX
+		} else if row == maxY {
+			return k.selectStartX, 9999 // Start row (in reverse): from startX to end
+		}
+	}
+	return 0, 9999 // Middle rows: full width
+}
+
+// SelectionColumn returns the column index where selection is active (-1 if none).
+func (k *KanbanView) SelectionColumn() int {
+	return k.selectColumn
 }
 
 // IsRowSelected returns true if the given row is within the selection.
@@ -379,17 +439,61 @@ func (k *KanbanView) CacheRenderedText(lines []string) {
 }
 
 // CopySelection copies the selected text to clipboard and returns it.
+// Only copies text from within the selected column's boundaries.
 func (k *KanbanView) CopySelection() error {
 	if !k.HasSelection() || len(k.renderedLines) == 0 {
 		return nil
 	}
 
+	if k.selectColumn < 0 || k.selectColumn > 3 {
+		return nil // No valid column selected
+	}
+
 	minY, maxY := k.GetSelectionRange()
+
+	// Calculate column boundaries
+	colWidth := k.ColumnWidth()
+	if colWidth <= 0 {
+		return nil
+	}
+	colStartX := k.selectColumn * colWidth
+	colEndX := colStartX + colWidth
+
 	var selectedLines []string
 	for i := minY; i <= maxY && i < len(k.renderedLines); i++ {
-		if i >= 0 {
-			selectedLines = append(selectedLines, k.renderedLines[i])
+		if i < 0 {
+			continue
 		}
+
+		line := k.renderedLines[i]
+		if len(line) == 0 {
+			selectedLines = append(selectedLines, "")
+			continue
+		}
+
+		// Get the X range for this row
+		selStartX, selEndX := k.GetSelectionXRange(i)
+
+		// Convert to absolute X positions
+		absStartX := colStartX + selStartX
+		absEndX := colStartX + selEndX
+		if absEndX > colEndX {
+			absEndX = colEndX
+		}
+
+		// Clamp to line length
+		if absStartX >= len(line) {
+			selectedLines = append(selectedLines, "")
+			continue
+		}
+		if absEndX > len(line) {
+			absEndX = len(line)
+		}
+		if absStartX < 0 {
+			absStartX = 0
+		}
+
+		selectedLines = append(selectedLines, strings.TrimSpace(line[absStartX:absEndX]))
 	}
 
 	k.selectedText = strings.Join(selectedLines, "\n")
@@ -397,25 +501,66 @@ func (k *KanbanView) CopySelection() error {
 }
 
 // applySelectionHighlight applies selection highlight to the rendered board.
+// Selection is column-aware: only highlights within the selected column's boundaries.
 func (k *KanbanView) applySelectionHighlight(board string) string {
+	if k.selectColumn < 0 || k.selectColumn > 3 {
+		return board // No valid column selected
+	}
+
 	lines := strings.Split(board, "\n")
 	minY, maxY := k.GetSelectionRange()
 
+	// Calculate column boundaries
+	colWidth := k.ColumnWidth()
+	if colWidth <= 0 {
+		return board
+	}
+	colStartX := k.selectColumn * colWidth
+	colEndX := colStartX + colWidth
+
 	// Selection highlight style with background color
-	// Note: Reverse(true) doesn't work with already-styled text because
-	// existing ANSI codes reset the reverse attribute. Using background
-	// color provides consistent highlighting regardless of existing styles.
 	highlightStyle := lipgloss.NewStyle().
 		Background(lipgloss.Color("39")). // Blue background
 		Foreground(lipgloss.Color("231")) // White text for contrast
 
 	for i := range lines {
-		if i >= minY && i <= maxY {
-			// Strip existing ANSI codes before applying highlight
-			// This ensures the highlight renders consistently
-			plainText := ansi.Strip(lines[i])
-			lines[i] = highlightStyle.Render(plainText)
+		if i < minY || i > maxY {
+			continue
 		}
+
+		// Get the X range for this row
+		selStartX, selEndX := k.GetSelectionXRange(i)
+
+		// Convert to absolute X positions within the board
+		absStartX := colStartX + selStartX
+		absEndX := colStartX + selEndX
+		if absEndX > colEndX {
+			absEndX = colEndX
+		}
+
+		// Strip ANSI codes to work with plain text positions
+		plainLine := ansi.Strip(lines[i])
+		if len(plainLine) == 0 {
+			continue
+		}
+
+		// Clamp positions to line length
+		if absStartX >= len(plainLine) {
+			continue
+		}
+		if absEndX > len(plainLine) {
+			absEndX = len(plainLine)
+		}
+		if absStartX < 0 {
+			absStartX = 0
+		}
+
+		// Build the highlighted line: before + highlighted + after
+		before := plainLine[:absStartX]
+		selected := plainLine[absStartX:absEndX]
+		after := plainLine[absEndX:]
+
+		lines[i] = before + highlightStyle.Render(selected) + after
 	}
 
 	return strings.Join(lines, "\n")
