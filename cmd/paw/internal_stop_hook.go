@@ -153,13 +153,17 @@ var stopHookCmd = &cobra.Command{
 }
 
 func classifyStopStatus(taskName, paneContent string) (task.Status, error) {
+	// NOTE: WAITING is intentionally excluded from stop-hook classification.
+	// The watch-wait watcher handles WAITING detection using specific markers
+	// (PAW_WAITING, AskUserQuestion tool, UI patterns) which are more reliable
+	// than text-based classification that can produce false positives from
+	// conversational phrases like "please test" or "please check".
 	prompt := fmt.Sprintf(`You are classifying the current state of a coding task.
 
-Return exactly one label: WORKING, WAITING, DONE, or WARNING.
+Return exactly one label: WORKING, DONE, or WARNING.
 
 Definitions:
-- WORKING: actively processing, making tool calls, executing commands, in progress.
-- WAITING: user input required, question asked, blocked on decision or info.
+- WORKING: actively processing, making tool calls, executing commands, in progress, or asking user questions.
 - DONE: work completed successfully and ready for review/merge.
 - WARNING: errors, failing tests, merge conflicts, or incomplete/failed work.
 
@@ -210,11 +214,14 @@ func parseStopHookDecision(output string) (task.Status, bool) {
 	cleaned = strings.Trim(cleaned, "`\"' \t\r\n")
 	upper := strings.ToUpper(cleaned)
 
+	// NOTE: WAITING is mapped to WORKING because the watch-wait watcher
+	// handles WAITING detection more accurately using specific markers.
+	// This prevents false positives from text-based classification.
 	switch {
 	case strings.HasPrefix(upper, "WORKING"):
 		return task.StatusWorking, true
 	case strings.HasPrefix(upper, "WAITING"):
-		return task.StatusWaiting, true
+		return task.StatusWorking, true // Map to WORKING - let watch-wait handle it
 	case strings.HasPrefix(upper, "DONE"):
 		return task.StatusDone, true
 	case strings.HasPrefix(upper, "WARNING"), strings.HasPrefix(upper, "WARN"):
@@ -222,7 +229,7 @@ func parseStopHookDecision(output string) (task.Status, bool) {
 	case strings.Contains(upper, "WORKING"):
 		return task.StatusWorking, true
 	case strings.Contains(upper, "WAITING"):
-		return task.StatusWaiting, true
+		return task.StatusWorking, true // Map to WORKING - let watch-wait handle it
 	case strings.Contains(upper, "DONE"):
 		return task.StatusDone, true
 	case strings.Contains(upper, "WARNING"):
