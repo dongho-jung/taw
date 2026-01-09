@@ -8,6 +8,7 @@ import (
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/service"
@@ -91,7 +92,11 @@ func (k *KanbanView) Render() string {
 	// Calculate column width (4 columns with gaps)
 	// Minimum width per column
 	const minColumnWidth = 15
-	const columnGap = 10 // 8 for borders (4 columns * 2 chars each) + 2 for scrollbar
+	// columnGap accounts for borders only (padding is included in lipgloss Width):
+	// - In lipgloss v2, Width(X) sets content+padding width, then border is added
+	// - Borders: 4 columns × 2 chars = 8
+	// Note: Scrollbar (2 chars) is added separately after columns, not included here
+	const columnGap = 8
 	if k.width < minColumnWidth*4+columnGap {
 		return ""
 	}
@@ -247,9 +252,12 @@ func (k *KanbanView) FocusedColumn() int {
 
 // ColumnWidth returns the width of each column (including border and padding).
 func (k *KanbanView) ColumnWidth() int {
-	// Must match the condition in Render(): minColumnWidth*4 + columnGap = 70
+	// Must match the calculation in Render()
 	const minColumnWidth = 15
-	const columnGap = 10
+	// columnGap accounts for borders only (padding is included in lipgloss Width):
+	// - In lipgloss v2, Width(X) sets content+padding width, then border is added
+	// - Borders: 4 columns × 2 chars = 8
+	const columnGap = 8
 	if k.width < minColumnWidth*4+columnGap {
 		return 0
 	}
@@ -257,7 +265,7 @@ func (k *KanbanView) ColumnWidth() int {
 	if columnWidth < minColumnWidth {
 		columnWidth = minColumnWidth
 	}
-	return columnWidth + 4 // +4 for border (2) and padding (2)
+	return columnWidth + 2 // +2 for border only (padding is included in Width)
 }
 
 // ScrollUp scrolls the kanban view up by n lines.
@@ -451,13 +459,15 @@ func (k *KanbanView) CopySelection() error {
 
 	minY, maxY := k.GetSelectionRange()
 
-	// Calculate column boundaries
+	// Calculate column boundaries (content area only, excluding border/padding)
 	colWidth := k.ColumnWidth()
 	if colWidth <= 0 {
 		return nil
 	}
 	colStartX := k.selectColumn * colWidth
-	colEndX := colStartX + colWidth
+	// Content area excludes border(1) and padding(1) on each side
+	contentStartX := colStartX + 2
+	contentEndX := colStartX + colWidth - 2
 
 	var selectedLines []string
 	for i := minY; i <= maxY && i < len(k.renderedLines); i++ {
@@ -474,30 +484,50 @@ func (k *KanbanView) CopySelection() error {
 		// Get the X range for this row
 		selStartX, selEndX := k.GetSelectionXRange(i)
 
-		// Convert to absolute X positions
+		// Convert to absolute X positions (display columns)
 		absStartX := colStartX + selStartX
 		absEndX := colStartX + selEndX
-		if absEndX > colEndX {
-			absEndX = colEndX
-		}
 
-		// Clamp to line length
-		if absStartX >= len(line) {
+		// Get display width of the line for clamping
+		lineDisplayWidth := runewidth.StringWidth(line)
+
+		// Clamp positions: must stay within content area (excluding border/padding)
+		absEndX = min(absEndX, contentEndX)
+		absEndX = min(absEndX, lineDisplayWidth)
+		absStartX = max(absStartX, contentStartX)
+		absStartX = min(absStartX, lineDisplayWidth-1)
+
+		// Skip if selection is outside valid range
+		if absStartX >= absEndX || absStartX >= lineDisplayWidth {
 			selectedLines = append(selectedLines, "")
 			continue
 		}
-		if absEndX > len(line) {
-			absEndX = len(line)
-		}
-		if absStartX < 0 {
-			absStartX = 0
-		}
 
-		selectedLines = append(selectedLines, strings.TrimSpace(line[absStartX:absEndX]))
+		// Convert display column positions to byte offsets
+		byteStart := displayColToByteOffset(line, absStartX)
+		byteEnd := displayColToByteOffset(line, absEndX)
+
+		selectedLines = append(selectedLines, strings.TrimSpace(line[byteStart:byteEnd]))
 	}
 
 	k.selectedText = strings.Join(selectedLines, "\n")
 	return clipboard.WriteAll(k.selectedText)
+}
+
+// displayColToByteOffset converts a display column position to a byte offset in the string.
+// This accounts for multi-byte UTF-8 characters (like box-drawing chars) and wide characters.
+func displayColToByteOffset(s string, displayCol int) int {
+	if displayCol <= 0 {
+		return 0
+	}
+	col := 0
+	for i, r := range s {
+		if col >= displayCol {
+			return i
+		}
+		col += runewidth.RuneWidth(r)
+	}
+	return len(s)
 }
 
 // applySelectionHighlight applies selection highlight to the rendered board.
@@ -510,13 +540,16 @@ func (k *KanbanView) applySelectionHighlight(board string) string {
 	lines := strings.Split(board, "\n")
 	minY, maxY := k.GetSelectionRange()
 
-	// Calculate column boundaries
+	// Calculate column boundaries (content area only, excluding border/padding)
 	colWidth := k.ColumnWidth()
 	if colWidth <= 0 {
 		return board
 	}
 	colStartX := k.selectColumn * colWidth
-	colEndX := colStartX + colWidth
+	// Content area excludes border(1) and padding(1) on each side
+	// Structure: │ content │  (border + padding + content + padding + border)
+	contentStartX := colStartX + 2  // Skip left border and padding
+	contentEndX := colStartX + colWidth - 2  // Exclude right padding and border
 
 	// Selection highlight style with background color
 	highlightStyle := lipgloss.NewStyle().
@@ -531,12 +564,10 @@ func (k *KanbanView) applySelectionHighlight(board string) string {
 		// Get the X range for this row
 		selStartX, selEndX := k.GetSelectionXRange(i)
 
-		// Convert to absolute X positions within the board
+		// Convert to absolute X positions within the board (display columns)
+		// selStartX/selEndX are relative to column start, so add colStartX
 		absStartX := colStartX + selStartX
 		absEndX := colStartX + selEndX
-		if absEndX > colEndX {
-			absEndX = colEndX
-		}
 
 		// Strip ANSI codes to work with plain text positions
 		plainLine := ansi.Strip(lines[i])
@@ -544,21 +575,28 @@ func (k *KanbanView) applySelectionHighlight(board string) string {
 			continue
 		}
 
-		// Clamp positions to line length
-		if absStartX >= len(plainLine) {
+		// Get display width of the line for clamping
+		lineDisplayWidth := runewidth.StringWidth(plainLine)
+
+		// Clamp positions: must stay within content area (excluding border/padding)
+		absEndX = min(absEndX, contentEndX)
+		absEndX = min(absEndX, lineDisplayWidth)
+		absStartX = max(absStartX, contentStartX)
+		absStartX = min(absStartX, lineDisplayWidth-1)
+
+		// Skip if selection is outside valid range
+		if absStartX >= absEndX || absStartX >= lineDisplayWidth {
 			continue
 		}
-		if absEndX > len(plainLine) {
-			absEndX = len(plainLine)
-		}
-		if absStartX < 0 {
-			absStartX = 0
-		}
+
+		// Convert display column positions to byte offsets
+		byteStart := displayColToByteOffset(plainLine, absStartX)
+		byteEnd := displayColToByteOffset(plainLine, absEndX)
 
 		// Build the highlighted line: before + highlighted + after
-		before := plainLine[:absStartX]
-		selected := plainLine[absStartX:absEndX]
-		after := plainLine[absEndX:]
+		before := plainLine[:byteStart]
+		selected := plainLine[byteStart:byteEnd]
+		after := plainLine[byteEnd:]
 
 		lines[i] = before + highlightStyle.Render(selected) + after
 	}

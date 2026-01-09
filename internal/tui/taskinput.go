@@ -948,8 +948,10 @@ func (m *TaskInput) getKanbanRelativeX(x, col int) int {
 	if relX < 0 {
 		relX = 0
 	}
-	if relX > colWidth {
-		relX = colWidth
+	// Clamp to colWidth-1 (last valid position within column)
+	// colWidth is the first position of the NEXT column
+	if relX >= colWidth {
+		relX = colWidth - 1
 	}
 	return relX
 }

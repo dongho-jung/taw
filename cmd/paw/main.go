@@ -611,13 +611,13 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	_ = tm.SetOption("mouse", "on", true)
 
 	// Conditional mouse drag handling: TUI windows vs normal windows
-	// - In main window (⭐️main): Pass through drag events to bubbletea TUI for cell-level selection
+	// - In main window (⭐️main): Forward drag events to bubbletea TUI for cell-level selection
 	// - In task windows: Use normal tmux copy-mode for line-level selection
 	// The #{m:pattern,string} format checks if window name matches the pattern.
 	// Note: ⭐️ is multi-byte UTF-8, so we use the prefix check pattern.
 	_ = tm.Run("bind", "-n", "MouseDrag1Pane",
 		"if-shell", "-F", "#{m:⭐*,#{window_name}}",
-		"", // Empty command = pass through (do nothing, let app handle it)
+		"send-keys -M", // Forward mouse event to pane (TUI handles it)
 		"copy-mode -M") // Enter copy-mode with mouse selection
 
 	// Enable vi-style copy mode and clipboard integration
