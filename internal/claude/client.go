@@ -504,7 +504,7 @@ func (c *claudeClient) IsClaudeRunning(tm tmux.Client, target string) bool {
 }
 
 // ScrollToFirstSpinner waits for the first ⏺ spinner line to appear in the pane content,
-// then clears the scrollback history to prevent scrolling back to the banner and initial command.
+// waits for the banner to scroll into scrollback, then clears the scrollback.
 // This creates a cleaner view where the pane content starts from Claude's first output.
 func (c *claudeClient) ScrollToFirstSpinner(tm tmux.Client, target string, timeout time.Duration) error {
 	logging.Trace("ScrollToFirstSpinner: waiting for spinner in pane %s", target)
@@ -512,8 +512,16 @@ func (c *claudeClient) ScrollToFirstSpinner(tm tmux.Client, target string, timeo
 	pollInterval := 500 * time.Millisecond
 	deadline := time.Now().Add(timeout)
 
+	// The banner (logo + version + path) is typically 4-5 lines, plus the command prompt
+	// is another 2-3 lines. Total ~8 lines before the spinner.
+	// We wait until the spinner moves to line 2 or lower in the VISIBLE pane,
+	// which means the banner has scrolled into the scrollback buffer.
+	const maxSpinnerLineFromTop = 2
+
 	for time.Now().Before(deadline) {
-		content, err := tm.CapturePane(target, 100)
+		// Capture only the visible pane content (no scrollback)
+		// By passing 0 lines, we get just what's visible on screen
+		content, err := tm.CapturePane(target, 0)
 		if err != nil {
 			logging.Trace("ScrollToFirstSpinner: capture failed: %v", err)
 			time.Sleep(pollInterval)
@@ -531,15 +539,25 @@ func (c *claudeClient) ScrollToFirstSpinner(tm tmux.Client, target string, timeo
 		}
 
 		if spinnerLine >= 0 {
-			logging.Debug("ScrollToFirstSpinner: found spinner at line %d", spinnerLine)
+			logging.Trace("ScrollToFirstSpinner: spinner at visible line %d", spinnerLine)
 
-			// Clear scrollback history - this removes the banner and initial command
-			// from the scrollable history, so users can't scroll back to see them
-			if err := tm.ClearHistory(target); err != nil {
-				logging.Trace("ScrollToFirstSpinner: failed to clear history: %v", err)
+			// When the spinner is at or near the top of the visible pane,
+			// the banner has scrolled into the scrollback buffer
+			if spinnerLine <= maxSpinnerLineFromTop {
+				logging.Debug("ScrollToFirstSpinner: spinner at top (line %d), clearing history", spinnerLine)
+
+				// Clear scrollback history - this removes the banner and initial command
+				// from the scrollable history, so users can't scroll back to see them
+				if err := tm.ClearHistory(target); err != nil {
+					logging.Trace("ScrollToFirstSpinner: failed to clear history: %v", err)
+				}
+
+				return nil
 			}
 
-			return nil
+			// Spinner not at top yet, continue waiting for more output
+			logging.Trace("ScrollToFirstSpinner: waiting for spinner to reach top (currently at line %d)",
+				spinnerLine)
 		}
 
 		time.Sleep(pollInterval)
