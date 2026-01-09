@@ -114,7 +114,7 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 	isDark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
 
 	ta := textarea.New()
-	ta.Placeholder = "Describe your task here...\n\nExamples:\n- Add user authentication\n- Fix bug in login form"
+	ta.Placeholder = "Describe your task here... and press Alt+Enter\n\nExamples:\n- Add user authentication\n- Fix bug in login form"
 	ta.Focus()
 	ta.CharLimit = 0 // No limit
 	ta.ShowLineNumbers = false
@@ -587,11 +587,11 @@ func (m *TaskInput) View() tea.View {
 		var helpText string
 		switch m.focusPanel {
 		case FocusPanelLeft:
-			helpText = "⌃R: History  |  Alt+Enter/F5: Submit  |  ⌥Tab: Options  |  Esc×2: Cancel"
+			helpText = "Alt+Enter: Submit  |  Esc×2: Cancel"
 		case FocusPanelRight:
-			helpText = "↑/↓: Navigate  |  ←/→: Change  |  ⌥Tab: Tasks  |  Alt+Enter: Submit"
+			helpText = "Alt+Enter: Submit  |  Esc×2: Cancel"
 		case FocusPanelKanban:
-			helpText = "↑/↓: Scroll  |  ⌥Tab: Input  |  Alt+Enter: Submit  |  Esc×2: Cancel"
+			helpText = "Alt+Enter: Submit  |  Esc×2: Cancel"
 		}
 
 		// Add version+tip on left, help text on right

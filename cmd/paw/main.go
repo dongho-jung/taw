@@ -590,7 +590,7 @@ func setupTmuxConfig(app *app.App, tm tmux.Client) error {
 	_ = tm.SetOption("status-position", "bottom", true)
 	_ = tm.SetOption("status-left", " "+app.SessionName+" ", true)
 	_ = tm.SetOption("status-left-length", "30", true)
-	_ = tm.SetOption("status-right", " ⌃T:templates ⌃O:logs ⌃B:shell ⌃/:help ", true)
+	_ = tm.SetOption("status-right", " ⌥←/→:tabs ⌥Tab:pane ⌃/:help ", true)
 	_ = tm.SetOption("status-right-length", "100", true)
 
 	// Window status format - removes index numbers (0:, 1:, 2:) and asterisk (*)
