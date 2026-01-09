@@ -255,6 +255,49 @@ func checkVersionChanged(pawDir string) bool {
 	return savedVersion != Version
 }
 
+// respawnMainWindow respawns the main window (⭐️main) with the new paw binary.
+// This is needed when PAW is upgraded while a session is running, because the
+// main window's new-task TUI process was started with the old binary and would
+// continue to spawn tasks using the old version.
+func respawnMainWindow(app *app.App, tm tmux.Client) error {
+	// Find the main window (starts with ⭐️)
+	windows, err := tm.ListWindows()
+	if err != nil {
+		return fmt.Errorf("failed to list windows: %w", err)
+	}
+
+	var mainWindowID string
+	for _, w := range windows {
+		if strings.HasPrefix(w.Name, constants.EmojiNew) {
+			mainWindowID = w.ID
+			break
+		}
+	}
+
+	if mainWindowID == "" {
+		logging.Debug("Main window not found, nothing to respawn")
+		return nil
+	}
+
+	logging.Log("Respawning main window %s with new binary", mainWindowID)
+
+	// Get the new paw binary path
+	pawBin, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Respawn the pane with the new-task command using the new binary
+	// This replaces the old TUI process with a new one using the updated binary
+	newTaskCmd := fmt.Sprintf("%s internal new-task %s", pawBin, app.SessionName)
+	if err := tm.RespawnPane(mainWindowID+".0", app.ProjectDir, newTaskCmd); err != nil {
+		return fmt.Errorf("failed to respawn main window: %w", err)
+	}
+
+	logging.Log("Main window respawned successfully")
+	return nil
+}
+
 // startNewSession creates a new tmux session
 func startNewSession(app *app.App, tm tmux.Client) error {
 	logging.Debug("Starting new tmux session...")
@@ -381,6 +424,12 @@ func attachToSession(app *app.App, tm tmux.Client) error {
 
 		// Notify user about the upgrade
 		fmt.Printf("🔄 PAW upgraded to %s\n", Version)
+
+		// Respawn the main window so it uses the new binary
+		// The main window runs the new-task TUI which was started with the old binary
+		if err := respawnMainWindow(app, tm); err != nil {
+			logging.Warn("Failed to respawn main window: %v", err)
+		}
 	}
 
 	// Run cleanup and recovery before attaching
