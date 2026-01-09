@@ -898,8 +898,9 @@ func (m *TaskInput) detectKanbanColumn(x, y int) int {
 
 // getKanbanRelativeY converts absolute Y coordinate to kanban-relative row.
 func (m *TaskInput) getKanbanRelativeY(y int) int {
-	// Kanban starts after: help text (1) + textarea (dynamic height + 2 border) + gap (1)
-	kanbanStartY := 1 + m.textareaHeight + 2 + 1
+	// Kanban starts after: help text (1) + textarea (dynamic height + 2 border)
+	// Note: there's no gap between textarea and kanban (see View: "no extra gap")
+	kanbanStartY := 1 + m.textareaHeight + 2
 	relY := y - kanbanStartY
 	if relY < 0 {
 		relY = 0
