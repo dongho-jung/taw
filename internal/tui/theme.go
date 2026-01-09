@@ -4,6 +4,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/charmbracelet/lipgloss/v2"
 
@@ -29,9 +30,38 @@ func DetectDarkMode() bool {
 	case config.ThemeDark:
 		return true
 	default:
-		// Auto-detect
-		return lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+		// Auto-detect with improved reliability
+		return detectDarkModeWithRetry()
 	}
+}
+
+// detectDarkModeWithRetry performs dark mode detection with multiple attempts
+// to improve reliability. The OSC query to detect background color can be
+// unreliable if called too early or if there's buffered input.
+func detectDarkModeWithRetry() bool {
+	// Flush stdout to ensure terminal is in a clean state
+	os.Stdout.Sync()
+
+	// Small delay to let terminal settle after any previous output
+	time.Sleep(5 * time.Millisecond)
+
+	// Try detection multiple times and use majority vote
+	// This helps with intermittent detection failures
+	const attempts = 3
+	darkCount := 0
+
+	for i := range attempts {
+		if lipgloss.HasDarkBackground(os.Stdin, os.Stdout) {
+			darkCount++
+		}
+		// Small delay between attempts (except after last)
+		if i < attempts-1 {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	// Use majority vote: if 2+ out of 3 say dark, return dark
+	return darkCount >= 2
 }
 
 // loadThemeFromConfig attempts to load the theme setting from .paw/config.
