@@ -391,16 +391,17 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMotionMsg:
-		if msg.Button == tea.MouseLeft {
-			if m.mouseSelecting {
-				if row, col, ok := m.handleTextareaMouse(msg.X, msg.Y); ok {
-					m.textarea.SetSelection(m.selectAnchorRow, m.selectAnchorCol, row, col)
-				}
+		// Process drag motion based on state tracking, not button field.
+		// In AllMotion mode, MouseMotionMsg.Button may not reflect the held button.
+		// The selecting state is set in MouseClickMsg and cleared in MouseReleaseMsg.
+		if m.mouseSelecting {
+			if row, col, ok := m.handleTextareaMouse(msg.X, msg.Y); ok {
+				m.textarea.SetSelection(m.selectAnchorRow, m.selectAnchorCol, row, col)
 			}
-			if m.kanbanSelecting {
-				kanbanY := m.getKanbanRelativeY(msg.Y)
-				m.kanban.ExtendSelection(kanbanY)
-			}
+		}
+		if m.kanbanSelecting {
+			kanbanY := m.getKanbanRelativeY(msg.Y)
+			m.kanban.ExtendSelection(kanbanY)
 		}
 
 	case tea.MouseReleaseMsg:
