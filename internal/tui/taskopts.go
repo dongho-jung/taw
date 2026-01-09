@@ -2,7 +2,6 @@
 package tui
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -187,50 +186,35 @@ func (m *TaskOptsUI) View() tea.View {
 	sb.WriteString(titleStyle.Render("Task Options"))
 	sb.WriteString("\n\n")
 
-	// Model field - use manual padding instead of Width() to avoid ANSI code issues
+	// Model field
 	{
-		// Manually pad label to 20 chars for alignment (standalone Options UI uses wider labels)
-		paddedLabel := fmt.Sprintf("%-20s", "Model:")
-		label := labelStyle.Render(paddedLabel)
+		label := labelStyle.Render("Model: ")
 		if m.field == TaskOptsFieldModel {
-			label = selectedLabelStyle.Render(paddedLabel)
+			label = selectedLabelStyle.Render("Model: ")
 		}
 
 		models := config.ValidModels()
-		// Calculate max model name length for consistent padding
-		maxLen := 0
-		for _, model := range models {
-			if len(model) > maxLen {
-				maxLen = len(model)
-			}
-		}
 		var modelParts []string
 		for i, model := range models {
-			// Pad model name to max length for alignment
-			paddedName := fmt.Sprintf("%-*s", maxLen, string(model))
 			if i == m.modelIdx {
 				if m.field == TaskOptsFieldModel {
-					modelParts = append(modelParts, selectedValueStyle.Render("["+paddedName+"]"))
+					modelParts = append(modelParts, selectedValueStyle.Render("["+string(model)+"]"))
 				} else {
-					modelParts = append(modelParts, valueStyle.Render("["+paddedName+"]"))
+					modelParts = append(modelParts, valueStyle.Render("["+string(model)+"]"))
 				}
 			} else {
-				modelParts = append(modelParts, dimStyle.Render(" "+paddedName+" "))
+				modelParts = append(modelParts, dimStyle.Render(" "+string(model)+" "))
 			}
 		}
-		// Use JoinHorizontal to properly handle styled strings
-		modelRow := lipgloss.JoinHorizontal(lipgloss.Left, label, strings.Join(modelParts, ""))
-		sb.WriteString(modelRow)
+		sb.WriteString(label + strings.Join(modelParts, ""))
 		sb.WriteString("\n")
 	}
 
-	// Ultrathink field - use manual padding instead of Width() to avoid ANSI code issues
+	// Ultrathink field
 	{
-		// Manually pad label to 20 chars for alignment (standalone Options UI uses wider labels)
-		paddedLabel := fmt.Sprintf("%-20s", "Ultrathink:")
-		label := labelStyle.Render(paddedLabel)
+		label := labelStyle.Render("Ultrathink: ")
 		if m.field == TaskOptsFieldUltrathink {
-			label = selectedLabelStyle.Render(paddedLabel)
+			label = selectedLabelStyle.Render("Ultrathink: ")
 		}
 
 		var onText, offText string
@@ -249,9 +233,7 @@ func (m *TaskOptsUI) View() tea.View {
 				offText = valueStyle.Render("[off]")
 			}
 		}
-		// Use JoinHorizontal to properly handle styled strings
-		ultrathinkRow := lipgloss.JoinHorizontal(lipgloss.Left, label, onText, " ", offText)
-		sb.WriteString(ultrathinkRow)
+		sb.WriteString(label + onText + " " + offText)
 		sb.WriteString("\n")
 	}
 
