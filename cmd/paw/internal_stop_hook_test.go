@@ -114,3 +114,61 @@ func TestHasDoneMarker(t *testing.T) {
 		})
 	}
 }
+
+func TestHasAskUserQuestionInLastSegment(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{
+			name:    "AskUserQuestion at end of last segment",
+			content: "⏺ Working on task\nDoing work...\nAskUserQuestion:\n  - question: How?\n",
+			want:    true,
+		},
+		{
+			name:    "AskUserQuestion with options",
+			content: "⏺ Response\nAskUserQuestion:\n  questions:\n    - question: Which one?\n      options:\n        - Option A\n        - Option B\n",
+			want:    true,
+		},
+		{
+			name:    "AskUserQuestion in previous segment only",
+			content: "⏺ First response\nAskUserQuestion:\n  - question: Done?\n⏺ New response\nWorking on changes...\n",
+			want:    false,
+		},
+		{
+			name:    "no AskUserQuestion",
+			content: "⏺ Response\nAll done!\nPAW_DONE\n",
+			want:    false,
+		},
+		{
+			name:    "empty content",
+			content: "",
+			want:    false,
+		},
+		{
+			name:    "AskUserQuestion without segment marker",
+			content: "Working on task...\nAskUserQuestion:\n  - question: Ready?\n",
+			want:    true,
+		},
+		{
+			name:    "AskUserQuestion mentioned in text (not tool call)",
+			content: "⏺ Response\nI will use AskUserQuestion to ask you\n",
+			want:    false,
+		},
+		{
+			name:    "AskUserQuestion tool invocation format",
+			content: "⏺ Response\n  AskUserQuestion:\n    questions:\n",
+			want:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hasAskUserQuestionInLastSegment(tt.content)
+			if got != tt.want {
+				t.Fatalf("hasAskUserQuestionInLastSegment() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

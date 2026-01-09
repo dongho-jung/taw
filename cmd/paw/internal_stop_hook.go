@@ -18,9 +18,15 @@ import (
 	"github.com/dongho-jung/paw/internal/tmux"
 )
 
-const stopHookTimeout = 20 * time.Second
 const doneMarker = "PAW_DONE"
 const stopHookTraceFile = "/tmp/paw-stop-hook-trace.log"
+
+// modelAttempt defines a model escalation attempt configuration for classification.
+type modelAttempt struct {
+	model    string
+	thinking bool
+	timeout  time.Duration
+}
 
 // stopHookTrace writes a debug trace to help diagnose stop hook issues.
 // This is written to a separate file for debugging since stop hook runs
@@ -122,9 +128,15 @@ var stopHookCmd = &cobra.Command{
 			logging.Debug("stopHookCmd: PAW_DONE marker detected")
 			status = task.StatusDone
 			stopHookTrace("PAW_DONE marker detected for task=%s", taskName)
+		} else if hasAskUserQuestionInLastSegment(paneContent) {
+			// Skip classification if AskUserQuestion is in the last segment
+			// The watch-wait watcher will handle WAITING status detection
+			logging.Debug("stopHookCmd: AskUserQuestion detected in last segment, skipping classification")
+			status = task.StatusWorking
+			stopHookTrace("AskUserQuestion detected for task=%s (skipping classification, watch-wait will handle)", taskName)
 		} else {
-			// Fallback to Claude classification
-			stopHookTrace("Calling Claude haiku for classification task=%s content_len=%d", taskName, len(paneContent))
+			// Fallback to Claude classification with progressive model escalation
+			stopHookTrace("Calling Claude for classification task=%s content_len=%d (will try haiku→sonnet→opus→opus+thinking)", taskName, len(paneContent))
 
 			var err error
 			status, err = classifyStopStatus(taskName, paneContent)
@@ -174,24 +186,58 @@ Terminal output (most recent):
 %s
 `, taskName, paneContent)
 
-	output, err := runClaudePrompt(prompt)
-	if err != nil {
-		return "", err
+	// Progressive model escalation: haiku -> sonnet -> opus -> opus with thinking
+	// This handles cases where the agent forgot to output markers in long responses
+	attempts := []modelAttempt{
+		{model: "haiku", thinking: false, timeout: constants.ClaudeNameGenTimeout1},
+		{model: "sonnet", thinking: false, timeout: constants.ClaudeNameGenTimeout2},
+		{model: "opus", thinking: false, timeout: constants.ClaudeNameGenTimeout3},
+		{model: "opus", thinking: true, timeout: constants.ClaudeNameGenTimeout4},
 	}
 
-	status, ok := parseStopHookDecision(output)
-	if !ok {
-		return "", fmt.Errorf("unrecognized stop-hook output: %q", output)
+	var lastErr error
+	for i, attempt := range attempts {
+		modelDesc := attempt.model
+		if attempt.thinking {
+			modelDesc = attempt.model + " (thinking)"
+		}
+		stopHookTrace("Classification attempt %d/%d: model=%s timeout=%v", i+1, len(attempts), modelDesc, attempt.timeout)
+		logging.Debug("classifyStopStatus: attempt %d/%d with model=%s, timeout=%v", i+1, len(attempts), modelDesc, attempt.timeout)
+
+		output, err := runClaudePromptWithModel(prompt, attempt.model, attempt.thinking, attempt.timeout)
+		if err != nil {
+			logging.Debug("classifyStopStatus: attempt %d failed: %v", i+1, err)
+			stopHookTrace("Classification attempt %d failed: %v", i+1, err)
+			lastErr = err
+			continue
+		}
+
+		status, ok := parseStopHookDecision(output)
+		if !ok {
+			lastErr = fmt.Errorf("unrecognized stop-hook output: %q", output)
+			logging.Debug("classifyStopStatus: attempt %d parse failed: %v", i+1, lastErr)
+			stopHookTrace("Classification attempt %d parse failed: %v", i+1, lastErr)
+			continue
+		}
+
+		stopHookTrace("Classification SUCCESS at attempt %d: status=%s", i+1, status)
+		logging.Debug("classifyStopStatus: success at attempt %d, status=%s", i+1, status)
+		return status, nil
 	}
 
-	return status, nil
+	return "", lastErr
 }
 
-func runClaudePrompt(prompt string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), stopHookTimeout)
+func runClaudePromptWithModel(prompt, model string, thinking bool, timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "claude", "-p", "--model", "haiku")
+	args := []string{"-p", "--model", model}
+	if thinking {
+		args = append(args, "--think")
+	}
+
+	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Env = append(os.Environ(), "PAW_STOP_HOOK=1")
 	cmd.Stdin = strings.NewReader(prompt)
 
@@ -201,7 +247,11 @@ func runClaudePrompt(prompt string) (string, error) {
 
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("claude timeout after %s", stopHookTimeout)
+			modelDesc := model
+			if thinking {
+				modelDesc = model + " (thinking)"
+			}
+			return "", fmt.Errorf("claude %s timeout after %s", modelDesc, timeout)
 		}
 		return "", fmt.Errorf("claude failed: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
@@ -258,6 +308,28 @@ func tailString(value string, maxLen int) string {
 		return value
 	}
 	return value[len(value)-maxLen:]
+}
+
+// hasAskUserQuestionInLastSegment checks if the last segment contains AskUserQuestion.
+// This is used to skip AI classification since watch-wait watcher handles WAITING status.
+func hasAskUserQuestionInLastSegment(content string) bool {
+	lines := strings.Split(content, "\n")
+	lines = trimTrailingEmptyLines(lines)
+	if len(lines) == 0 {
+		return false
+	}
+
+	// Find the last segment (after the last ⏺ marker)
+	segmentStart := findLastSegmentStartStopHook(lines)
+
+	// Check if any line in the last segment contains "AskUserQuestion"
+	for _, line := range lines[segmentStart:] {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "AskUserQuestion") {
+			return true
+		}
+	}
+	return false
 }
 
 // hasDoneMarker checks if the pane content contains the PAW_DONE marker.
