@@ -631,13 +631,11 @@ func (m *TaskInput) renderOptionsPanel() string {
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("39")).
-		MarginBottom(1)
+		Foreground(lipgloss.Color("39"))
 
 	titleDimStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(dimColor).
-		MarginBottom(1)
+		Foreground(dimColor)
 
 	labelStyle := lipgloss.NewStyle().
 		Foreground(normalColor)
@@ -660,26 +658,25 @@ func (m *TaskInput) renderOptionsPanel() string {
 	if isFocused {
 		borderColor = lipgloss.Color("39")
 	}
-	panelStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(borderColor).
-		Padding(0, 2).          // No vertical padding - Options title provides spacing
-		Width(43).              // Wider to accommodate Model row without line wrapping
-		Height(m.textareaHeight) // Dynamic height: match current textarea height
 
-	var content strings.Builder
+	// Build content lines with consistent visible width
+	// Using explicit line-by-line approach to avoid Width() ANSI code issues
+	const innerWidth = 37 // Content width (excludes border and padding)
+	var lines []string
 
+	// Title line
 	if isFocused {
-		content.WriteString(titleStyle.Render("Options"))
+		lines = append(lines, padToWidth(titleStyle.Render("Options"), innerWidth))
 	} else {
-		content.WriteString(titleDimStyle.Render("Options"))
+		lines = append(lines, padToWidth(titleDimStyle.Render("Options"), innerWidth))
 	}
-	// Note: MarginBottom(1) on titleStyle already provides spacing, no explicit \n needed
 
-	// Model field - use manual padding instead of Width() to avoid ANSI code issues
+	// Empty line (from MarginBottom effect)
+	lines = append(lines, strings.Repeat(" ", innerWidth))
+
+	// Model field
 	{
 		isSelected := isFocused && m.optField == OptFieldModel
-		// Manually pad label to 12 chars for alignment
 		paddedLabel := fmt.Sprintf("%-12s", "Model:")
 		label := labelStyle.Render(paddedLabel)
 		if isSelected {
@@ -687,7 +684,6 @@ func (m *TaskInput) renderOptionsPanel() string {
 		}
 
 		models := config.ValidModels()
-		// Calculate max model name length for consistent padding
 		maxLen := 0
 		for _, model := range models {
 			if len(model) > maxLen {
@@ -696,7 +692,6 @@ func (m *TaskInput) renderOptionsPanel() string {
 		}
 		var parts []string
 		for i, model := range models {
-			// Pad model name to max length for alignment
 			paddedName := fmt.Sprintf("%-*s", maxLen, string(model))
 			if i == m.modelIdx {
 				if isSelected {
@@ -708,15 +703,13 @@ func (m *TaskInput) renderOptionsPanel() string {
 				parts = append(parts, dimStyle.Render(" "+paddedName+" "))
 			}
 		}
-		// Direct concatenation - JoinHorizontal causes layout issues with fixed-width panels
-		content.WriteString(label + strings.Join(parts, ""))
-		content.WriteString("\n")
+		modelLine := label + strings.Join(parts, "")
+		lines = append(lines, padToWidth(modelLine, innerWidth))
 	}
 
-	// Ultrathink field - use manual padding instead of Width() to avoid ANSI code issues
+	// Ultrathink field
 	{
 		isSelected := isFocused && m.optField == OptFieldUltrathink
-		// Manually pad label to 12 chars for alignment
 		paddedLabel := fmt.Sprintf("%-12s", "Ultrathink:")
 		label := labelStyle.Render(paddedLabel)
 		if isSelected {
@@ -739,12 +732,22 @@ func (m *TaskInput) renderOptionsPanel() string {
 				offText = valueStyle.Render("[off]")
 			}
 		}
-		// Direct concatenation - JoinHorizontal causes layout issues with fixed-width panels
-		content.WriteString(label + onText + " " + offText)
-		content.WriteString("\n")
+		ultraLine := label + onText + " " + offText
+		lines = append(lines, padToWidth(ultraLine, innerWidth))
 	}
 
-	return panelStyle.Render(content.String())
+	// Fill remaining height with empty lines
+	for len(lines) < m.textareaHeight {
+		lines = append(lines, strings.Repeat(" ", innerWidth))
+	}
+
+	// Apply border and padding to pre-formatted content
+	panelStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 2)
+
+	return panelStyle.Render(strings.Join(lines, "\n"))
 }
 
 func (m *TaskInput) handleTextareaMouse(x, y int) (int, int, bool) {
@@ -972,6 +975,16 @@ func (m *TaskInput) handleMouseScroll(msg tea.MouseWheelMsg) {
 			m.kanban.ScrollDown(1)
 		}
 	}
+}
+
+// padToWidth pads a styled string to a target visible width.
+// It uses lipgloss.Width() to calculate the visible width (excluding ANSI codes).
+func padToWidth(s string, targetWidth int) string {
+	currentWidth := lipgloss.Width(s)
+	if currentWidth >= targetWidth {
+		return s
+	}
+	return s + strings.Repeat(" ", targetWidth-currentWidth)
 }
 
 func embedScrollbarInTextarea(view string, scrollbar string, visibleLines int) string {
