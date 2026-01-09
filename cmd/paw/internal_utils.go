@@ -187,6 +187,36 @@ func statusFromWindowName(name string) task.Status {
 	return ""
 }
 
+// validateRequiredParams checks if all required parameters are non-empty.
+// Returns an error with a descriptive message if any parameter is empty.
+func validateRequiredParams(params map[string]string) error {
+	for name, value := range params {
+		if value == "" {
+			return fmt.Errorf("%s is required but was empty", name)
+		}
+	}
+	return nil
+}
+
+// setupLogger creates and configures a logger for a command handler.
+// Returns a logger and a cleanup function. The cleanup function should be
+// deferred immediately after calling this function.
+// If taskName is empty, the task context will not be set.
+func setupLogger(logPath string, debug bool, scriptName string, taskName string) (logging.Logger, func()) {
+	logger, _ := logging.New(logPath, debug)
+	if logger == nil {
+		return nil, func() {}
+	}
+
+	logger.SetScript(scriptName)
+	if taskName != "" {
+		logger.SetTask(taskName)
+	}
+	logging.SetGlobal(logger)
+
+	return logger, func() { _ = logger.Close() }
+}
+
 func renameWindowWithStatus(tm tmux.Client, windowID, name, pawDir, taskName, source string) error {
 	if err := tm.RenameWindow(windowID, name); err != nil {
 		return err

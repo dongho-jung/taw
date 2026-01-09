@@ -18,18 +18,20 @@ var userPromptSubmitHookCmd = &cobra.Command{
 		sessionName := os.Getenv("SESSION_NAME")
 		windowID := os.Getenv("WINDOW_ID")
 		taskName := os.Getenv("TASK_NAME")
-		if sessionName == "" || windowID == "" || taskName == "" {
+
+		// Validate required environment variables
+		if err := validateRequiredParams(map[string]string{
+			"SESSION_NAME": sessionName,
+			"WINDOW_ID":    windowID,
+			"TASK_NAME":    taskName,
+		}); err != nil {
 			return nil
 		}
 
+		// Setup logging if PAW_DIR is available
 		if pawDir := os.Getenv("PAW_DIR"); pawDir != "" {
-			logger, _ := logging.New(filepath.Join(pawDir, constants.LogFileName), os.Getenv("PAW_DEBUG") == "1")
-			if logger != nil {
-				defer func() { _ = logger.Close() }()
-				logger.SetScript("user-prompt-submit-hook")
-				logger.SetTask(taskName)
-				logging.SetGlobal(logger)
-			}
+			_, cleanup := setupLogger(filepath.Join(pawDir, constants.LogFileName), os.Getenv("PAW_DEBUG") == "1", "user-prompt-submit-hook", taskName)
+			defer cleanup()
 		}
 
 		logging.Trace("userPromptSubmitHookCmd: start session=%s windowID=%s task=%s", sessionName, windowID, taskName)
@@ -64,18 +66,20 @@ var askUserQuestionHookCmd = &cobra.Command{
 		sessionName := os.Getenv("SESSION_NAME")
 		windowID := os.Getenv("WINDOW_ID")
 		taskName := os.Getenv("TASK_NAME")
-		if sessionName == "" || windowID == "" || taskName == "" {
+
+		// Validate required environment variables
+		if err := validateRequiredParams(map[string]string{
+			"SESSION_NAME": sessionName,
+			"WINDOW_ID":    windowID,
+			"TASK_NAME":    taskName,
+		}); err != nil {
 			return nil
 		}
 
+		// Setup logging if PAW_DIR is available
 		if pawDir := os.Getenv("PAW_DIR"); pawDir != "" {
-			logger, _ := logging.New(filepath.Join(pawDir, constants.LogFileName), os.Getenv("PAW_DEBUG") == "1")
-			if logger != nil {
-				defer func() { _ = logger.Close() }()
-				logger.SetScript("ask-user-question-hook")
-				logger.SetTask(taskName)
-				logging.SetGlobal(logger)
-			}
+			_, cleanup := setupLogger(filepath.Join(pawDir, constants.LogFileName), os.Getenv("PAW_DEBUG") == "1", "ask-user-question-hook", taskName)
+			defer cleanup()
 		}
 
 		logging.Trace("askUserQuestionHookCmd: start session=%s windowID=%s task=%s", sessionName, windowID, taskName)
