@@ -129,9 +129,9 @@ Fuzzy-searchable command palette for quick access to commands.
 
 ## Help Viewer (⌃/)
 
-  ↑↓j/k       Scroll vertically
-  ←/→h/l      Scroll horizontally
+  ↑/↓/j/k     Scroll vertically
+  ←/→/h/l     Scroll horizontally
   g/G         Jump to top/bottom
   PgUp/PgDn   Page scroll
-  ⌃U/D        Half-page scroll
+  ⌃U/⌃D       Half-page scroll
   ⌃//q/Esc    Close the help viewer

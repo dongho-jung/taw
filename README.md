@@ -40,7 +40,7 @@ To add another task inside the tmux session, press `⌃N`:
 - Use `⌥Tab` to edit per-task options (model, ultrathink, dependencies, worktree hook) before submitting.
 
 **Task completion**:
-- Press `⌃F` twice to finish; PAW commits changes and cleans up, pushes in `auto-pr`/`auto-merge`, and auto-merges in `auto-merge`.
+- Press `⌃F` twice to finish. PAW commits changes and cleans up. In `auto-pr` mode, it also pushes and creates a PR. In `auto-merge` mode, it pushes and auto-merges to main.
 - In `auto-pr`, the agent creates the PR before you finish.
 - Optional verification and hooks can run before finish/merge (see config).
 
@@ -49,7 +49,7 @@ To add another task inside the tmux session, press `⌃N`:
 
 If a task is left unfinished and the window or tmux session closes, the next `paw` run automatically reopens those task windows.
 
-**Session Resume**: When reopening, Claude automatically continues the previous conversation session (using `claude --continue`), preserving the full conversation history and context. The agent continues exactly where it left off without restarting from scratch.
+**Session Resume**: When reopening, Claude automatically continues the previous conversation (using `claude --continue`), preserving full history and context.
 </details>
 
 <details>
@@ -157,7 +157,7 @@ log_max_backups: 3
 | `work_mode` | `worktree` | Create a git worktree per task (isolated, recommended) |
 |             | `main` | Work directly on the current branch (simple) |
 | `on_complete` | `confirm` | Commit only (no push/PR/merge) |
-|               | `auto-merge` | **Auto** commit + push + merge + clean up + close window (worktree mode only) |
+|               | `auto-merge` | Auto commit + push + merge + clean up + close window (worktree mode only) |
 |               | `auto-pr` | Auto commit + push + create PR (worktree mode only) |
 | `non_git_workspace` | `shared` | Use the project directory directly (default) |
 |                   | `copy` | Create a per-task workspace copy (isolation) |
@@ -300,4 +300,4 @@ Use `paw history` to list entries and `paw history show <index|task|file>` to vi
   paw attach           # List and select from running sessions
   paw attach myproject # Attach directly to 'myproject' session
   ```
-- `paw check --fix` attempts Homebrew installs for missing dependencies and repairs missing PAW files/folders.
+- `paw check --fix` - Attempts Homebrew installs for missing dependencies and repairs missing PAW files/folders.

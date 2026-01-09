@@ -92,16 +92,16 @@ AskUserQuestion:
           description: "Start implementation as outlined"
         - label: "Revise plan"
           description: "Adjust steps or verification first"
-    - question: "Which caching strategy should we use?"
+    - question: "Which caching strategy?"
       header: "Cache"
       multiSelect: false
       options:
         - label: "Redis (Recommended)"
-          description: "Great for distributed setups; requires a separate server"
+          description: "Distributed, requires separate server"
         - label: "In-memory"
-          description: "Simple but resets when the app restarts"
+          description: "Simple, resets on restart"
         - label: "File-based"
-          description: "Persistent but not suitable for distributed environments"
+          description: "Persistent, not for distributed setups"
 ```
 
 **Example – simple task (no question):**
@@ -210,16 +210,16 @@ Run verification → success? → report ready → user finishes (Ctrl+F)
 ```
 
 **auto-merge requirements (all must hold):**
-1. ✅ Plan marks the change as "automatically verifiable."
-2. ✅ Build succeeds (when a build command exists).
-3. ✅ Tests pass (when tests exist).
-4. ✅ Lint/typecheck passes (when available).
+1. ✅ Plan marks as "automatically verifiable"
+2. ✅ Build succeeds (when build command exists)
+3. ✅ Tests pass (when tests exist)
+4. ✅ Lint/typecheck passes (when available)
 
 **Do not auto-merge if:**
-- ❌ Plan marks the change as "not automatically verifiable."
-- ❌ Tests are missing or do not cover the change.
-- ❌ UI/UX, configuration, or docs changes that need visual review.
-- ❌ Any verification step fails.
+- ❌ Plan marks as "not automatically verifiable"
+- ❌ Tests missing or inadequate
+- ❌ UI/UX, config, or docs needing visual review
+- ❌ Any verification step fails
 
 **When verification succeeds:**
 1. Ensure changes are committed.
