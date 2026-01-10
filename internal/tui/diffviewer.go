@@ -125,8 +125,8 @@ func (m *DiffViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	// Close on q, Esc, or Ctrl+D
-	case "q", "esc", "ctrl+d", "ctrl+shift+d":
+	// Close on q, Esc, or Ctrl+Shift+D
+	case "q", "esc", "ctrl+shift+d":
 		return m, tea.Quit
 
 	case "down", "j":
@@ -181,6 +181,9 @@ func (m *DiffViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "ctrl+u":
 		m.scrollUp(m.contentHeight() / 2)
+
+	case "ctrl+d":
+		m.scrollDown(m.contentHeight() / 2)
 	}
 
 	return m, nil
@@ -248,7 +251,7 @@ func (m *DiffViewer) getDisplayLines() []string {
 // View renders the diff viewer.
 func (m *DiffViewer) View() tea.View {
 	if m.err != nil {
-		return tea.NewView(fmt.Sprintf("Error: %v\n\nPress q, Esc, or ⌃D to close.", m.err))
+		return tea.NewView(fmt.Sprintf("Error: %v\n\nPress q or Esc to close.", m.err))
 	}
 
 	if m.width == 0 || m.height == 0 {
@@ -333,10 +336,10 @@ func (m *DiffViewer) View() tea.View {
 	}
 
 	// Keybindings hint (use ansi.StringWidth for unicode characters like ⌃)
-	hint := "w:wrap g/G:top/end ⌃D/q:close"
+	hint := "⌃D/⌃U:scroll w:wrap g/G:top/end q:close"
 	padding := m.width - ansi.StringWidth(status) - ansi.StringWidth(hint)
 	if padding < 0 {
-		hint = "⌃D/q:close"
+		hint = "q:close"
 		padding = m.width - ansi.StringWidth(status) - ansi.StringWidth(hint)
 		if padding < 0 {
 			padding = 0

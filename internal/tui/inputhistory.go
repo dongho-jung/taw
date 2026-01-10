@@ -119,14 +119,28 @@ func (m *InputHistoryPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "pgup":
+		case "pgup", "ctrl+b":
+			m.cursor -= 10
+			if m.cursor < 0 {
+				m.cursor = 0
+			}
+			return m, nil
+
+		case "pgdown", "ctrl+f":
+			m.cursor += 10
+			if m.cursor >= len(m.filtered) {
+				m.cursor = max(0, len(m.filtered)-1)
+			}
+			return m, nil
+
+		case "ctrl+u":
 			m.cursor -= 5
 			if m.cursor < 0 {
 				m.cursor = 0
 			}
 			return m, nil
 
-		case "pgdown":
+		case "ctrl+d":
 			m.cursor += 5
 			if m.cursor >= len(m.filtered) {
 				m.cursor = max(0, len(m.filtered)-1)

@@ -244,12 +244,19 @@ func (m *LogViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.scrollToEnd()
 		}
 
-	case "pgup":
+	case "pgup", "ctrl+b":
 		m.tailMode = false
 		m.scrollUp(m.contentHeight())
 
-	case "pgdown":
+	case "pgdown", "ctrl+f":
 		m.scrollDown(m.contentHeight())
+
+	case "ctrl+u":
+		m.tailMode = false
+		m.scrollUp(m.contentHeight() / 2)
+
+	case "ctrl+d":
+		m.scrollDown(m.contentHeight() / 2)
 	}
 
 	return m, nil
