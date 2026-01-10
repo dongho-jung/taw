@@ -111,7 +111,7 @@ func parseUnixTime(s string) (int64, error) {
 
 var renameWindowCmd = &cobra.Command{
 	Use:   "rename-window [window-id] [name]",
-	Short: "Rename a tmux window (with logging and sound)",
+	Short: "Rename a tmux window (with logging and notifications)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		windowID := args[0]
@@ -150,21 +150,8 @@ var renameWindowCmd = &cobra.Command{
 		pawDir := os.Getenv("PAW_DIR")
 		taskName := os.Getenv("TASK_NAME")
 
-		status := statusFromWindowName(name)
-		if status != "" {
-			switch status {
-			case task.StatusDone:
-				logging.Trace("renameWindowCmd: playing SoundTaskCompleted (done state)")
-				notify.PlaySound(notify.SoundTaskCompleted)
-			case task.StatusWaiting:
-				logging.Trace("renameWindowCmd: playing SoundNeedInput (waiting state)")
-				notify.PlaySound(notify.SoundNeedInput)
-			case task.StatusCorrupted:
-				logging.Trace("renameWindowCmd: playing SoundError (warning state)")
-				notify.PlaySound(notify.SoundError)
-			}
-		}
-
+		// Sound and notifications are handled centrally in renameWindowWithStatus
+		// to ensure all status change paths trigger alerts
 		if err := renameWindowWithStatus(tm, windowID, name, pawDir, taskName, "rename-window"); err != nil {
 			return err
 		}
@@ -242,6 +229,27 @@ func renameWindowWithStatus(tm tmux.Client, windowID, name, pawDir, taskName, so
 	historyService := service.NewHistoryService(filepath.Join(pawDir, constants.HistoryDirName))
 	if err := historyService.RecordStatusTransition(taskName, prevStatus, status, source, "", valid); err != nil {
 		logging.Warn("Failed to record status transition: %v", err)
+	}
+
+	// Send notifications only when status actually changes (avoid duplicates)
+	// This centralized notification ensures DONE state always triggers alerts.
+	//
+	// NOTE: WAITING and WARNING states are handled by their respective code paths:
+	// - WAITING: watch-wait watcher (wait.go) provides action buttons and prompt context
+	// - WARNING: handlers provide contextual messages (merge failed, verification failed, etc.)
+	if prevStatus != status && status == task.StatusDone {
+		// Load config to get notification settings
+		var notificationsConfig *config.NotificationsConfig
+		sessionName := os.Getenv("SESSION_NAME")
+		if sessionName != "" {
+			if appCtx, err := getAppFromSession(sessionName); err == nil && appCtx.Config != nil {
+				notificationsConfig = appCtx.Config.Notifications
+			}
+		}
+
+		logging.Trace("renameWindowWithStatus: sending done notification for task=%s", taskName)
+		notify.PlaySound(notify.SoundTaskCompleted)
+		notify.SendAll(notificationsConfig, "Task ready", fmt.Sprintf("✅ %s is ready for review", taskName))
 	}
 
 	return nil

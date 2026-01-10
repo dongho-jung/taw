@@ -117,10 +117,11 @@ var cancelTaskCmd = &cobra.Command{
 							abortCmd.Dir = appCtx.ProjectDir
 							_ = abortCmd.Run()
 
-							// Rename window to warning state
+							// Rename window to warning state and notify user
 							warningName := windowNameForStatus(targetTask.Name, task.StatusCorrupted)
 							_ = renameWindowWithStatus(tm, windowID, warningName, appCtx.PawDir, targetTask.Name, "cancel-task")
 							notify.PlaySound(notify.SoundError)
+							notify.SendAll(appCtx.Config.Notifications, "Revert conflict", fmt.Sprintf("⚠️ %s - manual resolution needed", targetTask.Name))
 							return nil // Don't cleanup - keep task for manual resolution
 						}
 						revertSpinner.Stop(true, "Reverted")
