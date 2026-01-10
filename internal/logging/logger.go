@@ -375,9 +375,7 @@ func (l *fileLogger) Debug(format string, args ...interface{}) {
 	}
 
 	msg := fmt.Sprintf(format, args...)
-	caller := getCaller()
-	fmt.Fprintf(os.Stderr, "[L1] [%s] %s\n", caller, msg)
-
+	// Only write to log file, not stderr - stderr output interferes with TUI
 	l.logWithLevel(LevelDebug, "%s", msg)
 }
 
