@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -31,6 +32,14 @@ type GitViewer struct {
 	width         int
 	height        int
 	err           error
+
+	// Mouse text selection state
+	selecting    bool
+	hasSelection bool
+	selectStartY int // Start row (screen-relative)
+	selectStartX int // Start column (screen-relative)
+	selectEndY   int // End row (screen-relative)
+	selectEndX   int // End column (screen-relative)
 }
 
 // NewGitViewer creates a new git viewer for the given working directory.
@@ -52,6 +61,43 @@ func (m *GitViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
+	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseLeft {
+			// Start text selection
+			m.selecting = true
+			m.hasSelection = true
+			m.selectStartY = msg.Y
+			m.selectStartX = msg.X
+			m.selectEndY = msg.Y
+			m.selectEndX = msg.X
+		}
+		return m, nil
+
+	case tea.MouseMotionMsg:
+		// Extend selection while dragging
+		if m.selecting {
+			m.selectEndY = msg.Y
+			m.selectEndX = msg.X
+		}
+		return m, nil
+
+	case tea.MouseReleaseMsg:
+		if msg.Button == tea.MouseLeft && m.selecting {
+			m.selecting = false
+			m.selectEndY = msg.Y
+			m.selectEndX = msg.X
+		}
+		return m, nil
+
+	case tea.MouseWheelMsg:
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			m.scrollUp(3)
+		case tea.MouseWheelDown:
+			m.scrollDown(3)
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -61,6 +107,7 @@ func (m *GitViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lines = msg.lines
 		m.scrollPos = 0
 		m.horizontalPos = 0
+		m.clearSelection()
 		return m, nil
 
 	case error:
@@ -79,6 +126,13 @@ type gitOutputMsg struct {
 // handleKey handles keyboard input.
 func (m *GitViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	// Copy selection with Ctrl+C
+	case "ctrl+c":
+		if m.hasSelection {
+			m.copySelection()
+		}
+		return m, nil
+
 	// Close on q, Esc, or Ctrl+G
 	case "q", "esc", "ctrl+g", "ctrl+shift+g":
 		return m, tea.Quit
@@ -257,8 +311,14 @@ func (m *GitViewer) View() tea.View {
 		endPos = len(displayLines)
 	}
 
+	// Selection highlight style
+	highlightStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("25")).
+		Foreground(lipgloss.Color("255"))
+
 	// Render visible lines
 	for i := m.scrollPos; i < endPos; i++ {
+		screenY := i - m.scrollPos // Screen-relative Y position
 		line := displayLines[i]
 		lineWidth := ansi.StringWidth(line)
 
@@ -283,6 +343,12 @@ func (m *GitViewer) View() tea.View {
 		if lineWidth < m.width {
 			line = line + strings.Repeat(" ", m.width-lineWidth)
 		}
+
+		// Apply selection highlighting if this line is in selection
+		if m.hasSelection {
+			line = m.applySelectionToLine(line, screenY, highlightStyle)
+		}
+
 		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
@@ -341,6 +407,7 @@ func (m *GitViewer) View() tea.View {
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeAllMotion // Enable mouse drag selection
 	return v
 }
 
@@ -366,6 +433,149 @@ func (m *GitViewer) maxLineWidth() int {
 	return maxWidth
 }
 
+// clearSelection clears the current selection.
+func (m *GitViewer) clearSelection() {
+	m.selecting = false
+	m.hasSelection = false
+	m.selectStartY = 0
+	m.selectStartX = 0
+	m.selectEndY = 0
+	m.selectEndX = 0
+}
+
+// getSelectionRange returns the normalized selection range (minY, maxY, startX, endX).
+// startX/endX are adjusted based on selection direction.
+func (m *GitViewer) getSelectionRange() (minY, maxY, startX, endX int) {
+	if m.selectStartY < m.selectEndY {
+		return m.selectStartY, m.selectEndY, m.selectStartX, m.selectEndX
+	} else if m.selectStartY > m.selectEndY {
+		return m.selectEndY, m.selectStartY, m.selectEndX, m.selectStartX
+	}
+	// Same row - ensure startX < endX
+	if m.selectStartX <= m.selectEndX {
+		return m.selectStartY, m.selectEndY, m.selectStartX, m.selectEndX
+	}
+	return m.selectStartY, m.selectEndY, m.selectEndX, m.selectStartX
+}
+
+// getSelectionXRange returns the X selection range for a given screen row.
+func (m *GitViewer) getSelectionXRange(screenY int) (int, int) {
+	minY, maxY, startX, endX := m.getSelectionRange()
+
+	if screenY < minY || screenY > maxY {
+		return -1, -1 // Not in selection
+	}
+
+	if minY == maxY {
+		// Single row selection
+		return startX, endX
+	}
+
+	// Multi-row selection
+	if screenY == minY {
+		// First row: from startX to end of line
+		return startX, m.width
+	} else if screenY == maxY {
+		// Last row: from start to endX
+		return 0, endX
+	}
+	// Middle rows: full line
+	return 0, m.width
+}
+
+// applySelectionToLine applies selection highlighting to a line.
+func (m *GitViewer) applySelectionToLine(line string, screenY int, highlightStyle lipgloss.Style) string {
+	startX, endX := m.getSelectionXRange(screenY)
+	if startX < 0 || startX >= endX {
+		return line // Not in selection or invalid range
+	}
+
+	lineWidth := ansi.StringWidth(line)
+	if startX >= lineWidth {
+		return line // Selection starts beyond line
+	}
+	if endX > lineWidth {
+		endX = lineWidth
+	}
+
+	// Split line into before, selected, and after parts (ANSI-aware)
+	before := ""
+	if startX > 0 {
+		before = ansi.Cut(line, 0, startX)
+	}
+	selected := ansi.Cut(line, startX, endX)
+	after := ""
+	if endX < lineWidth {
+		after = ansi.Cut(line, endX, lineWidth)
+	}
+
+	// Strip ANSI from selected text and apply highlight
+	plainSelected := ansi.Strip(selected)
+
+	return before + highlightStyle.Render(plainSelected) + after
+}
+
+// copySelection copies the selected text to clipboard.
+func (m *GitViewer) copySelection() {
+	if !m.hasSelection {
+		return
+	}
+
+	displayLines := m.getDisplayLines()
+	minY, maxY, _, _ := m.getSelectionRange()
+
+	var selectedLines []string
+	for screenY := minY; screenY <= maxY; screenY++ {
+		lineIdx := m.scrollPos + screenY
+		if lineIdx < 0 || lineIdx >= len(displayLines) {
+			continue
+		}
+
+		line := displayLines[lineIdx]
+		lineWidth := ansi.StringWidth(line)
+
+		// Apply horizontal scroll offset for accurate X positions
+		if !m.wordWrap && m.horizontalPos > 0 {
+			if m.horizontalPos < lineWidth {
+				line = ansi.Cut(line, m.horizontalPos, lineWidth)
+				lineWidth = ansi.StringWidth(line)
+			} else {
+				line = ""
+				lineWidth = 0
+			}
+		}
+
+		// Truncate to screen width
+		if lineWidth > m.width {
+			line = ansi.Cut(line, 0, m.width)
+			lineWidth = m.width
+		}
+
+		// Pad for consistent width
+		if lineWidth < m.width {
+			line = line + strings.Repeat(" ", m.width-lineWidth)
+		}
+
+		startX, endX := m.getSelectionXRange(screenY)
+		if startX < 0 || startX >= endX {
+			continue
+		}
+		if endX > m.width {
+			endX = m.width
+		}
+
+		// Extract selected portion
+		selected := ansi.Cut(line, startX, endX)
+		plainSelected := strings.TrimRight(ansi.Strip(selected), " ")
+		selectedLines = append(selectedLines, plainSelected)
+	}
+
+	if len(selectedLines) > 0 {
+		text := strings.Join(selectedLines, "\n")
+		_ = clipboard.WriteAll(text)
+	}
+}
+
 // loadGitOutput loads git output based on the current mode.
 func (m *GitViewer) loadGitOutput() tea.Cmd {
 	return func() tea.Msg {
@@ -373,14 +583,14 @@ func (m *GitViewer) loadGitOutput() tea.Cmd {
 
 		switch m.mode {
 		case gitModeStatus:
-			// git status with color
+			// git status with color (status doesn't support --color flag, use -c config)
 			cmd = exec.Command("git", "-c", "color.status=always", "status")
 		case gitModeLog:
-			// git log with color
-			cmd = exec.Command("git", "-c", "color.log=always", "log")
+			// git log with color (--color=always forces color output even for non-TTY)
+			cmd = exec.Command("git", "log", "--color=always")
 		case gitModeAll:
 			// git log --all --decorate --oneline --graph with color
-			cmd = exec.Command("git", "-c", "color.log=always", "log", "--all", "--decorate", "--oneline", "--graph")
+			cmd = exec.Command("git", "log", "--all", "--decorate", "--oneline", "--graph", "--color=always")
 		}
 
 		cmd.Dir = m.workDir
