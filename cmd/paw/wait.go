@@ -101,7 +101,14 @@ var watchWaitCmd = &cobra.Command{
 
 			content, err := tm.CapturePane(paneID, waitCaptureLines)
 			if err != nil {
-				logging.Trace("Failed to capture pane: %v", err)
+				errStr := err.Error()
+				// Check if the error indicates the window/pane is gone (expected during cleanup)
+				if strings.Contains(errStr, "can't find window") || strings.Contains(errStr, "can't find pane") {
+					logging.Debug("Window/pane no longer exists (capture failed), stopping wait watcher: %v", err)
+					return nil
+				}
+				// Other unexpected errors - log as warning and continue
+				logging.Warn("Failed to capture pane: %v", err)
 				time.Sleep(waitPollInterval)
 				continue
 			}
@@ -149,7 +156,7 @@ var watchWaitCmd = &cobra.Command{
 							// If user selects an action from notification, send it to the agent
 							if choice != "" {
 								if sendErr := sendAgentResponse(tm, paneID, choice); sendErr != nil {
-									logging.Trace("Failed to send prompt response: %v", sendErr)
+									logging.Warn("Failed to send prompt response: %v", sendErr)
 								} else {
 									logging.Debug("Sent prompt response: %s", choice)
 								}
