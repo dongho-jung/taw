@@ -10,6 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/dongho-jung/paw/internal/config"
 )
 
 // gitMode represents different git command modes
@@ -32,6 +34,9 @@ type GitViewer struct {
 	width         int
 	height        int
 	err           error
+	theme         config.Theme
+	isDark        bool
+	colors        ThemeColors
 
 	// Mouse text selection state
 	selecting    bool
@@ -51,20 +56,39 @@ type GitViewer struct {
 
 // NewGitViewer creates a new git viewer for the given working directory.
 func NewGitViewer(workDir string) *GitViewer {
+	// Detect dark mode BEFORE bubbletea starts
+	theme := loadThemeFromConfig()
+	isDark := detectDarkMode(theme)
+
 	return &GitViewer{
 		workDir: workDir,
 		mode:    gitModeStatus, // Start in status mode by default
+		theme:   theme,
+		isDark:  isDark,
+		colors:  NewThemeColors(isDark),
 	}
 }
 
 // Init initializes the git viewer.
 func (m *GitViewer) Init() tea.Cmd {
-	return m.loadGitOutput()
+	cmds := []tea.Cmd{m.loadGitOutput()}
+	if m.theme == config.ThemeAuto {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles messages and updates the model.
 func (m *GitViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		if m.theme == config.ThemeAuto {
+			m.isDark = msg.IsDark()
+			m.colors = NewThemeColors(m.isDark)
+			setCachedDarkMode(m.isDark)
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
@@ -452,9 +476,10 @@ func (m *GitViewer) View() tea.View {
 	}
 
 	// Status bar
+	c := m.colors
 	statusStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("240")).
-		Foreground(lipgloss.Color("252"))
+		Background(c.StatusBar).
+		Foreground(c.StatusBarText)
 
 	// Search input mode: show search bar instead of status
 	if m.searchMode {

@@ -8,6 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
+
+	"github.com/dongho-jung/paw/internal/config"
 )
 
 // StepStatus represents the status of a step.
@@ -37,6 +39,9 @@ type EndTaskUI struct {
 	err         error
 	width       int
 	height      int
+	theme       config.Theme
+	isDark      bool
+	colors      ThemeColors
 }
 
 // stepCompleteMsg is sent when a step completes.
@@ -48,6 +53,10 @@ type stepCompleteMsg struct {
 
 // NewEndTaskUI creates a new finish task UI.
 func NewEndTaskUI(taskName string, isGitRepo bool) *EndTaskUI {
+	// Detect dark mode BEFORE bubbletea starts
+	theme := loadThemeFromConfig()
+	isDark := detectDarkMode(theme)
+
 	steps := []Step{}
 
 	if isGitRepo {
@@ -67,17 +76,32 @@ func NewEndTaskUI(taskName string, isGitRepo bool) *EndTaskUI {
 	return &EndTaskUI{
 		taskName: taskName,
 		steps:    steps,
+		theme:    theme,
+		isDark:   isDark,
+		colors:   NewThemeColors(isDark),
 	}
 }
 
 // Init initializes the finish task UI.
 func (m *EndTaskUI) Init() tea.Cmd {
-	return m.runNextStep()
+	cmds := []tea.Cmd{m.runNextStep()}
+	if m.theme == config.ThemeAuto {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles messages and updates the model.
 func (m *EndTaskUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		if m.theme == config.ThemeAuto {
+			m.isDark = msg.IsDark()
+			m.colors = NewThemeColors(m.isDark)
+			setCachedDarkMode(m.isDark)
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -116,26 +140,27 @@ func (m *EndTaskUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the finish task UI.
 func (m *EndTaskUI) View() tea.View {
+	c := m.colors
 	var sb strings.Builder
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("39"))
+		Foreground(c.Accent)
 
 	okStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("40"))
+		Foreground(c.SuccessColor)
 
 	skipStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240"))
+		Foreground(c.TextDim)
 
 	failStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("196"))
+		Foreground(c.ErrorColor)
 
 	runningStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("220"))
+		Foreground(c.WarningColor)
 
 	pendingStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240"))
+		Foreground(c.TextDim)
 
 	sb.WriteString("\n")
 	sb.WriteString(titleStyle.Render(fmt.Sprintf("Finishing task: %s", m.taskName)))
