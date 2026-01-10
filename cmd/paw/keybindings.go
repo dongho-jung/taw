@@ -20,6 +20,7 @@ import (
 //   - Ctrl+G: Toggle git viewer (status/log/graph modes)
 //   - Ctrl+B: Toggle bottom (shell)
 //   - Ctrl+/: Toggle help
+//   - Ctrl+R: Toggle history search (in new task window only)
 //   - Alt+Left/Right: Move window
 //   - Alt+Tab: Cycle pane (in task windows) / Cycle options (in new task window)
 func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
@@ -44,6 +45,10 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	// -F flag is required so tmux evaluates the format as a boolean, not as a shell command
 	cmdAltTab := `if -F "#{m:⭐️*,#{window_name}}" "send-keys Escape Tab" "select-pane -t :.+"`
 
+	// Ctrl+R: context-aware - show history picker only in new task window (⭐️)
+	// In other windows, pass through Ctrl+R for normal reverse search
+	cmdCtrlR := fmt.Sprintf(`if -F "#{m:⭐️*,#{window_name}}" "run-shell '%s internal toggle-history %s'" "send-keys C-r"`, pawBin, sessionName)
+
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
 		{Key: "M-Tab", Command: cmdAltTab, NoPrefix: true},
@@ -65,5 +70,6 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 		{Key: "C-g", Command: cmdToggleGitStatus, NoPrefix: true},
 		{Key: "C-b", Command: cmdToggleBottom, NoPrefix: true},
 		{Key: "C-_", Command: cmdToggleHelp, NoPrefix: true}, // Ctrl+/ sends C-_
+		{Key: "C-r", Command: cmdCtrlR, NoPrefix: true},      // History search in new task window
 	}
 }

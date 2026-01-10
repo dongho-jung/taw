@@ -48,6 +48,8 @@ func init() {
 	internalCmd.AddCommand(toggleTemplateCmd)
 	internalCmd.AddCommand(templateViewerCmd)
 	internalCmd.AddCommand(templateEditorCmd)
+	internalCmd.AddCommand(toggleHistoryCmd)
+	internalCmd.AddCommand(historyPickerCmd)
 	internalCmd.AddCommand(loadingScreenCmd)
 	internalCmd.AddCommand(toggleSetupCmd)
 	internalCmd.AddCommand(setupWizardCmd)

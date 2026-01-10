@@ -13,6 +13,7 @@ import (
 	"github.com/dongho-jung/paw/internal/embed"
 	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/logging"
+	"github.com/dongho-jung/paw/internal/service"
 	"github.com/dongho-jung/paw/internal/tmux"
 	"github.com/dongho-jung/paw/internal/tui"
 )
@@ -447,6 +448,114 @@ var templateEditorCmd = &cobra.Command{
 
 			if err := templates.Save(appCtx.PawDir); err != nil {
 				return fmt.Errorf("failed to save templates: %w", err)
+			}
+		}
+
+		return nil
+	},
+}
+
+var toggleHistoryCmd = &cobra.Command{
+	Use:   "toggle-history [session]",
+	Short: "Toggle history picker popup",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		tm := tmux.New(sessionName)
+
+		appCtx, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		pawBin, err := os.Executable()
+		if err != nil {
+			pawBin = "paw"
+		}
+
+		// Run history picker in popup
+		historyCmd := fmt.Sprintf("%s internal history-picker %s", pawBin, sessionName)
+
+		_ = tm.DisplayPopup(tmux.PopupOpts{
+			Width:     constants.PopupWidthHistory,
+			Height:    constants.PopupHeightHistory,
+			Title:     " Task History (⌃R) ",
+			Close:     true,
+			Style:     "fg=terminal,bg=terminal",
+			Directory: appCtx.ProjectDir,
+		}, historyCmd)
+		return nil
+	},
+}
+
+var historyPickerCmd = &cobra.Command{
+	Use:    "history-picker [session]",
+	Short:  "Run the history picker",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		appCtx, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		logger, _ := logging.New(appCtx.GetLogPath(), appCtx.Debug)
+		if logger != nil {
+			defer func() { _ = logger.Close() }()
+			logger.SetScript("history-picker")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Debug("-> historyPickerCmd(session=%s)", sessionName)
+		defer logging.Debug("<- historyPickerCmd")
+
+		// Initialize input history service
+		inputHistorySvc := service.NewInputHistoryService(appCtx.PawDir)
+
+		// Load history
+		history, err := inputHistorySvc.GetAllContents()
+		if err != nil {
+			logging.Warn("Failed to load input history: %v", err)
+			fmt.Println("Failed to load history.")
+			return nil
+		}
+		if len(history) == 0 {
+			fmt.Println("No task history yet.")
+			return nil
+		}
+
+		// Run history picker
+		action, selected, err := tui.RunInputHistoryPicker(history)
+		if err != nil {
+			logging.Warn("Failed to run history picker: %v", err)
+			return nil
+		}
+
+		// If user selected something, send it to the task input
+		if action == tui.InputHistorySelect && selected != "" {
+			logging.Trace("historyPickerCmd: selected history item")
+			tm := tmux.New(sessionName)
+
+			// Get the current window name to check if we're in the new task window
+			windowName, _ := tm.Display("#{window_name}")
+			windowName = strings.TrimSpace(windowName)
+
+			// Only send keys if we're in the new task window (⭐️)
+			if strings.HasPrefix(windowName, constants.EmojiNew) {
+				// Send Ctrl+A to select all existing text, then send the selected content
+				// This replaces existing content instead of appending
+				if err := tm.SendKeys("", "C-a"); err != nil {
+					logging.Warn("Failed to send Ctrl+A: %v", err)
+				}
+				// Send the selected content (this will replace the selection)
+				if err := tm.SendKeysLiteral("", selected); err != nil {
+					logging.Warn("Failed to send history content: %v", err)
+				}
+			} else {
+				logging.Debug("Not in new task window, skipping history injection")
 			}
 		}
 

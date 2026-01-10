@@ -83,9 +83,6 @@ type TaskInput struct {
 	cancelPressTime time.Time
 	cancelKey       string // Track which key was pressed for cancel ("esc" or "ctrl+c")
 
-	// History search request
-	historyRequested bool
-
 	// Tip caching - only changes every minute
 	currentTip     string
 	lastTipRefresh time.Time
@@ -99,10 +96,9 @@ type cancelClearMsg struct{}
 
 // TaskInputResult contains the result of the task input.
 type TaskInputResult struct {
-	Content          string
-	Options          *config.TaskOptions
-	Cancelled        bool
-	HistoryRequested bool // True when Ctrl+R was pressed to show history
+	Content   string
+	Options   *config.TaskOptions
+	Cancelled bool
 }
 
 // NewTaskInput creates a new task input model.
@@ -405,11 +401,6 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.switchFocusTo(FocusPanelLeft)
 			}
 			return m, nil
-
-		// History search: Ctrl+R
-		case "ctrl+r":
-			m.historyRequested = true
-			return m, tea.Quit
 		}
 
 		// Panel-specific key handling

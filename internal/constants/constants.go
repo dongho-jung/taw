@@ -398,4 +398,8 @@ const (
 	// Small size for command palette
 	PopupWidthPalette  = "60"
 	PopupHeightPalette = "20"
+
+	// Medium size for history picker
+	PopupWidthHistory  = "80%"
+	PopupHeightHistory = "70%"
 )

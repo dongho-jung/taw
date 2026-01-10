@@ -315,7 +315,9 @@ func (m *InputHistoryPicker) View() tea.View {
 	sb.WriteString("\n")
 	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter: Select  Esc/⌃R: Cancel"))
 
-	return tea.NewView(sb.String())
+	v := tea.NewView(sb.String())
+	v.AltScreen = true
+	return v
 }
 
 // truncateWithEllipsis truncates a string to maxLen and adds ellipsis if needed.
