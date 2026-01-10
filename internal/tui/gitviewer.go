@@ -160,6 +160,18 @@ func (m *GitViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "ctrl+d":
 		m.scrollDown(m.contentHeight() / 2)
+
+	case "tab":
+		// Cycle through modes: status -> log -> all -> status
+		switch m.mode {
+		case gitModeStatus:
+			m.mode = gitModeLog
+		case gitModeLog:
+			m.mode = gitModeAll
+		case gitModeAll:
+			m.mode = gitModeStatus
+		}
+		return m, m.loadGitOutput()
 	}
 
 	return m, nil
@@ -311,7 +323,7 @@ func (m *GitViewer) View() tea.View {
 	}
 
 	// Keybindings hint (use ansi.StringWidth for unicode characters like ⌃)
-	hint := "s:status L:log a:all w:wrap g/G:top/end ⌃G/q:close"
+	hint := "Tab:cycle s/L/a:mode w:wrap g/G:top/end ⌃G/q:close"
 	padding := m.width - ansi.StringWidth(status) - ansi.StringWidth(hint)
 	if padding < 0 {
 		hint = "⌃G/q:close"
