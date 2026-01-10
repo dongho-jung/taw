@@ -37,6 +37,13 @@ type LogViewer struct {
 	selectStartX int // Start column (screen-relative)
 	selectEndY   int // End row (screen-relative)
 	selectEndX   int // End column (screen-relative)
+
+	// Search state
+	searchMode       bool   // whether search input is active
+	searchQuery      string // current search term (confirmed)
+	searchInput      string // input buffer while typing
+	searchMatches    []int  // display line indices containing matches
+	currentMatchIdx  int    // current match index for n/N navigation
 }
 
 const maxLogLines = 5000
@@ -180,6 +187,11 @@ func (m *LogViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKey handles keyboard input.
 func (m *LogViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle search mode input
+	if m.searchMode {
+		return m.handleSearchKey(msg)
+	}
+
 	switch msg.String() {
 	// Copy selection with Ctrl+C
 	case "ctrl+c":
@@ -188,8 +200,36 @@ func (m *LogViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "q", "esc", "ctrl+o", "ctrl+l", "ctrl+shift+l", "ctrl+shift+o":
+	case "q", "ctrl+o", "ctrl+l", "ctrl+shift+l", "ctrl+shift+o":
 		return m, tea.Quit
+
+	case "esc":
+		// Clear search if active, otherwise quit
+		if m.searchQuery != "" {
+			m.clearSearch()
+			return m, nil
+		}
+		return m, tea.Quit
+
+	// Search mode
+	case "/":
+		m.searchMode = true
+		m.searchInput = ""
+		return m, nil
+
+	// Next match
+	case "n":
+		if m.searchQuery != "" && len(m.searchMatches) > 0 {
+			m.nextMatch()
+		}
+		return m, nil
+
+	// Previous match
+	case "N":
+		if m.searchQuery != "" && len(m.searchMatches) > 0 {
+			m.prevMatch()
+		}
+		return m, nil
 
 	case "down":
 		m.tailMode = false
@@ -234,6 +274,10 @@ func (m *LogViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.minLevel = 0
 		}
 		m.scrollPos = 0
+		// Re-find matches after level change
+		if m.searchQuery != "" {
+			m.findMatches()
+		}
 		if m.tailMode {
 			m.scrollToEnd()
 		}
@@ -254,6 +298,43 @@ func (m *LogViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// handleSearchKey handles keyboard input in search mode.
+func (m *LogViewer) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		// Confirm search
+		m.searchMode = false
+		m.searchQuery = m.searchInput
+		if m.searchQuery != "" {
+			m.findMatches()
+			if len(m.searchMatches) > 0 {
+				m.currentMatchIdx = 0
+				m.scrollToMatch(0)
+			}
+		}
+		return m, nil
+
+	case "esc":
+		// Cancel search mode
+		m.searchMode = false
+		m.searchInput = ""
+		return m, nil
+
+	case "backspace":
+		if len(m.searchInput) > 0 {
+			m.searchInput = m.searchInput[:len(m.searchInput)-1]
+		}
+		return m, nil
+
+	default:
+		// Append typed character
+		if len(msg.String()) == 1 {
+			m.searchInput += msg.String()
+		}
+		return m, nil
+	}
 }
 
 // scrollUp scrolls up by n lines.
@@ -396,6 +477,12 @@ func (m *LogViewer) View() tea.View {
 			line = line[:m.width]
 		}
 
+		// Apply search highlighting before padding
+		if m.searchQuery != "" && m.isMatchLine(i) {
+			isCurrentMatch := m.isCurrentMatchLine(i)
+			line = m.highlightSearchMatches(line, isCurrentMatch)
+		}
+
 		// Pad to full width
 		line = fmt.Sprintf("%-*s", m.width, line)
 
@@ -419,6 +506,22 @@ func (m *LogViewer) View() tea.View {
 		Background(lipgloss.Color("240")).
 		Foreground(lipgloss.Color("252"))
 
+	// Search input mode: show search bar instead of status
+	if m.searchMode {
+		searchStyle := lipgloss.NewStyle().
+			Background(lipgloss.Color("240")).
+			Foreground(lipgloss.Color("252"))
+		searchBar := fmt.Sprintf("/%-*s", m.width-1, m.searchInput)
+		if len(searchBar) > m.width {
+			searchBar = searchBar[:m.width]
+		}
+		sb.WriteString(searchStyle.Render(searchBar))
+		v := tea.NewView(sb.String())
+		v.AltScreen = true
+		v.MouseMode = tea.MouseModeAllMotion
+		return v
+	}
+
 	var status string
 	if m.tailMode {
 		status = " [TAIL]"
@@ -428,6 +531,14 @@ func (m *LogViewer) View() tea.View {
 	}
 	if m.minLevel > 0 {
 		status += fmt.Sprintf(" [L%d+]", m.minLevel)
+	}
+	// Show search info
+	if m.searchQuery != "" {
+		if len(m.searchMatches) > 0 {
+			status += fmt.Sprintf(" [/%s %d/%d]", m.searchQuery, m.currentMatchIdx+1, len(m.searchMatches))
+		} else {
+			status += fmt.Sprintf(" [/%s 0/0]", m.searchQuery)
+		}
 	}
 	if status == "" {
 		status = " "
@@ -442,7 +553,7 @@ func (m *LogViewer) View() tea.View {
 	}
 
 	// Keybindings hint
-	hint := "↑↓←→:scroll Tab:level w:wrap g/G:top/end ⌃O/q:close"
+	hint := "/:search n/N:match Tab:level w:wrap ⌃O/q:close"
 	padding := m.width - len(status) - len(hint)
 	if padding < 0 {
 		hint = "q:close"
@@ -613,6 +724,144 @@ func (m *LogViewer) clearSelection() {
 	m.selectStartX = 0
 	m.selectEndY = 0
 	m.selectEndX = 0
+}
+
+// clearSearch clears the current search state.
+func (m *LogViewer) clearSearch() {
+	m.searchQuery = ""
+	m.searchInput = ""
+	m.searchMatches = nil
+	m.currentMatchIdx = 0
+}
+
+// findMatches finds all lines containing the search query.
+func (m *LogViewer) findMatches() {
+	m.searchMatches = nil
+	if m.searchQuery == "" {
+		return
+	}
+
+	displayLines := m.getDisplayLines()
+	query := strings.ToLower(m.searchQuery)
+
+	for i, line := range displayLines {
+		if strings.Contains(strings.ToLower(line), query) {
+			m.searchMatches = append(m.searchMatches, i)
+		}
+	}
+}
+
+// scrollToMatch scrolls to make the match at the given index visible.
+func (m *LogViewer) scrollToMatch(idx int) {
+	if idx < 0 || idx >= len(m.searchMatches) {
+		return
+	}
+
+	lineIdx := m.searchMatches[idx]
+	contentHeight := m.contentHeight()
+
+	// If line is already visible, don't scroll
+	if lineIdx >= m.scrollPos && lineIdx < m.scrollPos+contentHeight {
+		return
+	}
+
+	// Scroll to put the match line in the middle of the screen
+	m.scrollPos = lineIdx - contentHeight/2
+	if m.scrollPos < 0 {
+		m.scrollPos = 0
+	}
+
+	// Clamp to max scroll
+	displayLines := m.getDisplayLines()
+	maxScroll := len(displayLines) - contentHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if m.scrollPos > maxScroll {
+		m.scrollPos = maxScroll
+	}
+
+	m.tailMode = false
+}
+
+// nextMatch moves to the next search match.
+func (m *LogViewer) nextMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	m.currentMatchIdx = (m.currentMatchIdx + 1) % len(m.searchMatches)
+	m.scrollToMatch(m.currentMatchIdx)
+}
+
+// prevMatch moves to the previous search match.
+func (m *LogViewer) prevMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	m.currentMatchIdx--
+	if m.currentMatchIdx < 0 {
+		m.currentMatchIdx = len(m.searchMatches) - 1
+	}
+	m.scrollToMatch(m.currentMatchIdx)
+}
+
+// isMatchLine returns true if the display line at idx is a match line.
+func (m *LogViewer) isMatchLine(idx int) bool {
+	for _, matchIdx := range m.searchMatches {
+		if matchIdx == idx {
+			return true
+		}
+	}
+	return false
+}
+
+// isCurrentMatchLine returns true if the display line at idx is the current match.
+func (m *LogViewer) isCurrentMatchLine(idx int) bool {
+	if len(m.searchMatches) == 0 || m.currentMatchIdx >= len(m.searchMatches) {
+		return false
+	}
+	return m.searchMatches[m.currentMatchIdx] == idx
+}
+
+// highlightSearchMatches highlights search matches in a line.
+func (m *LogViewer) highlightSearchMatches(line string, isCurrentMatch bool) string {
+	if m.searchQuery == "" {
+		return line
+	}
+
+	// Find all occurrences (case-insensitive)
+	lowerLine := strings.ToLower(line)
+	lowerQuery := strings.ToLower(m.searchQuery)
+
+	// Use different colors for current match vs other matches
+	var matchStyle lipgloss.Style
+	if isCurrentMatch {
+		matchStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("208")). // Orange for current match
+			Foreground(lipgloss.Color("0"))    // Black text
+	} else {
+		matchStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("226")). // Yellow for other matches
+			Foreground(lipgloss.Color("0"))    // Black text
+	}
+
+	var result strings.Builder
+	lastIdx := 0
+
+	for {
+		idx := strings.Index(lowerLine[lastIdx:], lowerQuery)
+		if idx == -1 {
+			result.WriteString(line[lastIdx:])
+			break
+		}
+
+		actualIdx := lastIdx + idx
+		result.WriteString(line[lastIdx:actualIdx])
+		result.WriteString(matchStyle.Render(line[actualIdx : actualIdx+len(m.searchQuery)]))
+		lastIdx = actualIdx + len(m.searchQuery)
+	}
+
+	return result.String()
 }
 
 // getSelectionRange returns the normalized selection range (minY, maxY, startX, endX).

@@ -32,6 +32,13 @@ type DiffViewer struct {
 	selectStartX int // Start column (screen-relative)
 	selectEndY   int // End row (screen-relative)
 	selectEndX   int // End column (screen-relative)
+
+	// Search state
+	searchMode      bool   // whether search input is active
+	searchQuery     string // current search term (confirmed)
+	searchInput     string // input buffer while typing
+	searchMatches   []int  // display line indices containing matches
+	currentMatchIdx int    // current match index for n/N navigation
 }
 
 // NewDiffViewer creates a new diff viewer for the given working directory.
@@ -117,6 +124,11 @@ type diffOutputMsg struct {
 
 // handleKey handles keyboard input.
 func (m *DiffViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle search mode input
+	if m.searchMode {
+		return m.handleSearchKey(msg)
+	}
+
 	switch msg.String() {
 	// Copy selection with Ctrl+C
 	case "ctrl+c":
@@ -125,9 +137,37 @@ func (m *DiffViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	// Close on q, Esc, or Ctrl+Shift+D
-	case "q", "esc", "ctrl+shift+d":
+	// Close on q or Ctrl+Shift+D
+	case "q", "ctrl+shift+d":
 		return m, tea.Quit
+
+	case "esc":
+		// Clear search if active, otherwise quit
+		if m.searchQuery != "" {
+			m.clearSearch()
+			return m, nil
+		}
+		return m, tea.Quit
+
+	// Search mode
+	case "/":
+		m.searchMode = true
+		m.searchInput = ""
+		return m, nil
+
+	// Next match
+	case "n":
+		if m.searchQuery != "" && len(m.searchMatches) > 0 {
+			m.nextMatch()
+		}
+		return m, nil
+
+	// Previous match
+	case "N":
+		if m.searchQuery != "" && len(m.searchMatches) > 0 {
+			m.prevMatch()
+		}
+		return m, nil
 
 	case "down", "j":
 		m.scrollDown(1)
@@ -172,6 +212,10 @@ func (m *DiffViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Reset scroll positions when toggling wrap mode
 		m.scrollPos = 0
 		m.horizontalPos = 0
+		// Re-find matches after wrap change
+		if m.searchQuery != "" {
+			m.findMatches()
+		}
 
 	case "pgup", "ctrl+b":
 		m.scrollUp(m.contentHeight())
@@ -187,6 +231,43 @@ func (m *DiffViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// handleSearchKey handles keyboard input in search mode.
+func (m *DiffViewer) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		// Confirm search
+		m.searchMode = false
+		m.searchQuery = m.searchInput
+		if m.searchQuery != "" {
+			m.findMatches()
+			if len(m.searchMatches) > 0 {
+				m.currentMatchIdx = 0
+				m.scrollToMatch(0)
+			}
+		}
+		return m, nil
+
+	case "esc":
+		// Cancel search mode
+		m.searchMode = false
+		m.searchInput = ""
+		return m, nil
+
+	case "backspace":
+		if len(m.searchInput) > 0 {
+			m.searchInput = m.searchInput[:len(m.searchInput)-1]
+		}
+		return m, nil
+
+	default:
+		// Append typed character
+		if len(msg.String()) == 1 {
+			m.searchInput += msg.String()
+		}
+		return m, nil
+	}
 }
 
 // scrollUp scrolls up by n lines.
@@ -297,6 +378,13 @@ func (m *DiffViewer) View() tea.View {
 			lineWidth = m.width
 		}
 
+		// Apply search highlighting before padding
+		if m.searchQuery != "" && m.isMatchLine(i) {
+			isCurrentMatch := m.isCurrentMatchLine(i)
+			line = m.highlightSearchMatches(line, isCurrentMatch)
+			lineWidth = ansi.StringWidth(line)
+		}
+
 		// Pad to full width (accounting for visual width)
 		if lineWidth < m.width {
 			line = line + strings.Repeat(" ", m.width-lineWidth)
@@ -322,10 +410,31 @@ func (m *DiffViewer) View() tea.View {
 		Background(lipgloss.Color("240")).
 		Foreground(lipgloss.Color("252"))
 
+	// Search input mode: show search bar instead of status
+	if m.searchMode {
+		searchBar := fmt.Sprintf("/%-*s", m.width-1, m.searchInput)
+		if len(searchBar) > m.width {
+			searchBar = searchBar[:m.width]
+		}
+		sb.WriteString(statusStyle.Render(searchBar))
+		v := tea.NewView(sb.String())
+		v.AltScreen = true
+		v.MouseMode = tea.MouseModeAllMotion
+		return v
+	}
+
 	var status string
 	status = fmt.Sprintf(" [DIFF %s...HEAD]", m.mainBranch)
 	if m.wordWrap {
 		status += " [WRAP]"
+	}
+	// Show search info
+	if m.searchQuery != "" {
+		if len(m.searchMatches) > 0 {
+			status += fmt.Sprintf(" [/%s %d/%d]", m.searchQuery, m.currentMatchIdx+1, len(m.searchMatches))
+		} else {
+			status += fmt.Sprintf(" [/%s 0/0]", m.searchQuery)
+		}
 	}
 	status += " "
 
@@ -336,7 +445,7 @@ func (m *DiffViewer) View() tea.View {
 	}
 
 	// Keybindings hint (use ansi.StringWidth for unicode characters like ⌃)
-	hint := "⌃D/⌃U:scroll w:wrap g/G:top/end q:close"
+	hint := "/:search n/N:match ⌃D/⌃U:scroll w:wrap q:close"
 	padding := m.width - ansi.StringWidth(status) - ansi.StringWidth(hint)
 	if padding < 0 {
 		hint = "q:close"
@@ -388,6 +497,156 @@ func (m *DiffViewer) clearSelection() {
 	m.selectStartX = 0
 	m.selectEndY = 0
 	m.selectEndX = 0
+}
+
+// clearSearch clears the current search state.
+func (m *DiffViewer) clearSearch() {
+	m.searchQuery = ""
+	m.searchInput = ""
+	m.searchMatches = nil
+	m.currentMatchIdx = 0
+}
+
+// findMatches finds all lines containing the search query.
+func (m *DiffViewer) findMatches() {
+	m.searchMatches = nil
+	if m.searchQuery == "" {
+		return
+	}
+
+	displayLines := m.getDisplayLines()
+	query := strings.ToLower(m.searchQuery)
+
+	for i, line := range displayLines {
+		// Strip ANSI codes for matching
+		plainLine := strings.ToLower(ansi.Strip(line))
+		if strings.Contains(plainLine, query) {
+			m.searchMatches = append(m.searchMatches, i)
+		}
+	}
+}
+
+// scrollToMatch scrolls to make the match at the given index visible.
+func (m *DiffViewer) scrollToMatch(idx int) {
+	if idx < 0 || idx >= len(m.searchMatches) {
+		return
+	}
+
+	lineIdx := m.searchMatches[idx]
+	contentHeight := m.contentHeight()
+
+	// If line is already visible, don't scroll
+	if lineIdx >= m.scrollPos && lineIdx < m.scrollPos+contentHeight {
+		return
+	}
+
+	// Scroll to put the match line in the middle of the screen
+	m.scrollPos = lineIdx - contentHeight/2
+	if m.scrollPos < 0 {
+		m.scrollPos = 0
+	}
+
+	// Clamp to max scroll
+	displayLines := m.getDisplayLines()
+	maxScroll := len(displayLines) - contentHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if m.scrollPos > maxScroll {
+		m.scrollPos = maxScroll
+	}
+}
+
+// nextMatch moves to the next search match.
+func (m *DiffViewer) nextMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	m.currentMatchIdx = (m.currentMatchIdx + 1) % len(m.searchMatches)
+	m.scrollToMatch(m.currentMatchIdx)
+}
+
+// prevMatch moves to the previous search match.
+func (m *DiffViewer) prevMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	m.currentMatchIdx--
+	if m.currentMatchIdx < 0 {
+		m.currentMatchIdx = len(m.searchMatches) - 1
+	}
+	m.scrollToMatch(m.currentMatchIdx)
+}
+
+// isMatchLine returns true if the display line at idx is a match line.
+func (m *DiffViewer) isMatchLine(idx int) bool {
+	for _, matchIdx := range m.searchMatches {
+		if matchIdx == idx {
+			return true
+		}
+	}
+	return false
+}
+
+// isCurrentMatchLine returns true if the display line at idx is the current match.
+func (m *DiffViewer) isCurrentMatchLine(idx int) bool {
+	if len(m.searchMatches) == 0 || m.currentMatchIdx >= len(m.searchMatches) {
+		return false
+	}
+	return m.searchMatches[m.currentMatchIdx] == idx
+}
+
+// highlightSearchMatches highlights search matches in a line (ANSI-aware).
+func (m *DiffViewer) highlightSearchMatches(line string, isCurrentMatch bool) string {
+	if m.searchQuery == "" {
+		return line
+	}
+
+	// Strip ANSI for matching, but we'll rebuild with highlighting
+	plainLine := ansi.Strip(line)
+	lowerPlain := strings.ToLower(plainLine)
+	lowerQuery := strings.ToLower(m.searchQuery)
+
+	// Use different colors for current match vs other matches
+	var matchStyle lipgloss.Style
+	if isCurrentMatch {
+		matchStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("208")). // Orange for current match
+			Foreground(lipgloss.Color("0"))    // Black text
+	} else {
+		matchStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("226")). // Yellow for other matches
+			Foreground(lipgloss.Color("0"))    // Black text
+	}
+
+	// Find all match positions in the plain text
+	var matches [][2]int // [start, end] positions
+	searchStart := 0
+	for {
+		idx := strings.Index(lowerPlain[searchStart:], lowerQuery)
+		if idx == -1 {
+			break
+		}
+		actualIdx := searchStart + idx
+		matches = append(matches, [2]int{actualIdx, actualIdx + len(m.searchQuery)})
+		searchStart = actualIdx + len(m.searchQuery)
+	}
+
+	if len(matches) == 0 {
+		return line
+	}
+
+	// Rebuild the line with highlighting (using plain text since ANSI codes complicate highlighting)
+	var result strings.Builder
+	lastIdx := 0
+	for _, match := range matches {
+		result.WriteString(plainLine[lastIdx:match[0]])
+		result.WriteString(matchStyle.Render(plainLine[match[0]:match[1]]))
+		lastIdx = match[1]
+	}
+	result.WriteString(plainLine[lastIdx:])
+
+	return result.String()
 }
 
 // getSelectionRange returns the normalized selection range (minY, maxY, startX, endX).
