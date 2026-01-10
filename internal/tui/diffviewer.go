@@ -678,15 +678,17 @@ func (m *DiffViewer) getSelectionXRange(screenY int) (int, int) {
 	}
 
 	// Multi-row selection
-	if screenY == minY {
+	switch screenY {
+	case minY:
 		// First row: from startX to end of line
 		return startX, m.width
-	} else if screenY == maxY {
+	case maxY:
 		// Last row: from start to endX
 		return 0, endX
+	default:
+		// Middle rows: full line
+		return 0, m.width
 	}
-	// Middle rows: full line
-	return 0, m.width
 }
 
 // applySelectionToLine applies selection highlighting to a line.

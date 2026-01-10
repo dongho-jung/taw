@@ -722,16 +722,6 @@ func (m *LogViewer) tick() tea.Cmd {
 	})
 }
 
-// clearSelection clears the current selection.
-func (m *LogViewer) clearSelection() {
-	m.selecting = false
-	m.hasSelection = false
-	m.selectStartY = 0
-	m.selectStartX = 0
-	m.selectEndY = 0
-	m.selectEndX = 0
-}
-
 // clearSearch clears the current search state.
 func (m *LogViewer) clearSearch() {
 	m.searchQuery = ""
@@ -899,15 +889,17 @@ func (m *LogViewer) getSelectionXRange(screenY int) (int, int) {
 	}
 
 	// Multi-row selection
-	if screenY == minY {
+	switch screenY {
+	case minY:
 		// First row: from startX to end of line
 		return startX, m.width
-	} else if screenY == maxY {
+	case maxY:
 		// Last row: from start to endX
 		return 0, endX
+	default:
+		// Middle rows: full line
+		return 0, m.width
 	}
-	// Middle rows: full line
-	return 0, m.width
 }
 
 // applySelectionToLine applies selection highlighting to a line.

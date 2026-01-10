@@ -19,8 +19,6 @@ const (
 	SettingsScopeGlobal
 )
 
-const settingsScopeCount = 2
-
 // SettingsTab represents which tab is active.
 type SettingsTab int
 

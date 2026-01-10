@@ -289,16 +289,6 @@ func (m *HelpViewer) scrollToEnd() {
 	m.scrollPos = max
 }
 
-// clearSelection clears the current selection.
-func (m *HelpViewer) clearSelection() {
-	m.selecting = false
-	m.hasSelection = false
-	m.selectStartY = 0
-	m.selectStartX = 0
-	m.selectEndY = 0
-	m.selectEndX = 0
-}
-
 // getSelectionRange returns the normalized selection range (minY, maxY, startX, endX).
 // startX/endX are adjusted based on selection direction.
 func (m *HelpViewer) getSelectionRange() (minY, maxY, startX, endX int) {
@@ -328,15 +318,17 @@ func (m *HelpViewer) getSelectionXRange(screenY int) (int, int) {
 	}
 
 	// Multi-row selection
-	if screenY == minY {
+	switch screenY {
+	case minY:
 		// First row: from startX to end of line
 		return startX, m.width
-	} else if screenY == maxY {
+	case maxY:
 		// Last row: from start to endX
 		return 0, endX
+	default:
+		// Middle rows: full line
+		return 0, m.width
 	}
-	// Middle rows: full line
-	return 0, m.width
 }
 
 // applySelectionToLine applies selection highlighting to a line.
