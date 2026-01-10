@@ -36,19 +36,33 @@ type TemplateUI struct {
 	previewScroll int
 	previewLines  []string
 	previewIndex  int
+	theme         config.Theme
+	isDark        bool
+	colors        ThemeColors
 }
 
 // NewTemplateUI creates a new template UI.
 func NewTemplateUI(pawDir string) *TemplateUI {
+	// Detect dark mode BEFORE bubbletea starts
+	theme := loadThemeFromConfig()
+	isDark := detectDarkMode(theme)
+
 	return &TemplateUI{
 		pawDir:       pawDir,
 		previewIndex: -1,
+		theme:        theme,
+		isDark:       isDark,
+		colors:       NewThemeColors(isDark),
 	}
 }
 
 // Init initializes the template UI.
 func (m *TemplateUI) Init() tea.Cmd {
-	return m.loadTemplates()
+	cmds := []tea.Cmd{m.loadTemplates()}
+	if m.theme == config.ThemeAuto {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
+	return tea.Batch(cmds...)
 }
 
 type templatesLoadedMsg struct {
@@ -103,6 +117,14 @@ func (m *TemplateUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case templatesLoadedMsg:
 		m.templates = msg.templates
 		m.updateFilter()
+		return m, nil
+
+	case tea.BackgroundColorMsg:
+		if m.theme == config.ThemeAuto {
+			m.isDark = msg.IsDark()
+			m.colors = NewThemeColors(m.isDark)
+			setCachedDarkMode(m.isDark)
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -208,26 +230,28 @@ func (m *TemplateUI) View() tea.View {
 		m.updatePreviewCache()
 	}
 
+	c := m.colors
+
 	// Styles
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("39"))
+		Foreground(c.Accent)
 
 	selectedStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
+		Foreground(c.Accent).
 		Bold(true)
 
 	normalStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252"))
+		Foreground(c.TextNormal)
 
 	dimStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240"))
+		Foreground(c.TextDim)
 
 	searchStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39"))
+		Foreground(c.Accent)
 
 	previewStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("250"))
+		Foreground(c.TextNormal)
 
 	// Layout: left panel (template list) + right panel (preview)
 	listWidth := m.width * 35 / 100
@@ -409,8 +433,8 @@ func (m *TemplateUI) View() tea.View {
 
 	// Status bar
 	statusStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("240")).
-		Foreground(lipgloss.Color("252"))
+		Background(c.StatusBar).
+		Foreground(c.StatusBarText)
 
 	statusHints := []string{"↑↓:nav", "⏎:select", "⌃N:new", "⌃E:edit", "⌃D:del", "Esc:close"}
 

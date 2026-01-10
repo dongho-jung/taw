@@ -12,6 +12,8 @@ import (
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
+
+	"github.com/dongho-jung/paw/internal/config"
 )
 
 // LogViewer provides an interactive log viewer with vim-like navigation.
@@ -29,6 +31,9 @@ type LogViewer struct {
 	lastSize             int64
 	lastEndedWithNewline bool
 	err                  error
+	theme                config.Theme
+	isDark               bool
+	colors               ThemeColors
 
 	// Mouse text selection state
 	selecting    bool
@@ -75,24 +80,43 @@ func NewLogViewer(logFile string) *LogViewer {
 		minLevel = 0
 	}
 
+	// Detect dark mode BEFORE bubbletea starts
+	theme := loadThemeFromConfig()
+	isDark := detectDarkMode(theme)
+
 	return &LogViewer{
 		logFile:  logFile,
 		tailMode: true,
 		minLevel: minLevel,
+		theme:    theme,
+		isDark:   isDark,
+		colors:   NewThemeColors(isDark),
 	}
 }
 
 // Init initializes the log viewer.
 func (m *LogViewer) Init() tea.Cmd {
-	return tea.Batch(
+	cmds := []tea.Cmd{
 		m.loadFile(),
 		m.tick(),
-	)
+	}
+	if m.theme == config.ThemeAuto {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles messages and updates the model.
 func (m *LogViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		if m.theme == config.ThemeAuto {
+			m.isDark = msg.IsDark()
+			m.colors = NewThemeColors(m.isDark)
+			setCachedDarkMode(m.isDark)
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
@@ -459,10 +483,12 @@ func (m *LogViewer) View() tea.View {
 		endPos = len(displayLines)
 	}
 
+	c := m.colors
+
 	// Selection highlight style
 	highlightStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("25")).
-		Foreground(lipgloss.Color("255"))
+		Background(c.Selection).
+		Foreground(c.TextBright)
 
 	// Render visible lines
 	for i := m.scrollPos; i < endPos; i++ {
@@ -509,14 +535,14 @@ func (m *LogViewer) View() tea.View {
 
 	// Status bar
 	statusStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("240")).
-		Foreground(lipgloss.Color("252"))
+		Background(c.StatusBar).
+		Foreground(c.StatusBarText)
 
 	// Search input mode: show search bar instead of status
 	if m.searchMode {
 		searchStyle := lipgloss.NewStyle().
-			Background(lipgloss.Color("240")).
-			Foreground(lipgloss.Color("252"))
+			Background(c.StatusBar).
+			Foreground(c.StatusBarText)
 		searchBar := fmt.Sprintf("/%-*s", m.width-1, m.searchInput)
 		if len(searchBar) > m.width {
 			searchBar = searchBar[:m.width]
@@ -833,12 +859,12 @@ func (m *LogViewer) highlightSearchMatches(line string, isCurrentMatch bool) str
 	var matchStyle lipgloss.Style
 	if isCurrentMatch {
 		matchStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("208")). // Orange for current match
-			Foreground(lipgloss.Color("0"))    // Black text
+			Background(m.colors.SearchCurrent).
+			Foreground(m.colors.TextInverted)
 	} else {
 		matchStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("226")). // Yellow for other matches
-			Foreground(lipgloss.Color("0"))    // Black text
+			Background(m.colors.SearchMatch).
+			Foreground(m.colors.TextInverted)
 	}
 
 	var result strings.Builder

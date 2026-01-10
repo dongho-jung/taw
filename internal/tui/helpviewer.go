@@ -9,6 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/dongho-jung/paw/internal/config"
 )
 
 // HelpViewer provides an interactive help viewer with vim-like navigation.
@@ -18,6 +20,9 @@ type HelpViewer struct {
 	horizontalPos int
 	width         int
 	height        int
+	theme         config.Theme
+	isDark        bool
+	colors        ThemeColors
 
 	// Mouse text selection state
 	selecting    bool
@@ -35,19 +40,38 @@ func NewHelpViewer(content string) *HelpViewer {
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
+
+	// Detect dark mode BEFORE bubbletea starts
+	theme := loadThemeFromConfig()
+	isDark := detectDarkMode(theme)
+
 	return &HelpViewer{
-		lines: lines,
+		lines:  lines,
+		theme:  theme,
+		isDark: isDark,
+		colors: NewThemeColors(isDark),
 	}
 }
 
 // Init initializes the help viewer.
 func (m *HelpViewer) Init() tea.Cmd {
+	if m.theme == config.ThemeAuto {
+		return tea.RequestBackgroundColor
+	}
 	return nil
 }
 
 // Update handles messages and updates the model.
 func (m *HelpViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		if m.theme == config.ThemeAuto {
+			m.isDark = msg.IsDark()
+			m.colors = NewThemeColors(m.isDark)
+			setCachedDarkMode(m.isDark)
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
@@ -187,10 +211,12 @@ func (m *HelpViewer) View() tea.View {
 		endPos = len(m.lines)
 	}
 
+	c := m.colors
+
 	// Selection highlight style
 	highlightStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("25")).
-		Foreground(lipgloss.Color("255"))
+		Background(c.Selection).
+		Foreground(c.TextBright)
 
 	// Render visible lines
 	for i := m.scrollPos; i < endPos; i++ {
@@ -237,8 +263,8 @@ func (m *HelpViewer) View() tea.View {
 
 	// Status bar
 	statusStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("240")).
-		Foreground(lipgloss.Color("252"))
+		Background(c.StatusBar).
+		Foreground(c.StatusBarText)
 
 	var status string
 	if len(m.lines) > 0 {

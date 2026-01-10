@@ -37,6 +37,7 @@ type CommandPalette struct {
 	selected *Command
 	theme    config.Theme
 	isDark   bool
+	colors   ThemeColors
 }
 
 // NewCommandPalette creates a new command palette.
@@ -62,6 +63,7 @@ func NewCommandPalette(commands []Command) *CommandPalette {
 		cursor:   0,
 		theme:    theme,
 		isDark:   isDark,
+		colors:   NewThemeColors(isDark),
 	}
 }
 
@@ -82,6 +84,7 @@ func (m *CommandPalette) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		if m.theme == config.ThemeAuto {
 			m.isDark = msg.IsDark()
+			m.colors = NewThemeColors(m.isDark)
 			setCachedDarkMode(m.isDark)
 		}
 		return m, nil
@@ -161,39 +164,37 @@ func (m *CommandPalette) updateFiltered() {
 
 // View renders the command palette.
 func (m *CommandPalette) View() tea.View {
-	lightDark := lipgloss.LightDark(m.isDark)
-	dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("240"))
-	normalColor := lightDark(lipgloss.Color("236"), lipgloss.Color("252"))
+	c := m.colors
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("39"))
+		Foreground(c.Accent)
 
 	inputStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("39")).
+		BorderForeground(c.BorderFocused).
 		Padding(0, 1).
 		Width(46)
 
 	itemStyle := lipgloss.NewStyle().
-		Foreground(normalColor).
+		Foreground(c.TextNormal).
 		PaddingLeft(2)
 
 	selectedStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
+		Foreground(c.Accent).
 		Bold(true).
 		PaddingLeft(0)
 
 	descStyle := lipgloss.NewStyle().
-		Foreground(dimColor).
+		Foreground(c.TextDim).
 		PaddingLeft(4)
 
 	selectedDescStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
+		Foreground(c.Accent).
 		PaddingLeft(2)
 
 	helpStyle := lipgloss.NewStyle().
-		Foreground(dimColor).
+		Foreground(c.TextDim).
 		MarginTop(1)
 
 	var sb strings.Builder
@@ -208,7 +209,7 @@ func (m *CommandPalette) View() tea.View {
 
 	// Filtered commands
 	if len(m.filtered) == 0 {
-		sb.WriteString(lipgloss.NewStyle().Foreground(dimColor).Render("  No matching commands"))
+		sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("  No matching commands"))
 		sb.WriteString("\n")
 	} else {
 		// Show up to 10 commands
@@ -232,7 +233,7 @@ func (m *CommandPalette) View() tea.View {
 		}
 
 		if len(m.filtered) > maxItems {
-			sb.WriteString(lipgloss.NewStyle().Foreground(dimColor).Render(
+			sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render(
 				"  ... and more"))
 			sb.WriteString("\n")
 		}

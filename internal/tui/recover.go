@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 
+	"github.com/dongho-jung/paw/internal/config"
 	"github.com/dongho-jung/paw/internal/task"
 )
 
@@ -18,23 +19,42 @@ type RecoverUI struct {
 	done      bool
 	cancelled bool
 	action    task.RecoveryAction
+	theme     config.Theme
+	isDark    bool
+	colors    ThemeColors
 }
 
 // NewRecoverUI creates a new recovery UI.
 func NewRecoverUI(t *task.Task) *RecoverUI {
+	theme := loadThemeFromConfig()
+	isDark := detectDarkMode(theme)
 	return &RecoverUI{
-		task: t,
+		task:   t,
+		theme:  theme,
+		isDark: isDark,
+		colors: NewThemeColors(isDark),
 	}
 }
 
 // Init initializes the recovery UI.
 func (m *RecoverUI) Init() tea.Cmd {
+	if m.theme == config.ThemeAuto {
+		return tea.RequestBackgroundColor
+	}
 	return nil
 }
 
 // Update handles messages and updates the model.
 func (m *RecoverUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		if m.theme == config.ThemeAuto {
+			m.isDark = msg.IsDark()
+			m.colors = NewThemeColors(m.isDark)
+			setCachedDarkMode(m.isDark)
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -72,24 +92,25 @@ func (m *RecoverUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the recovery UI.
 func (m *RecoverUI) View() tea.View {
+	c := m.colors
 	var sb strings.Builder
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("220"))
+		Foreground(c.WarningColor)
 
 	warningStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("196"))
+		Foreground(c.ErrorColor)
 
 	descStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240"))
+		Foreground(c.TextDim)
 
 	selectedStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
+		Foreground(c.Accent).
 		Bold(true)
 
 	normalStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252"))
+		Foreground(c.TextNormal)
 
 	sb.WriteString("\n")
 	sb.WriteString(titleStyle.Render(fmt.Sprintf("⚠️  Task Recovery: %s", m.task.Name)))

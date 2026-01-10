@@ -29,6 +29,7 @@ type InputHistoryPicker struct {
 	selected string
 	theme    config.Theme
 	isDark   bool
+	colors   ThemeColors
 	width    int
 	height   int
 }
@@ -59,6 +60,7 @@ func NewInputHistoryPicker(history []string) *InputHistoryPicker {
 		cursor:   0,
 		theme:    theme,
 		isDark:   isDark,
+		colors:   NewThemeColors(isDark),
 		width:    80,
 		height:   24,
 	}
@@ -89,8 +91,10 @@ func (m *InputHistoryPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		if m.theme == config.ThemeAuto {
 			m.isDark = msg.IsDark()
+			m.colors = NewThemeColors(m.isDark)
 			setCachedDarkMode(m.isDark)
 		}
+		return m, nil
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -188,39 +192,37 @@ func (m *InputHistoryPicker) updateFiltered() {
 
 // View renders the input history picker.
 func (m *InputHistoryPicker) View() tea.View {
-	lightDark := lipgloss.LightDark(m.isDark)
-	dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("240"))
-	normalColor := lightDark(lipgloss.Color("236"), lipgloss.Color("252"))
+	c := m.colors
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("39"))
+		Foreground(c.Accent)
 
 	inputStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("39")).
+		BorderForeground(c.BorderFocused).
 		Padding(0, 1)
 
 	itemStyle := lipgloss.NewStyle().
-		Foreground(normalColor).
+		Foreground(c.TextNormal).
 		PaddingLeft(2)
 
 	selectedStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
+		Foreground(c.Accent).
 		Bold(true).
 		PaddingLeft(0)
 
 	helpStyle := lipgloss.NewStyle().
-		Foreground(dimColor).
+		Foreground(c.TextDim).
 		MarginTop(1)
 
 	previewBorderStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(dimColor).
+		BorderForeground(c.Border).
 		Padding(0, 1)
 
 	previewTitleStyle := lipgloss.NewStyle().
-		Foreground(dimColor).
+		Foreground(c.TextDim).
 		Bold(true)
 
 	var sb strings.Builder
@@ -242,9 +244,9 @@ func (m *InputHistoryPicker) View() tea.View {
 	// Filtered history
 	if len(m.filtered) == 0 {
 		if len(m.history) == 0 {
-			sb.WriteString(lipgloss.NewStyle().Foreground(dimColor).Render("  No history yet"))
+			sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("  No history yet"))
 		} else {
-			sb.WriteString(lipgloss.NewStyle().Foreground(dimColor).Render("  No matching entries"))
+			sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("  No matching entries"))
 		}
 		sb.WriteString("\n")
 	} else {
@@ -274,7 +276,7 @@ func (m *InputHistoryPicker) View() tea.View {
 
 		// Show scroll indicator if needed
 		if len(m.filtered) > listHeight {
-			scrollInfo := lipgloss.NewStyle().Foreground(dimColor).Render(
+			scrollInfo := lipgloss.NewStyle().Foreground(c.TextDim).Render(
 				strings.Repeat(" ", 2) + "... " + string(rune('0'+(m.cursor+1)/10)) + string(rune('0'+(m.cursor+1)%10)) + "/" + string(rune('0'+len(m.filtered)/10)) + string(rune('0'+len(m.filtered)%10)))
 			sb.WriteString(scrollInfo)
 			sb.WriteString("\n")

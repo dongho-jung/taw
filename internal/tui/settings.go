@@ -72,6 +72,7 @@ type SettingsUI struct {
 	theme     config.Theme
 	isDark    bool
 	isGitRepo bool
+	colors    ThemeColors
 
 	// Field indices for dropdown-style fields
 	workModeIdx        int
@@ -183,6 +184,7 @@ func NewSettingsUI(globalCfg, projectCfg *config.Config, isGitRepo bool) *Settin
 		theme:              theme,
 		isDark:             isDark,
 		isGitRepo:          isGitRepo,
+		colors:             NewThemeColors(isDark),
 		workModeIdx:        workModeIdx,
 		onCompleteIdx:      onCompleteIdx,
 		themeIdx:           themeIdx,
@@ -212,6 +214,7 @@ func (m *SettingsUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		if m.theme == config.ThemeAuto {
 			m.isDark = msg.IsDark()
+			m.colors = NewThemeColors(m.isDark)
 			setCachedDarkMode(m.isDark)
 		}
 		return m, nil
@@ -602,57 +605,54 @@ func (m *SettingsUI) updateFieldIndices() {
 
 // View renders the settings UI.
 func (m *SettingsUI) View() tea.View {
-	lightDark := lipgloss.LightDark(m.isDark)
-	normalColor := lightDark(lipgloss.Color("236"), lipgloss.Color("252"))
-	dimColor := lightDark(lipgloss.Color("250"), lipgloss.Color("238"))
-	accentColor := lightDark(lipgloss.Color("25"), lipgloss.Color("39"))
+	c := m.colors
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(accentColor).
+		Foreground(c.Accent).
 		MarginBottom(1)
 
 	tabStyle := lipgloss.NewStyle().
-		Foreground(dimColor).
+		Foreground(c.TextDim).
 		Padding(0, 2)
 
 	activeTabStyle := lipgloss.NewStyle().
-		Foreground(accentColor).
+		Foreground(c.Accent).
 		Bold(true).
 		Padding(0, 2).
 		Underline(true)
 
 	labelStyle := lipgloss.NewStyle().
-		Foreground(normalColor).
+		Foreground(c.TextNormal).
 		Width(20)
 
 	selectedLabelStyle := lipgloss.NewStyle().
-		Foreground(accentColor).
+		Foreground(c.Accent).
 		Bold(true).
 		Width(20)
 
 	valueStyle := lipgloss.NewStyle().
-		Foreground(normalColor)
+		Foreground(c.TextNormal)
 
 	selectedValueStyle := lipgloss.NewStyle().
-		Foreground(accentColor).
+		Foreground(c.Accent).
 		Bold(true)
 
 	dimStyle := lipgloss.NewStyle().
-		Foreground(dimColor)
+		Foreground(c.TextDim)
 
 	helpStyle := lipgloss.NewStyle().
-		Foreground(dimColor).
+		Foreground(c.TextDim).
 		MarginTop(1)
 
 	textInputStyle := lipgloss.NewStyle().
-		Foreground(normalColor).
-		Background(lightDark(lipgloss.Color("254"), lipgloss.Color("235"))).
+		Foreground(c.TextNormal).
+		Background(c.Background).
 		Padding(0, 1)
 
 	editingTextStyle := lipgloss.NewStyle().
-		Foreground(accentColor).
-		Background(lightDark(lipgloss.Color("254"), lipgloss.Color("235"))).
+		Foreground(c.Accent).
+		Background(c.Background).
 		Padding(0, 1)
 
 	var sb strings.Builder
