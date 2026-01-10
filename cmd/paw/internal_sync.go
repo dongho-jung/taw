@@ -23,8 +23,8 @@ var syncWithMainCmd = &cobra.Command{
 	Short: "Sync task branch with main (fetch and rebase)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		logging.Trace("syncWithMainCmd: start session=%s windowID=%s", args[0], args[1])
-		defer logging.Trace("syncWithMainCmd: end")
+		logging.Debug("-> syncWithMainCmd(session=%s, windowID=%s)", args[0], args[1])
+		defer logging.Debug("<- syncWithMainCmd")
 
 		sessionName := args[0]
 		windowID := args[1]
@@ -185,8 +185,8 @@ var syncWithMainUICmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("syncWithMainUICmd: start session=%s windowID=%s", sessionName, windowID)
-		defer logging.Trace("syncWithMainUICmd: end")
+		logging.Debug("-> syncWithMainUICmd(session=%s, windowID=%s)", sessionName, windowID)
+		defer logging.Debug("<- syncWithMainUICmd")
 
 		tm := tmux.New(sessionName)
 
@@ -243,8 +243,8 @@ var syncTaskCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("syncTaskCmd: start session=%s", sessionName)
-		defer logging.Trace("syncTaskCmd: end")
+		logging.Debug("-> syncTaskCmd(session=%s)", sessionName)
+		defer logging.Debug("<- syncTaskCmd")
 
 		tm := tmux.New(sessionName)
 
@@ -324,8 +324,8 @@ var toggleBranchCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("toggleBranchCmd: start session=%s", sessionName)
-		defer logging.Trace("toggleBranchCmd: end")
+		logging.Debug("-> toggleBranchCmd(session=%s)", sessionName)
+		defer logging.Debug("<- toggleBranchCmd")
 
 		tm := tmux.New(sessionName)
 

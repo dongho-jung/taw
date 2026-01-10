@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss/v2"
 
 	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/logging"
 )
 
 // SettingsTab represents which tab is active.
@@ -78,6 +79,9 @@ type SettingsResult struct {
 
 // NewSettingsUI creates a new settings UI.
 func NewSettingsUI(cfg *config.Config, isGitRepo bool) *SettingsUI {
+	logging.Debug("-> NewSettingsUI(isGitRepo=%v)", isGitRepo)
+	defer logging.Debug("<- NewSettingsUI")
+
 	// Detect dark mode BEFORE bubbletea starts
 	theme := loadThemeFromConfig()
 	isDark := detectDarkMode(theme)
@@ -732,15 +736,21 @@ func (m *SettingsUI) Result() SettingsResult {
 
 // RunSettingsUI runs the settings UI and returns the result.
 func RunSettingsUI(cfg *config.Config, isGitRepo bool) (*SettingsResult, error) {
+	logging.Debug("-> RunSettingsUI(isGitRepo=%v)", isGitRepo)
+	defer logging.Debug("<- RunSettingsUI")
+
 	m := NewSettingsUI(cfg, isGitRepo)
+	logging.Debug("RunSettingsUI: starting tea.Program")
 	p := tea.NewProgram(m)
 
 	finalModel, err := p.Run()
 	if err != nil {
+		logging.Debug("RunSettingsUI: tea.Program.Run failed: %v", err)
 		return nil, err
 	}
 
 	ui := finalModel.(*SettingsUI)
 	result := ui.Result()
+	logging.Debug("RunSettingsUI: completed, cancelled=%v", result.Cancelled)
 	return &result, nil
 }

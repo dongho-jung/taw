@@ -40,8 +40,8 @@ var cancelTaskCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("cancelTaskCmd: start session=%s windowID=%s", sessionName, windowID)
-		defer logging.Trace("cancelTaskCmd: end")
+		logging.Debug("-> cancelTaskCmd(session=%s, windowID=%s)", sessionName, windowID)
+		defer logging.Debug("<- cancelTaskCmd")
 
 		tm := tmux.New(sessionName)
 
@@ -242,8 +242,8 @@ var cancelTaskUICmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("cancelTaskUICmd: start session=%s windowID=%s", sessionName, windowID)
-		defer logging.Trace("cancelTaskUICmd: end")
+		logging.Debug("-> cancelTaskUICmd(session=%s, windowID=%s)", sessionName, windowID)
+		defer logging.Debug("<- cancelTaskUICmd")
 
 		tm := tmux.New(sessionName)
 

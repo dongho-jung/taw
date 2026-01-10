@@ -205,8 +205,8 @@ func isUIHintLine(line string) bool {
 }
 
 func notifyWaiting(notifications *config.NotificationsConfig, taskName, reason string) {
-	logging.Trace("notifyWaiting: start task=%s reason=%s", taskName, reason)
-	defer logging.Trace("notifyWaiting: end")
+	logging.Debug("-> notifyWaiting(task=%s, reason=%s)", taskName, reason)
+	defer logging.Debug("<- notifyWaiting")
 
 	title := taskName
 	message := "Waiting for your response"
@@ -219,8 +219,8 @@ func notifyWaiting(notifications *config.NotificationsConfig, taskName, reason s
 }
 
 func notifyWaitingWithDisplay(tm tmux.Client, notifications *config.NotificationsConfig, taskName, reason string) {
-	logging.Trace("notifyWaitingWithDisplay: start task=%s reason=%s", taskName, reason)
-	defer logging.Trace("notifyWaitingWithDisplay: end")
+	logging.Debug("-> notifyWaitingWithDisplay(task=%s, reason=%s)", taskName, reason)
+	defer logging.Debug("<- notifyWaitingWithDisplay")
 
 	notifyWaiting(notifications, taskName, reason)
 	// Show message in tmux status bar
@@ -248,9 +248,9 @@ func sendAgentResponse(tm tmux.Client, paneID, response string) error {
 // for simple prompts (2-5 options). Returns the selected option or empty string
 // if notification was not shown or user didn't select an action.
 func tryNotificationAction(taskName string, prompt askPrompt) string {
-	logging.Trace("tryNotificationAction: start task=%s question=%q options=%v",
+	logging.Debug("-> tryNotificationAction(task=%s, question=%q, options=%v)",
 		taskName, prompt.Question, prompt.Options)
-	defer logging.Trace("tryNotificationAction: end")
+	defer logging.Debug("<- tryNotificationAction")
 
 	// Only use notification for simple prompts with 2-5 options
 	if len(prompt.Options) < 2 || len(prompt.Options) > notifyMaxActions {

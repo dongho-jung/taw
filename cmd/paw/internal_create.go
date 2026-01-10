@@ -40,8 +40,8 @@ var toggleNewCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("toggleNewCmd: start session=%s", sessionName)
-		defer logging.Trace("toggleNewCmd: end")
+		logging.Debug("-> toggleNewCmd(session=%s)", sessionName)
+		defer logging.Debug("<- toggleNewCmd")
 
 		tm := tmux.New(sessionName)
 
@@ -260,8 +260,8 @@ var spawnTaskCmd = &cobra.Command{
 	Short: "Spawn a task in a separate window (shows progress)",
 	Args:  cobra.RangeArgs(2, 3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		logging.Trace("spawnTaskCmd: start session=%s contentFile=%s", args[0], args[1])
-		defer logging.Trace("spawnTaskCmd: end")
+		logging.Debug("-> spawnTaskCmd(session=%s, contentFile=%s)", args[0], args[1])
+		defer logging.Debug("<- spawnTaskCmd")
 
 		sessionName := args[0]
 		contentFile := args[1]

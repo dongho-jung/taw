@@ -37,8 +37,8 @@ var doneTaskCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("doneTaskCmd: start session=%s", sessionName)
-		defer logging.Trace("doneTaskCmd: end")
+		logging.Debug("-> doneTaskCmd(session=%s)", sessionName)
+		defer logging.Debug("<- doneTaskCmd")
 
 		tm := tmux.New(sessionName)
 

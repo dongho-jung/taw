@@ -82,8 +82,8 @@ var restorePanesCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("restorePanesCmd: start session=%s", sessionName)
-		defer logging.Trace("restorePanesCmd: end")
+		logging.Debug("-> restorePanesCmd(session=%s)", sessionName)
+		defer logging.Debug("<- restorePanesCmd")
 
 		tm := tmux.New(sessionName)
 

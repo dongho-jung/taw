@@ -9,6 +9,7 @@ import (
 	"github.com/sahilm/fuzzy"
 
 	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/logging"
 )
 
 // Command represents a command in the palette.
@@ -40,6 +41,9 @@ type CommandPalette struct {
 
 // NewCommandPalette creates a new command palette.
 func NewCommandPalette(commands []Command) *CommandPalette {
+	logging.Debug("-> NewCommandPalette(commands=%d)", len(commands))
+	defer logging.Debug("<- NewCommandPalette")
+
 	// Detect dark mode BEFORE bubbletea starts
 	// Uses config theme setting if available, otherwise auto-detects
 	theme := loadThemeFromConfig()
@@ -247,15 +251,25 @@ func (m *CommandPalette) Result() (CommandPaletteAction, *Command) {
 
 // RunCommandPalette runs the command palette and returns the selected command.
 func RunCommandPalette(commands []Command) (CommandPaletteAction, *Command, error) {
+	logging.Debug("-> RunCommandPalette(commands=%d)", len(commands))
+	defer logging.Debug("<- RunCommandPalette")
+
 	m := NewCommandPalette(commands)
+	logging.Debug("RunCommandPalette: starting tea.Program")
 	p := tea.NewProgram(m)
 
 	finalModel, err := p.Run()
 	if err != nil {
+		logging.Debug("RunCommandPalette: tea.Program.Run failed: %v", err)
 		return CommandPaletteCancel, nil, err
 	}
 
 	cp := finalModel.(*CommandPalette)
 	action, selected := cp.Result()
+	if selected != nil {
+		logging.Debug("RunCommandPalette: completed, action=%d, selected=%s", action, selected.ID)
+	} else {
+		logging.Debug("RunCommandPalette: completed, action=%d, selected=nil", action)
+	}
 	return action, selected, nil
 }

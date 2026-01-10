@@ -25,8 +25,8 @@ func SendNtfy(cfg *config.NtfyConfig, title, message string) error {
 		return nil
 	}
 
-	logging.Trace("SendNtfy: start title=%q topic=%q", title, cfg.Topic)
-	defer logging.Trace("SendNtfy: end")
+	logging.Debug("-> SendNtfy(title=%q, topic=%q)", title, cfg.Topic)
+	defer logging.Debug("<- SendNtfy")
 
 	// Determine server URL
 	server := cfg.Server

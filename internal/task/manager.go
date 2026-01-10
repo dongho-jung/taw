@@ -64,6 +64,9 @@ func (m *Manager) shouldUseWorkspace() bool {
 // CreateTask creates a new task with the given content.
 // It generates a task name using Claude and creates the task directory atomically.
 func (m *Manager) CreateTask(content string) (*Task, error) {
+	logging.Debug("-> Manager.CreateTask(content_len=%d)", len(content))
+	defer logging.Debug("<- Manager.CreateTask")
+
 	// Generate task name using Claude
 	logging.Trace("Generating task name with Claude: content_length=%d", len(content))
 	timer := logging.StartTimer("task name generation")

@@ -86,8 +86,8 @@ var stopHookCmd = &cobra.Command{
 			defer cleanup()
 		}
 
-		logging.Trace("stopHookCmd: start session=%s windowID=%s task=%s", sessionName, windowID, taskName)
-		defer logging.Trace("stopHookCmd: end")
+		logging.Debug("-> stopHookCmd(session=%s, windowID=%s, task=%s)", sessionName, windowID, taskName)
+		defer logging.Debug("<- stopHookCmd")
 
 		tm := tmux.New(sessionName)
 		paneID := windowID + ".0"

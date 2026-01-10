@@ -34,8 +34,8 @@ var userPromptSubmitHookCmd = &cobra.Command{
 			defer cleanup()
 		}
 
-		logging.Trace("userPromptSubmitHookCmd: start session=%s windowID=%s task=%s", sessionName, windowID, taskName)
-		defer logging.Trace("userPromptSubmitHookCmd: end")
+		logging.Debug("-> userPromptSubmitHookCmd(session=%s, windowID=%s, task=%s)", sessionName, windowID, taskName)
+		defer logging.Debug("<- userPromptSubmitHookCmd")
 
 		tm := tmux.New(sessionName)
 		paneID := windowID + ".0"
@@ -82,8 +82,8 @@ var askUserQuestionHookCmd = &cobra.Command{
 			defer cleanup()
 		}
 
-		logging.Trace("askUserQuestionHookCmd: start session=%s windowID=%s task=%s", sessionName, windowID, taskName)
-		defer logging.Trace("askUserQuestionHookCmd: end")
+		logging.Debug("-> askUserQuestionHookCmd(session=%s, windowID=%s, task=%s)", sessionName, windowID, taskName)
+		defer logging.Debug("<- askUserQuestionHookCmd")
 
 		tm := tmux.New(sessionName)
 		paneID := windowID + ".0"

@@ -22,11 +22,15 @@ var toggleLogCmd = &cobra.Command{
 	Short: "Toggle log viewer popup",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Debug("-> toggleLogCmd(session=%s)", args[0])
+		defer logging.Debug("<- toggleLogCmd")
+
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
 		appCtx, err := getAppFromSession(sessionName)
 		if err != nil {
+			logging.Debug("toggleLogCmd: getAppFromSession failed: %v", err)
 			return err
 		}
 
@@ -278,8 +282,8 @@ var templateViewerCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("templateViewerCmd: start session=%s", sessionName)
-		defer logging.Trace("templateViewerCmd: end")
+		logging.Debug("-> templateViewerCmd(session=%s)", sessionName)
+		defer logging.Debug("<- templateViewerCmd")
 
 		return runTemplateLoop(appCtx, sessionName)
 	},

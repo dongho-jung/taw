@@ -28,8 +28,8 @@ var endTaskCmd = &cobra.Command{
 	Short: "Finish a task (commit, merge, cleanup)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		logging.Trace("endTaskCmd: start session=%s windowID=%s", args[0], args[1])
-		defer logging.Trace("endTaskCmd: end")
+		logging.Debug("-> endTaskCmd(session=%s, windowID=%s)", args[0], args[1])
+		defer logging.Debug("<- endTaskCmd")
 
 		sessionName := args[0]
 		windowID := args[1]
@@ -246,8 +246,8 @@ var endTaskUICmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("endTaskUICmd: start session=%s windowID=%s", sessionName, windowID)
-		defer logging.Trace("endTaskUICmd: end")
+		logging.Debug("-> endTaskUICmd(session=%s, windowID=%s)", sessionName, windowID)
+		defer logging.Debug("<- endTaskUICmd")
 
 		tm := tmux.New(sessionName)
 

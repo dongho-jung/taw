@@ -486,6 +486,9 @@ func (c *tmuxClient) WaitForPane(target string, maxWait time.Duration, minConten
 // Display popup
 
 func (c *tmuxClient) DisplayPopup(opts PopupOpts, command string) error {
+	logging.Debug("-> tmux.DisplayPopup(title=%s, w=%s, h=%s, cmd=%s)", opts.Title, opts.Width, opts.Height, command)
+	defer logging.Debug("<- tmux.DisplayPopup")
+
 	args := []string{"display-popup"}
 
 	if opts.Close {
@@ -516,7 +519,11 @@ func (c *tmuxClient) DisplayPopup(opts PopupOpts, command string) error {
 		args = append(args, command)
 	}
 
-	return c.Run(args...)
+	err := c.Run(args...)
+	if err != nil {
+		logging.Debug("tmux.DisplayPopup: failed: %v", err)
+	}
+	return err
 }
 
 // Options

@@ -28,8 +28,8 @@ var handleTaskCmd = &cobra.Command{
 	Short: "Handle a task (create window, start Claude)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		logging.Trace("handleTaskCmd: start session=%s agentDir=%s", args[0], args[1])
-		defer logging.Trace("handleTaskCmd: end")
+		logging.Debug("-> handleTaskCmd(session=%s, agentDir=%s)", args[0], args[1])
+		defer logging.Debug("<- handleTaskCmd")
 
 		sessionName := args[0]
 		agentDir := args[1]
@@ -169,22 +169,22 @@ var handleTaskCmd = &cobra.Command{
 			logging.Warn("Failed to save window ID: %v", err)
 		}
 		if _, err := service.UpdateWindowMap(appCtx.PawDir, t.Name); err != nil {
-			logging.Trace("Failed to update window map: %v", err)
+			logging.Warn("Failed to update window map: %v", err)
 		}
 
 		if !isReopen {
 			prevStatus, valid, err := t.TransitionStatus(task.StatusWorking)
 			if err != nil {
-				logging.Trace("Failed to persist working status: %v", err)
+				logging.Warn("Failed to persist working status: %v", err)
 			} else {
-				logging.Trace("Status set to working for new task")
+				logging.Debug("Status set to working for new task")
 			}
 			if !valid {
 				logging.Warn("Invalid status transition: %s -> %s", prevStatus, task.StatusWorking)
 			}
 			historyService := service.NewHistoryService(appCtx.GetHistoryDir())
 			if err := historyService.RecordStatusTransition(t.Name, prevStatus, task.StatusWorking, "handle-task", "task started", valid); err != nil {
-				logging.Trace("Failed to record status transition: %v", err)
+				logging.Warn("Failed to record status transition: %v", err)
 			}
 		}
 

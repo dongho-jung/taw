@@ -21,6 +21,9 @@ var loadingScreenCmd = &cobra.Command{
 	Args:   cobra.MaximumNArgs(1),
 	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Debug("-> loadingScreenCmd")
+		defer logging.Debug("<- loadingScreenCmd")
+
 		message := "Generating task name..."
 		if len(args) > 0 {
 			message = args[0]
@@ -41,11 +44,15 @@ var toggleSetupCmd = &cobra.Command{
 	Short: "Toggle setup wizard popup",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Debug("-> toggleSetupCmd(session=%s)", args[0])
+		defer logging.Debug("<- toggleSetupCmd")
+
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
 		appCtx, err := getAppFromSession(sessionName)
 		if err != nil {
+			logging.Debug("toggleSetupCmd: getAppFromSession failed: %v", err)
 			return err
 		}
 
@@ -76,20 +83,26 @@ var setupWizardCmd = &cobra.Command{
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Debug("-> setupWizardCmd(session=%s)", args[0])
+		defer logging.Debug("<- setupWizardCmd")
+
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
 		if err != nil {
+			logging.Debug("setupWizardCmd: getAppFromSession failed: %v", err)
 			return err
 		}
 
 		// Run the setup wizard
 		if err := runSetupWizard(appCtx); err != nil {
+			logging.Debug("setupWizardCmd: runSetupWizard failed: %v", err)
 			return err
 		}
 
 		// Reload config and re-apply tmux settings
 		if err := appCtx.LoadConfig(); err != nil {
+			logging.Debug("setupWizardCmd: LoadConfig failed: %v", err)
 			return fmt.Errorf("failed to reload config: %w", err)
 		}
 
@@ -112,6 +125,9 @@ var toggleCmdPaletteCmd = &cobra.Command{
 	Short: "Toggle command palette popup",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Debug("-> toggleCmdPaletteCmd(session=%s)", args[0])
+		defer logging.Debug("<- toggleCmdPaletteCmd")
+
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
@@ -146,6 +162,17 @@ var cmdPaletteTUICmd = &cobra.Command{
 			return err
 		}
 
+		// Setup logging
+		logger, _ := logging.New(appCtx.GetLogPath(), appCtx.Debug)
+		if logger != nil {
+			defer func() { _ = logger.Close() }()
+			logger.SetScript("cmd-palette-tui")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Debug("-> cmdPaletteTUICmd(session=%s)", sessionName)
+		defer logging.Debug("<- cmdPaletteTUICmd")
+
 		// Define available commands
 		commands := []tui.Command{
 			{
@@ -165,14 +192,19 @@ var cmdPaletteTUICmd = &cobra.Command{
 			},
 		}
 
+		logging.Debug("cmdPaletteTUICmd: running command palette")
 		action, selected, err := tui.RunCommandPalette(commands)
 		if err != nil {
+			logging.Debug("cmdPaletteTUICmd: RunCommandPalette failed: %v", err)
 			return err
 		}
 
 		if action == tui.CommandPaletteCancel || selected == nil {
+			logging.Debug("cmdPaletteTUICmd: cancelled or no selection")
 			return nil
 		}
+
+		logging.Debug("cmdPaletteTUICmd: selected command=%s", selected.ID)
 
 		pawBin, err := os.Executable()
 		if err != nil {
@@ -181,8 +213,13 @@ var cmdPaletteTUICmd = &cobra.Command{
 
 		switch selected.ID {
 		case "settings":
+			logging.Debug("cmdPaletteTUICmd: executing toggle-settings")
 			settingsCmd := exec.Command(pawBin, "internal", "toggle-settings", sessionName)
-			return settingsCmd.Run()
+			if err := settingsCmd.Run(); err != nil {
+				logging.Debug("cmdPaletteTUICmd: toggle-settings failed: %v", err)
+				return err
+			}
+			return nil
 		case "show-diff":
 			// Queue the diff popup to open after this popup closes
 			// Use tmux run-shell -b (background) with a small delay
@@ -199,6 +236,7 @@ var cmdPaletteTUICmd = &cobra.Command{
 			return nil
 
 		case "restore-panes":
+			logging.Debug("cmdPaletteTUICmd: executing restore-panes")
 			restoreCmd := exec.Command(pawBin, "internal", "restore-panes", sessionName)
 			return restoreCmd.Run()
 		}
@@ -213,12 +251,24 @@ var toggleSettingsCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
-		tm := tmux.New(sessionName)
 
 		appCtx, err := getAppFromSession(sessionName)
 		if err != nil {
 			return err
 		}
+
+		// Setup logging
+		logger, _ := logging.New(appCtx.GetLogPath(), appCtx.Debug)
+		if logger != nil {
+			defer func() { _ = logger.Close() }()
+			logger.SetScript("toggle-settings")
+			logging.SetGlobal(logger)
+		}
+
+		logging.Debug("-> toggleSettingsCmd(session=%s)", sessionName)
+		defer logging.Debug("<- toggleSettingsCmd")
+
+		tm := tmux.New(sessionName)
 
 		pawBin, err := os.Executable()
 		if err != nil {
@@ -227,8 +277,9 @@ var toggleSettingsCmd = &cobra.Command{
 
 		// Run settings in popup
 		settingsCmd := fmt.Sprintf("%s internal settings-tui %s", pawBin, sessionName)
+		logging.Debug("toggleSettingsCmd: opening popup with cmd=%s", settingsCmd)
 
-		return tm.DisplayPopup(tmux.PopupOpts{
+		err = tm.DisplayPopup(tmux.PopupOpts{
 			Width:     "70%",
 			Height:    "60%",
 			Title:     " Settings ",
@@ -236,6 +287,10 @@ var toggleSettingsCmd = &cobra.Command{
 			Style:     "fg=terminal,bg=terminal",
 			Directory: appCtx.ProjectDir,
 		}, settingsCmd)
+		if err != nil {
+			logging.Debug("toggleSettingsCmd: DisplayPopup failed: %v", err)
+		}
+		return err
 	},
 }
 
@@ -252,23 +307,41 @@ var settingsTUICmd = &cobra.Command{
 			return err
 		}
 
-		// Run the settings UI
-		result, err := tui.RunSettingsUI(appCtx.Config, appCtx.IsGitRepo)
-		if err != nil {
-			return err
+		// Setup logging
+		logger, _ := logging.New(appCtx.GetLogPath(), appCtx.Debug)
+		if logger != nil {
+			defer func() { _ = logger.Close() }()
+			logger.SetScript("settings-tui")
+			logging.SetGlobal(logger)
 		}
 
+		logging.Debug("-> settingsTUICmd(session=%s)", sessionName)
+		defer logging.Debug("<- settingsTUICmd")
+
+		// Run the settings UI
+		logging.Debug("settingsTUICmd: calling tui.RunSettingsUI isGitRepo=%v", appCtx.IsGitRepo)
+		result, err := tui.RunSettingsUI(appCtx.Config, appCtx.IsGitRepo)
+		if err != nil {
+			logging.Debug("settingsTUICmd: RunSettingsUI failed: %v", err)
+			return err
+		}
+		logging.Debug("settingsTUICmd: RunSettingsUI returned cancelled=%v", result.Cancelled)
+
 		if result.Cancelled {
+			logging.Debug("settingsTUICmd: cancelled by user")
 			return nil
 		}
 
 		// Save the config
+		logging.Debug("settingsTUICmd: saving config to %s", appCtx.PawDir)
 		if err := result.Config.Save(appCtx.PawDir); err != nil {
+			logging.Debug("settingsTUICmd: Save failed: %v", err)
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
 		// Reload config and re-apply tmux settings
 		if err := appCtx.LoadConfig(); err != nil {
+			logging.Debug("settingsTUICmd: LoadConfig failed: %v", err)
 			return fmt.Errorf("failed to reload config: %w", err)
 		}
 

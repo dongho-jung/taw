@@ -41,8 +41,8 @@ var mergeTaskCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("mergeTaskCmd: start session=%s windowID=%s", sessionName, windowID)
-		defer logging.Trace("mergeTaskCmd: end")
+		logging.Debug("-> mergeTaskCmd(session=%s, windowID=%s)", sessionName, windowID)
+		defer logging.Debug("<- mergeTaskCmd")
 
 		tm := tmux.New(sessionName)
 
@@ -399,8 +399,8 @@ var mergeTaskUICmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("mergeTaskUICmd: start session=%s", sessionName)
-		defer logging.Trace("mergeTaskUICmd: end")
+		logging.Debug("-> mergeTaskUICmd(session=%s)", sessionName)
+		defer logging.Debug("<- mergeTaskUICmd")
 
 		tm := tmux.New(sessionName)
 

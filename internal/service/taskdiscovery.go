@@ -61,7 +61,6 @@ func NewTaskDiscoveryService() *TaskDiscoveryService {
 // Returns tasks grouped by status for Kanban display.
 func (s *TaskDiscoveryService) DiscoverAll() (working, waiting, done, warning []*DiscoveredTask) {
 	sockets := s.findPawSockets()
-	logging.Trace("TaskDiscovery: found %d PAW sockets", len(sockets))
 
 	var allTasks []*DiscoveredTask
 
@@ -96,7 +95,10 @@ func (s *TaskDiscoveryService) DiscoverAll() (working, waiting, done, warning []
 func (s *TaskDiscoveryService) findPawSockets() []string {
 	entries, err := os.ReadDir(s.socketDir)
 	if err != nil {
-		logging.Trace("TaskDiscovery: failed to read socket dir %s: %v", s.socketDir, err)
+		// Socket dir not found is expected when tmux is not running
+		if !os.IsNotExist(err) {
+			logging.Warn("Failed to read tmux socket dir %s: %v", s.socketDir, err)
+		}
 		return nil
 	}
 
@@ -131,7 +133,7 @@ func (s *TaskDiscoveryService) discoverFromSocket(socketName string) []*Discover
 	// List windows
 	windows, err := tm.ListWindows()
 	if err != nil {
-		logging.Trace("TaskDiscovery: failed to list windows for %s: %v", sessionName, err)
+		logging.Warn("Failed to list windows for session %s: %v", sessionName, err)
 		return nil
 	}
 
@@ -160,8 +162,6 @@ func (s *TaskDiscoveryService) discoverFromSocket(socketName string) []*Discover
 		if capture, err := tm.CapturePane(agentPane, 50); err == nil {
 			task.Preview = trimPreview(capture)
 			task.CurrentAction = extractCurrentAction(capture)
-		} else {
-			logging.Trace("TaskDiscovery: capture failed session=%s window=%s err=%v", sessionName, w.ID, err)
 		}
 
 		tasks = append(tasks, task)
@@ -172,8 +172,11 @@ func (s *TaskDiscoveryService) discoverFromSocket(socketName string) []*Discover
 
 func resolvePawDir(tm tmux.Client, sessionName string) string {
 	sessionPath, err := tm.RunWithOutput("display-message", "-p", "-t", sessionName, "#{session_path}")
-	if err != nil || sessionPath == "" {
-		logging.Trace("TaskDiscovery: failed to resolve session path for %s: %v", sessionName, err)
+	if err != nil {
+		logging.Debug("Failed to resolve session path for %s: %v", sessionName, err)
+		return ""
+	}
+	if sessionPath == "" {
 		return ""
 	}
 	sessionPath = strings.TrimSpace(sessionPath)
@@ -197,8 +200,8 @@ func buildTokenMap(pawDir string) map[string]string {
 		for token, name := range fileMap {
 			mapping[token] = name
 		}
-	} else {
-		logging.Trace("TaskDiscovery: failed to load window map: %v", err)
+	} else if !os.IsNotExist(err) {
+		logging.Debug("Failed to load window map from %s: %v", pawDir, err)
 	}
 
 	agentsDir := filepath.Join(pawDir, constants.AgentsDirName)

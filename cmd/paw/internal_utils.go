@@ -41,8 +41,8 @@ var ctrlCCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("ctrlCCmd: start session=%s", sessionName)
-		defer logging.Trace("ctrlCCmd: end")
+		logging.Debug("-> ctrlCCmd(session=%s)", sessionName)
+		defer logging.Debug("<- ctrlCCmd")
 
 		tm := tmux.New(sessionName)
 
@@ -137,8 +137,8 @@ var renameWindowCmd = &cobra.Command{
 			}
 		}
 
-		logging.Trace("renameWindowCmd: start windowID=%s name=%s", windowID, name)
-		defer logging.Trace("renameWindowCmd: end")
+		logging.Debug("-> renameWindowCmd(windowID=%s, name=%s)", windowID, name)
+		defer logging.Debug("<- renameWindowCmd")
 
 		// Get session name from environment or use default
 		sessionName := os.Getenv("SESSION_NAME")
@@ -231,9 +231,9 @@ func renameWindowWithStatus(tm tmux.Client, windowID, name, pawDir, taskName, so
 	t := task.New(taskName, agentDir)
 	prevStatus, valid, err := t.TransitionStatus(status)
 	if err != nil {
-		logging.Trace("Failed to save status: %v", err)
+		logging.Warn("Failed to save status: %v", err)
 	} else {
-		logging.Trace("Status saved: %s", status)
+		logging.Debug("Status saved: %s", status)
 	}
 	if !valid {
 		logging.Warn("Invalid status transition: %s -> %s", prevStatus, status)
@@ -241,7 +241,7 @@ func renameWindowWithStatus(tm tmux.Client, windowID, name, pawDir, taskName, so
 
 	historyService := service.NewHistoryService(filepath.Join(pawDir, constants.HistoryDirName))
 	if err := historyService.RecordStatusTransition(taskName, prevStatus, status, source, "", valid); err != nil {
-		logging.Trace("Failed to record status transition: %v", err)
+		logging.Warn("Failed to record status transition: %v", err)
 	}
 
 	return nil
@@ -249,14 +249,19 @@ func renameWindowWithStatus(tm tmux.Client, windowID, name, pawDir, taskName, so
 
 // getAppFromSession creates an App from session name
 func getAppFromSession(sessionName string) (*app.App, error) {
+	logging.Debug("-> getAppFromSession(session=%s)", sessionName)
+	defer logging.Debug("<- getAppFromSession")
+
 	// Session name is the project directory name
 	// We need to find the project directory
 
 	// First, try to get it from environment
 	if pawDir := os.Getenv("PAW_DIR"); pawDir != "" {
 		projectDir := filepath.Dir(pawDir)
+		logging.Debug("getAppFromSession: found PAW_DIR=%s, projectDir=%s", pawDir, projectDir)
 		application, err := app.New(projectDir)
 		if err != nil {
+			logging.Debug("getAppFromSession: app.New failed: %v", err)
 			return nil, err
 		}
 		return loadAppConfig(application)
@@ -265,6 +270,7 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 	// Try current directory
 	cwd, err := os.Getwd()
 	if err != nil {
+		logging.Debug("getAppFromSession: os.Getwd failed: %v", err)
 		return nil, err
 	}
 
@@ -273,8 +279,10 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 	for {
 		pawDir := filepath.Join(dir, ".paw")
 		if _, err := os.Stat(pawDir); err == nil {
+			logging.Debug("getAppFromSession: found .paw at %s", pawDir)
 			application, err := app.New(dir)
 			if err != nil {
+				logging.Debug("getAppFromSession: app.New failed: %v", err)
 				return nil, err
 			}
 			return loadAppConfig(application)
@@ -287,6 +295,7 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 		dir = parent
 	}
 
+	logging.Debug("getAppFromSession: could not find project directory")
 	return nil, fmt.Errorf("could not find project directory for session %s", sessionName)
 }
 

@@ -42,8 +42,8 @@ const (
 // It prefers using the paw-notify helper for consistent icon display,
 // falling back to AppleScript if the helper is not available.
 func Send(title, message string) error {
-	logging.Trace("Send: start title=%q message=%q", title, message)
-	defer logging.Trace("Send: end title=%q", title)
+	logging.Debug("-> Send(title=%q, message=%q)", title, message)
+	defer logging.Debug("<- Send")
 
 	if runtime.GOOS != "darwin" {
 		return nil
@@ -130,8 +130,8 @@ func FindIconPath() string {
 // It runs in the background and does not block.
 // Uses nohup to ensure the sound plays even if parent process exits.
 func PlaySound(soundType SoundType) {
-	logging.Trace("PlaySound: start soundType=%s", soundType)
-	defer logging.Trace("PlaySound: end soundType=%s", soundType)
+	logging.Debug("-> PlaySound(soundType=%s)", soundType)
+	defer logging.Debug("<- PlaySound")
 
 	if runtime.GOOS != "darwin" {
 		return
@@ -152,7 +152,7 @@ func PlaySound(soundType SoundType) {
 	cmd.Stderr = nil
 	cmd.Stdin = nil
 	if err := cmd.Start(); err != nil {
-		logging.Trace("PlaySound: failed to start afplay err=%v", err)
+		logging.Warn("PlaySound: failed to start afplay err=%v", err)
 	}
 }
 
@@ -172,8 +172,8 @@ func appleScriptCommand(args ...string) *exec.Cmd {
 // Returns the 0-based index of the selected action, or -1 if dismissed/timed out/clicked without action.
 // If the notification helper is not available, falls back to a simple notification and returns -1.
 func SendWithActions(title, message, iconPath string, actions []string, timeoutSec int) (int, error) {
-	logging.Trace("SendWithActions: start title=%q actions=%v timeout=%d", title, actions, timeoutSec)
-	defer logging.Trace("SendWithActions: end")
+	logging.Debug("-> SendWithActions(title=%q, actions=%v, timeout=%d)", title, actions, timeoutSec)
+	defer logging.Debug("<- SendWithActions")
 
 	if runtime.GOOS != "darwin" {
 		return -1, nil
@@ -285,12 +285,12 @@ func findNotifyHelper() string {
 // and ntfy (if configured). Errors from individual channels are logged but
 // do not prevent other channels from being notified.
 func SendAll(notifications *config.NotificationsConfig, title, message string) {
-	logging.Trace("SendAll: start title=%q", title)
-	defer logging.Trace("SendAll: end")
+	logging.Debug("-> SendAll(title=%q)", title)
+	defer logging.Debug("<- SendAll")
 
 	// Send macOS desktop notification (non-blocking, errors logged)
 	if err := Send(title, message); err != nil {
-		logging.Trace("SendAll: desktop notification failed: %v", err)
+		logging.Warn("SendAll: desktop notification failed: %v", err)
 	}
 
 	// Send to configured external channels
@@ -302,7 +302,7 @@ func SendAll(notifications *config.NotificationsConfig, title, message string) {
 	if notifications.Slack != nil {
 		go func() {
 			if err := SendSlack(notifications.Slack, title, message); err != nil {
-				logging.Trace("SendAll: Slack notification failed: %v", err)
+				logging.Warn("SendAll: Slack notification failed: %v", err)
 			}
 		}()
 	}
@@ -311,7 +311,7 @@ func SendAll(notifications *config.NotificationsConfig, title, message string) {
 	if notifications.Ntfy != nil {
 		go func() {
 			if err := SendNtfy(notifications.Ntfy, title, message); err != nil {
-				logging.Trace("SendAll: ntfy notification failed: %v", err)
+				logging.Warn("SendAll: ntfy notification failed: %v", err)
 			}
 		}()
 	}

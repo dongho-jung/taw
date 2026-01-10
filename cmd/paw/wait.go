@@ -55,8 +55,8 @@ var watchWaitCmd = &cobra.Command{
 			logging.SetGlobal(logger)
 		}
 
-		logging.Trace("watchWaitCmd: start session=%s windowID=%s task=%s", sessionName, windowID, taskName)
-		defer logging.Trace("watchWaitCmd: end")
+		logging.Debug("-> watchWaitCmd(session=%s, windowID=%s, task=%s)", sessionName, windowID, taskName)
+		defer logging.Debug("<- watchWaitCmd")
 
 		tm := tmux.New(sessionName)
 		paneID := windowID + ".0"
@@ -183,8 +183,8 @@ func isFinalWindow(name string) bool {
 }
 
 func ensureWaitingWindow(tm tmux.Client, windowID, taskName, pawDir string) error {
-	logging.Trace("ensureWaitingWindow: start windowID=%s task=%s", windowID, taskName)
-	defer logging.Trace("ensureWaitingWindow: end")
+	logging.Debug("-> ensureWaitingWindow(windowID=%s, task=%s)", windowID, taskName)
+	defer logging.Debug("<- ensureWaitingWindow")
 
 	windowName, err := getWindowName(tm, windowID)
 	if err != nil {
@@ -224,8 +224,8 @@ func doneWindowName(taskName string) string {
 
 // ensureDoneWindow renames the window to done status if it belongs to the task.
 func ensureDoneWindow(tm tmux.Client, windowID, taskName, pawDir string) error {
-	logging.Trace("ensureDoneWindow: start windowID=%s task=%s", windowID, taskName)
-	defer logging.Trace("ensureDoneWindow: end")
+	logging.Debug("-> ensureDoneWindow(windowID=%s, task=%s)", windowID, taskName)
+	defer logging.Debug("<- ensureDoneWindow")
 
 	windowName, err := getWindowName(tm, windowID)
 	if err != nil {

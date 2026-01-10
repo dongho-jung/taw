@@ -38,8 +38,8 @@ func SendSlack(cfg *config.SlackConfig, title, message string) error {
 		return nil
 	}
 
-	logging.Trace("SendSlack: start title=%q", title)
-	defer logging.Trace("SendSlack: end")
+	logging.Debug("-> SendSlack(title=%q)", title)
+	defer logging.Debug("<- SendSlack")
 
 	// Build message with attachment for rich formatting
 	payload := slackMessage{

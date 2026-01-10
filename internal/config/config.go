@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/logging"
 )
 
 // WorkMode defines how tasks work with git.
@@ -184,18 +185,30 @@ func isValidTheme(theme Theme) bool {
 
 // Load reads the configuration from the given paw directory.
 func Load(pawDir string) (*Config, error) {
+	logging.Debug("-> config.Load(pawDir=%s)", pawDir)
+	defer logging.Debug("<- config.Load")
+
 	configPath := filepath.Join(pawDir, constants.ConfigFileName)
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		logging.Debug("config.Load: config file not found, using defaults")
 		return DefaultConfig(), nil
 	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
+		logging.Debug("config.Load: failed to read config: %v", err)
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
-	return parseConfig(string(data))
+	cfg, err := parseConfig(string(data))
+	if err != nil {
+		logging.Debug("config.Load: failed to parse config: %v", err)
+		return nil, err
+	}
+
+	logging.Debug("config.Load: loaded WorkMode=%s OnComplete=%s", cfg.WorkMode, cfg.OnComplete)
+	return cfg, nil
 }
 
 // parseConfig parses the configuration from a string.
@@ -491,6 +504,9 @@ func countLeadingSpaces(s string) int {
 
 // Save writes the configuration to the given paw directory.
 func (c *Config) Save(pawDir string) error {
+	logging.Debug("-> config.Save(pawDir=%s)", pawDir)
+	defer logging.Debug("<- config.Save")
+
 	configPath := filepath.Join(pawDir, constants.ConfigFileName)
 
 	content := fmt.Sprintf(`# PAW Configuration
@@ -563,7 +579,12 @@ log_max_backups: %d
 		content += formatHook("post_merge_hook", c.PostMergeHook)
 	}
 
-	return os.WriteFile(configPath, []byte(content), 0644)
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		logging.Debug("config.Save: failed to write config: %v", err)
+		return err
+	}
+	logging.Debug("config.Save: written to %s", configPath)
+	return nil
 }
 
 // formatHook formats a hook command for saving.

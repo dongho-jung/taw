@@ -69,10 +69,16 @@ type logTickMsg time.Time
 
 // NewLogViewer creates a new log viewer for the given log file.
 func NewLogViewer(logFile string) *LogViewer {
+	// Default to L2+ (Info and above), but show all (L0+) if PAW_DEBUG=1
+	minLevel := 2
+	if os.Getenv("PAW_DEBUG") == "1" {
+		minLevel = 0
+	}
+
 	return &LogViewer{
 		logFile:  logFile,
 		tailMode: true,
-		minLevel: 2, // Show L2+ (Info and above) by default
+		minLevel: minLevel,
 	}
 }
 
