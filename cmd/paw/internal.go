@@ -53,6 +53,8 @@ func init() {
 	internalCmd.AddCommand(setupWizardCmd)
 	internalCmd.AddCommand(toggleCmdPaletteCmd)
 	internalCmd.AddCommand(cmdPaletteTUICmd)
+	internalCmd.AddCommand(toggleSettingsCmd)
+	internalCmd.AddCommand(settingsTUICmd)
 	internalCmd.AddCommand(restorePanesCmd)
 
 	// Utility commands

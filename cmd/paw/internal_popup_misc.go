@@ -149,6 +149,11 @@ var cmdPaletteTUICmd = &cobra.Command{
 		// Define available commands
 		commands := []tui.Command{
 			{
+				Name:        "Settings",
+				Description: "Configure PAW project settings",
+				ID:          "settings",
+			},
+			{
 				Name:        "Show Diff",
 				Description: "Show diff between task branch and main",
 				ID:          "show-diff",
@@ -175,6 +180,9 @@ var cmdPaletteTUICmd = &cobra.Command{
 		}
 
 		switch selected.ID {
+		case "settings":
+			settingsCmd := exec.Command(pawBin, "internal", "toggle-settings", sessionName)
+			return settingsCmd.Run()
 		case "show-diff":
 			// Queue the diff popup to open after this popup closes
 			// Use tmux run-shell -b (background) with a small delay
@@ -194,6 +202,85 @@ var cmdPaletteTUICmd = &cobra.Command{
 			restoreCmd := exec.Command(pawBin, "internal", "restore-panes", sessionName)
 			return restoreCmd.Run()
 		}
+
+		return nil
+	},
+}
+
+var toggleSettingsCmd = &cobra.Command{
+	Use:   "toggle-settings [session]",
+	Short: "Toggle settings popup",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		tm := tmux.New(sessionName)
+
+		appCtx, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		pawBin, err := os.Executable()
+		if err != nil {
+			pawBin = "paw"
+		}
+
+		// Run settings in popup
+		settingsCmd := fmt.Sprintf("%s internal settings-tui %s", pawBin, sessionName)
+
+		return tm.DisplayPopup(tmux.PopupOpts{
+			Width:     "70%",
+			Height:    "60%",
+			Title:     " Settings ",
+			Close:     true,
+			Style:     "fg=terminal,bg=terminal",
+			Directory: appCtx.ProjectDir,
+		}, settingsCmd)
+	},
+}
+
+var settingsTUICmd = &cobra.Command{
+	Use:    "settings-tui [session]",
+	Short:  "Run settings TUI (called from popup)",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		appCtx, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Run the settings UI
+		result, err := tui.RunSettingsUI(appCtx.Config, appCtx.IsGitRepo)
+		if err != nil {
+			return err
+		}
+
+		if result.Cancelled {
+			return nil
+		}
+
+		// Save the config
+		if err := result.Config.Save(appCtx.PawDir); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+
+		// Reload config and re-apply tmux settings
+		if err := appCtx.LoadConfig(); err != nil {
+			return fmt.Errorf("failed to reload config: %w", err)
+		}
+
+		// Re-apply tmux configuration
+		tm := tmux.New(sessionName)
+		if err := reapplyTmuxConfig(appCtx, tm); err != nil {
+			logging.Warn("Failed to re-apply tmux config: %v", err)
+		}
+
+		fmt.Println("\n✅ Settings saved!")
+		fmt.Println("Press Enter to close...")
+		_, _ = fmt.Scanln()
 
 		return nil
 	},
