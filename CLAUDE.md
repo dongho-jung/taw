@@ -173,6 +173,36 @@ paw/                           # This repository
         ├── .status            # Task status (working/waiting/done, persisted for resume)
         ├── .options.json      # Task options (model, ultrathink, depends_on, worktree_hook)
         └── .pr                # PR number (when created)
+
+$HOME/.paw/                        # Global PAW config (shared across all projects)
+└── config                         # Global config (default settings for all projects)
+```
+
+### Global vs Project Settings
+
+PAW supports both global and project-level settings:
+
+- **Global settings** (`$HOME/.paw/config`): Default settings applied to all projects
+- **Project settings** (`.paw/config`): Project-specific overrides
+
+In the Settings UI (⌃P → Settings), press `⌥Tab` to toggle between Global and Project views.
+
+Project settings can **inherit** from global settings. When a field is marked as inherited:
+- The value comes from global config
+- Press `i` on a field to toggle inherit on/off
+- Inherited fields show `(inherited)` indicator
+
+Example project config with inherit:
+```yaml
+work_mode: worktree
+on_complete: confirm
+theme: auto
+
+# Inherit settings from global config
+inherit:
+  work_mode: true     # Use global work_mode
+  on_complete: false  # Use project-specific value
+  theme: true         # Use global theme
 ```
 
 ## Logging levels

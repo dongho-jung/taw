@@ -12,6 +12,72 @@ import (
 	"github.com/dongho-jung/paw/internal/logging"
 )
 
+// InheritConfig defines which fields inherit from global config.
+// Only used in project-level config.
+type InheritConfig struct {
+	WorkMode        bool `yaml:"work_mode"`
+	OnComplete      bool `yaml:"on_complete"`
+	Theme           bool `yaml:"theme"`
+	NonGitWorkspace bool `yaml:"non_git_workspace"`
+	VerifyRequired  bool `yaml:"verify_required"`
+	VerifyTimeout   bool `yaml:"verify_timeout"`
+	VerifyCommand   bool `yaml:"verify_command"`
+	LogFormat       bool `yaml:"log_format"`
+	LogMaxSizeMB    bool `yaml:"log_max_size_mb"`
+	LogMaxBackups   bool `yaml:"log_max_backups"`
+	Notifications   bool `yaml:"notifications"`
+}
+
+// DefaultInheritConfig returns the default inherit configuration.
+// By default, all settings are inherited from global config.
+func DefaultInheritConfig() *InheritConfig {
+	return &InheritConfig{
+		WorkMode:        true,
+		OnComplete:      true,
+		Theme:           true,
+		NonGitWorkspace: true,
+		VerifyRequired:  true,
+		VerifyTimeout:   true,
+		VerifyCommand:   true,
+		LogFormat:       true,
+		LogMaxSizeMB:    true,
+		LogMaxBackups:   true,
+		Notifications:   true,
+	}
+}
+
+// GlobalPawDir returns the global PAW directory path ($HOME/.paw).
+func GlobalPawDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, constants.PawDirName)
+}
+
+// LoadGlobal reads the global configuration from $HOME/.paw/config.
+func LoadGlobal() (*Config, error) {
+	logging.Debug("-> config.LoadGlobal()")
+	defer logging.Debug("<- config.LoadGlobal")
+
+	globalDir := GlobalPawDir()
+	if globalDir == "" {
+		logging.Debug("config.LoadGlobal: could not determine home directory")
+		return DefaultConfig(), nil
+	}
+
+	return Load(globalDir)
+}
+
+// EnsureGlobalDir ensures the global PAW directory exists.
+func EnsureGlobalDir() error {
+	globalDir := GlobalPawDir()
+	if globalDir == "" {
+		return fmt.Errorf("could not determine home directory")
+	}
+	return os.MkdirAll(globalDir, 0755)
+}
+
 // WorkMode defines how tasks work with git.
 type WorkMode string
 
@@ -81,6 +147,10 @@ type Config struct {
 	LogFormat       string               `yaml:"log_format"`
 	LogMaxSizeMB    int                  `yaml:"log_max_size_mb"`
 	LogMaxBackups   int                  `yaml:"log_max_backups"`
+
+	// Inherit specifies which fields inherit from global config.
+	// Only used in project-level config files.
+	Inherit *InheritConfig `yaml:"inherit"`
 }
 
 // Normalize validates configuration values, applying safe defaults when needed.
@@ -171,6 +241,76 @@ func DefaultConfig() *Config {
 	}
 }
 
+// MergeWithGlobal applies inherited values from global config.
+// Fields marked for inheritance in cfg.Inherit will be copied from global.
+func (c *Config) MergeWithGlobal(global *Config) {
+	if c == nil || global == nil {
+		return
+	}
+	if c.Inherit == nil {
+		return
+	}
+
+	if c.Inherit.WorkMode {
+		c.WorkMode = global.WorkMode
+	}
+	if c.Inherit.OnComplete {
+		c.OnComplete = global.OnComplete
+	}
+	if c.Inherit.Theme {
+		c.Theme = global.Theme
+	}
+	if c.Inherit.NonGitWorkspace {
+		c.NonGitWorkspace = global.NonGitWorkspace
+	}
+	if c.Inherit.VerifyRequired {
+		c.VerifyRequired = global.VerifyRequired
+	}
+	if c.Inherit.VerifyTimeout {
+		c.VerifyTimeout = global.VerifyTimeout
+	}
+	if c.Inherit.VerifyCommand {
+		c.VerifyCommand = global.VerifyCommand
+	}
+	if c.Inherit.LogFormat {
+		c.LogFormat = global.LogFormat
+	}
+	if c.Inherit.LogMaxSizeMB {
+		c.LogMaxSizeMB = global.LogMaxSizeMB
+	}
+	if c.Inherit.LogMaxBackups {
+		c.LogMaxBackups = global.LogMaxBackups
+	}
+	if c.Inherit.Notifications && global.Notifications != nil {
+		c.Notifications = global.Notifications
+	}
+}
+
+// Clone creates a deep copy of the config.
+func (c *Config) Clone() *Config {
+	if c == nil {
+		return nil
+	}
+	clone := *c
+	if c.Notifications != nil {
+		notif := *c.Notifications
+		if c.Notifications.Slack != nil {
+			slack := *c.Notifications.Slack
+			notif.Slack = &slack
+		}
+		if c.Notifications.Ntfy != nil {
+			ntfy := *c.Notifications.Ntfy
+			notif.Ntfy = &ntfy
+		}
+		clone.Notifications = &notif
+	}
+	if c.Inherit != nil {
+		inherit := *c.Inherit
+		clone.Inherit = &inherit
+	}
+	return &clone
+}
+
 func isValidWorkMode(mode WorkMode) bool {
 	return mode == WorkModeWorktree || mode == WorkModeMain
 }
@@ -241,6 +381,12 @@ func parseConfig(content string) (*Config, error) {
 		// Check for nested block (notifications:)
 		if key == "notifications" && value == "" {
 			cfg.Notifications = parseNotificationsBlock(lines, &i)
+			continue
+		}
+
+		// Check for nested block (inherit:)
+		if key == "inherit" && value == "" {
+			cfg.Inherit = parseInheritBlock(lines, &i)
 			continue
 		}
 
@@ -477,6 +623,76 @@ func parseNtfyBlock(lines []string, i *int) *NtfyConfig {
 	return ntfy
 }
 
+// parseInheritBlock parses the inherit configuration block.
+func parseInheritBlock(lines []string, i *int) *InheritConfig {
+	*i++ // Move past "inherit:" line
+	inherit := &InheritConfig{}
+	baseIndent := getIndentLevel(lines, *i-1)
+
+	for *i < len(lines) {
+		line := lines[*i]
+
+		// Check if we're still in the inherit block (more indented than parent)
+		if len(line) == 0 {
+			*i++
+			continue
+		}
+
+		currentIndent := countLeadingSpaces(line)
+		if currentIndent <= baseIndent && strings.TrimSpace(line) != "" {
+			// Less or equal indent, end of inherit block
+			break
+		}
+
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			*i++
+			continue
+		}
+
+		parts := strings.SplitN(trimmed, ":", 2)
+		if len(parts) != 2 {
+			*i++
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		boolVal, _ := strconv.ParseBool(value)
+
+		switch key {
+		case "work_mode":
+			inherit.WorkMode = boolVal
+		case "on_complete":
+			inherit.OnComplete = boolVal
+		case "theme":
+			inherit.Theme = boolVal
+		case "non_git_workspace":
+			inherit.NonGitWorkspace = boolVal
+		case "verify_required":
+			inherit.VerifyRequired = boolVal
+		case "verify_timeout":
+			inherit.VerifyTimeout = boolVal
+		case "verify_command":
+			inherit.VerifyCommand = boolVal
+		case "log_format":
+			inherit.LogFormat = boolVal
+		case "log_max_size_mb":
+			inherit.LogMaxSizeMB = boolVal
+		case "log_max_backups":
+			inherit.LogMaxBackups = boolVal
+		case "notifications":
+			inherit.Notifications = boolVal
+		}
+
+		*i++
+	}
+
+	return inherit
+}
+
 // getIndentLevel returns the indentation level of a line at the given index.
 func getIndentLevel(lines []string, index int) int {
 	if index < 0 || index >= len(lines) {
@@ -579,6 +795,11 @@ log_max_backups: %d
 		content += formatHook("post_merge_hook", c.PostMergeHook)
 	}
 
+	// Add inherit block if set (project config only)
+	if c.Inherit != nil {
+		content += formatInheritBlock(c.Inherit)
+	}
+
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		logging.Debug("config.Save: failed to write config: %v", err)
 		return err
@@ -604,6 +825,30 @@ func formatHook(key, hook string) string {
 	}
 	// Single line
 	return fmt.Sprintf("%s: %s\n", key, hook)
+}
+
+// formatInheritBlock formats the inherit configuration block for saving.
+func formatInheritBlock(inherit *InheritConfig) string {
+	if inherit == nil {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\n# Inherit settings from global config\n")
+	sb.WriteString("# Set to true to use global value, false to use project-specific value\n")
+	sb.WriteString("inherit:\n")
+	sb.WriteString(fmt.Sprintf("  work_mode: %t\n", inherit.WorkMode))
+	sb.WriteString(fmt.Sprintf("  on_complete: %t\n", inherit.OnComplete))
+	sb.WriteString(fmt.Sprintf("  theme: %t\n", inherit.Theme))
+	sb.WriteString(fmt.Sprintf("  non_git_workspace: %t\n", inherit.NonGitWorkspace))
+	sb.WriteString(fmt.Sprintf("  verify_required: %t\n", inherit.VerifyRequired))
+	sb.WriteString(fmt.Sprintf("  verify_timeout: %t\n", inherit.VerifyTimeout))
+	sb.WriteString(fmt.Sprintf("  verify_command: %t\n", inherit.VerifyCommand))
+	sb.WriteString(fmt.Sprintf("  log_format: %t\n", inherit.LogFormat))
+	sb.WriteString(fmt.Sprintf("  log_max_size_mb: %t\n", inherit.LogMaxSizeMB))
+	sb.WriteString(fmt.Sprintf("  log_max_backups: %t\n", inherit.LogMaxBackups))
+	sb.WriteString(fmt.Sprintf("  notifications: %t\n", inherit.Notifications))
+	return sb.String()
 }
 
 // Exists checks if a configuration file exists in the given paw directory.

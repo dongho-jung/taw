@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 
+	"github.com/dongho-jung/paw/internal/config"
 	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/tmux"
@@ -321,25 +322,47 @@ var settingsTUICmd = &cobra.Command{
 		logging.Debug("-> settingsTUICmd(session=%s)", sessionName)
 		defer logging.Debug("<- settingsTUICmd")
 
-		// Run the settings UI
+		// Load global config
+		globalCfg, err := config.LoadGlobal()
+		if err != nil {
+			logging.Warn("settingsTUICmd: failed to load global config: %v", err)
+			globalCfg = config.DefaultConfig()
+		}
+
+		// Run the settings UI with both global and project configs
 		logging.Debug("settingsTUICmd: calling tui.RunSettingsUI isGitRepo=%v", appCtx.IsGitRepo)
-		result, err := tui.RunSettingsUI(appCtx.Config, appCtx.IsGitRepo)
+		result, err := tui.RunSettingsUI(globalCfg, appCtx.Config, appCtx.IsGitRepo)
 		if err != nil {
 			logging.Debug("settingsTUICmd: RunSettingsUI failed: %v", err)
 			return err
 		}
-		logging.Debug("settingsTUICmd: RunSettingsUI returned cancelled=%v", result.Cancelled)
+		logging.Debug("settingsTUICmd: RunSettingsUI returned cancelled=%v, scope=%d", result.Cancelled, result.Scope)
 
 		if result.Cancelled {
 			logging.Debug("settingsTUICmd: cancelled by user")
 			return nil
 		}
 
-		// Save the config
-		logging.Debug("settingsTUICmd: saving config to %s", appCtx.PawDir)
-		if err := result.Config.Save(appCtx.PawDir); err != nil {
-			logging.Debug("settingsTUICmd: Save failed: %v", err)
-			return fmt.Errorf("failed to save config: %w", err)
+		// Save configs based on scope
+		if result.Scope == tui.SettingsScopeGlobal {
+			// Ensure global directory exists
+			if err := config.EnsureGlobalDir(); err != nil {
+				logging.Debug("settingsTUICmd: EnsureGlobalDir failed: %v", err)
+				return fmt.Errorf("failed to create global config directory: %w", err)
+			}
+			// Save global config
+			logging.Debug("settingsTUICmd: saving global config to %s", config.GlobalPawDir())
+			if err := result.GlobalConfig.Save(config.GlobalPawDir()); err != nil {
+				logging.Debug("settingsTUICmd: Save global failed: %v", err)
+				return fmt.Errorf("failed to save global config: %w", err)
+			}
+		} else {
+			// Save project config
+			logging.Debug("settingsTUICmd: saving project config to %s", appCtx.PawDir)
+			if err := result.ProjectConfig.Save(appCtx.PawDir); err != nil {
+				logging.Debug("settingsTUICmd: Save project failed: %v", err)
+				return fmt.Errorf("failed to save project config: %w", err)
+			}
 		}
 
 		// Reload config and re-apply tmux settings

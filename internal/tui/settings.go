@@ -11,6 +11,16 @@ import (
 	"github.com/dongho-jung/paw/internal/logging"
 )
 
+// SettingsScope represents whether we're editing global or project settings.
+type SettingsScope int
+
+const (
+	SettingsScopeProject SettingsScope = iota
+	SettingsScopeGlobal
+)
+
+const settingsScopeCount = 2
+
 // SettingsTab represents which tab is active.
 type SettingsTab int
 
@@ -46,7 +56,15 @@ const notificationsFieldCount = 3
 
 // SettingsUI provides an interactive settings configuration form.
 type SettingsUI struct {
-	config    *config.Config
+	// Current scope (global or project)
+	scope         SettingsScope
+	globalConfig  *config.Config
+	projectConfig *config.Config
+	inheritConfig *config.InheritConfig
+
+	// Active config being edited (points to global or project)
+	config *config.Config
+
 	tab       SettingsTab
 	field     SettingsField
 	width     int
@@ -73,12 +91,17 @@ type SettingsUI struct {
 
 // SettingsResult contains the result of the settings UI.
 type SettingsResult struct {
-	Config    *config.Config
-	Cancelled bool
+	GlobalConfig  *config.Config
+	ProjectConfig *config.Config
+	InheritConfig *config.InheritConfig
+	Scope         SettingsScope
+	Cancelled     bool
 }
 
 // NewSettingsUI creates a new settings UI.
-func NewSettingsUI(cfg *config.Config, isGitRepo bool) *SettingsUI {
+// globalCfg is the global config from $HOME/.paw/config.
+// projectCfg is the project config from .paw/config.
+func NewSettingsUI(globalCfg, projectCfg *config.Config, isGitRepo bool) *SettingsUI {
 	logging.Debug("-> NewSettingsUI(isGitRepo=%v)", isGitRepo)
 	defer logging.Debug("<- NewSettingsUI")
 
@@ -86,9 +109,25 @@ func NewSettingsUI(cfg *config.Config, isGitRepo bool) *SettingsUI {
 	theme := loadThemeFromConfig()
 	isDark := detectDarkMode(theme)
 
-	if cfg == nil {
-		cfg = config.DefaultConfig()
+	if globalCfg == nil {
+		globalCfg = config.DefaultConfig()
 	}
+	if projectCfg == nil {
+		projectCfg = config.DefaultConfig()
+	}
+
+	// Clone configs to avoid modifying originals
+	globalCfg = globalCfg.Clone()
+	projectCfg = projectCfg.Clone()
+
+	// Get or create inherit config
+	inheritCfg := projectCfg.Inherit
+	if inheritCfg == nil {
+		inheritCfg = config.DefaultInheritConfig()
+	}
+
+	// Start with project scope, using project config
+	cfg := projectCfg
 
 	// Find current indices for dropdown fields
 	workModeIdx := 0
@@ -136,6 +175,10 @@ func NewSettingsUI(cfg *config.Config, isGitRepo bool) *SettingsUI {
 	}
 
 	return &SettingsUI{
+		scope:              SettingsScopeProject,
+		globalConfig:       globalCfg,
+		projectConfig:      projectCfg,
+		inheritConfig:      inheritCfg,
 		config:             cfg,
 		tab:                SettingsTabGeneral,
 		field:              0,
@@ -216,6 +259,11 @@ func (m *SettingsUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.field = 0
 			return m, nil
 
+		case "alt+tab":
+			// Switch between Global and Project scope
+			m.switchScope()
+			return m, nil
+
 		case "down", "j":
 			m.field = (m.field + 1) % m.currentFieldCount()
 			return m, nil
@@ -238,10 +286,57 @@ func (m *SettingsUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.config.VerifyRequired = !m.config.VerifyRequired
 				return m, nil
 			}
+
+		case "i":
+			// Toggle inherit for current field (project scope only)
+			if m.scope == SettingsScopeProject && m.tab == SettingsTabGeneral {
+				m.toggleInheritForCurrentField()
+				return m, nil
+			}
 		}
 	}
 
 	return m, nil
+}
+
+// toggleInheritForCurrentField toggles the inherit flag for the current field.
+func (m *SettingsUI) toggleInheritForCurrentField() {
+	if m.inheritConfig == nil || m.scope != SettingsScopeProject {
+		return
+	}
+
+	switch m.field {
+	case SettingsFieldWorkMode:
+		m.inheritConfig.WorkMode = !m.inheritConfig.WorkMode
+		if m.inheritConfig.WorkMode {
+			// Copy global value to project
+			m.config.WorkMode = m.globalConfig.WorkMode
+			m.updateFieldIndices()
+		}
+	case SettingsFieldOnComplete:
+		m.inheritConfig.OnComplete = !m.inheritConfig.OnComplete
+		if m.inheritConfig.OnComplete {
+			m.config.OnComplete = m.globalConfig.OnComplete
+			m.updateFieldIndices()
+		}
+	case SettingsFieldTheme:
+		m.inheritConfig.Theme = !m.inheritConfig.Theme
+		if m.inheritConfig.Theme {
+			m.config.Theme = m.globalConfig.Theme
+			m.updateFieldIndices()
+		}
+	case SettingsFieldNonGitWorkspace:
+		m.inheritConfig.NonGitWorkspace = !m.inheritConfig.NonGitWorkspace
+		if m.inheritConfig.NonGitWorkspace {
+			m.config.NonGitWorkspace = m.globalConfig.NonGitWorkspace
+			m.updateFieldIndices()
+		}
+	case SettingsFieldVerifyRequired:
+		m.inheritConfig.VerifyRequired = !m.inheritConfig.VerifyRequired
+		if m.inheritConfig.VerifyRequired {
+			m.config.VerifyRequired = m.globalConfig.VerifyRequired
+		}
+	}
 }
 
 func (m *SettingsUI) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -434,6 +529,79 @@ func (m *SettingsUI) applyChanges() {
 	}
 }
 
+// switchScope toggles between Global and Project settings scope.
+func (m *SettingsUI) switchScope() {
+	// Apply current changes before switching
+	m.applyChanges()
+
+	// Toggle scope
+	if m.scope == SettingsScopeProject {
+		m.scope = SettingsScopeGlobal
+		m.config = m.globalConfig
+	} else {
+		m.scope = SettingsScopeProject
+		m.config = m.projectConfig
+	}
+
+	// Update field indices for new config
+	m.updateFieldIndices()
+
+	// Reset to first tab/field
+	m.tab = SettingsTabGeneral
+	m.field = 0
+}
+
+// updateFieldIndices updates dropdown indices based on current config.
+func (m *SettingsUI) updateFieldIndices() {
+	// Work mode
+	m.workModeIdx = 0
+	for i, mode := range config.ValidWorkModes() {
+		if mode == m.config.WorkMode {
+			m.workModeIdx = i
+			break
+		}
+	}
+
+	// On complete
+	m.onCompleteIdx = 0
+	for i, c := range config.ValidOnCompletes() {
+		if c == m.config.OnComplete {
+			m.onCompleteIdx = i
+			break
+		}
+	}
+
+	// Theme
+	m.themeIdx = 0
+	themes := []config.Theme{config.ThemeAuto, config.ThemeLight, config.ThemeDark}
+	for i, t := range themes {
+		if t == m.config.Theme {
+			m.themeIdx = i
+			break
+		}
+	}
+
+	// Non-git workspace
+	m.nonGitWorkspaceIdx = 0
+	if m.config.NonGitWorkspace == string(config.NonGitWorkspaceCopy) {
+		m.nonGitWorkspaceIdx = 1
+	}
+
+	// Update text fields
+	m.slackWebhook = ""
+	m.ntfyTopic = ""
+	m.ntfyServer = ""
+	if m.config.Notifications != nil {
+		if m.config.Notifications.Slack != nil {
+			m.slackWebhook = m.config.Notifications.Slack.Webhook
+		}
+		if m.config.Notifications.Ntfy != nil {
+			m.ntfyTopic = m.config.Notifications.Ntfy.Topic
+			m.ntfyServer = m.config.Notifications.Ntfy.Server
+		}
+	}
+}
+
 // View renders the settings UI.
 func (m *SettingsUI) View() tea.View {
 	lightDark := lipgloss.LightDark(m.isDark)
@@ -491,8 +659,12 @@ func (m *SettingsUI) View() tea.View {
 
 	var sb strings.Builder
 
-	// Title
-	sb.WriteString(titleStyle.Render("⚙ Settings"))
+	// Title with scope indicator
+	scopeText := "[Project]"
+	if m.scope == SettingsScopeGlobal {
+		scopeText = "[Global]"
+	}
+	sb.WriteString(titleStyle.Render("⚙ Settings " + scopeText))
 	sb.WriteString("\n\n")
 
 	// Tabs
@@ -520,8 +692,10 @@ func (m *SettingsUI) View() tea.View {
 	sb.WriteString("\n")
 	if m.editingText {
 		sb.WriteString(helpStyle.Render("Enter: Confirm  |  Esc: Cancel  |  ←/→: Move cursor"))
+	} else if m.scope == SettingsScopeProject && m.tab == SettingsTabGeneral {
+		sb.WriteString(helpStyle.Render("⌥Tab: Global/Project  |  i: Toggle inherit  |  ↑/↓: Navigate  |  ←/→: Change  |  ⌃S: Save"))
 	} else {
-		sb.WriteString(helpStyle.Render("Tab: Switch tab  |  ↑/↓: Navigate  |  ←/→: Change value  |  Enter: Edit/Save  |  ⌃S: Save  |  Esc: Cancel"))
+		sb.WriteString(helpStyle.Render("⌥Tab: Global/Project  |  Tab: Switch tab  |  ↑/↓: Navigate  |  ←/→: Change  |  ⌃S: Save  |  Esc: Cancel"))
 	}
 
 	v := tea.NewView(sb.String())
@@ -530,6 +704,17 @@ func (m *SettingsUI) View() tea.View {
 }
 
 func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedLabelStyle, valueStyle, selectedValueStyle, dimStyle lipgloss.Style) {
+	// Helper to render inherit indicator
+	inheritIndicator := func(inherited bool) string {
+		if m.scope != SettingsScopeProject {
+			return ""
+		}
+		if inherited {
+			return dimStyle.Render(" (inherited)")
+		}
+		return ""
+	}
+
 	// Work Mode
 	{
 		label := labelStyle.Render("Work Mode:")
@@ -537,6 +722,7 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 			label = selectedLabelStyle.Render("Work Mode:")
 		}
 
+		inherited := m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.WorkMode
 		modes := config.ValidWorkModes()
 		var parts []string
 		for i, mode := range modes {
@@ -550,7 +736,7 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 				parts = append(parts, dimStyle.Render(" "+string(mode)+" "))
 			}
 		}
-		sb.WriteString(label + strings.Join(parts, ""))
+		sb.WriteString(label + strings.Join(parts, "") + inheritIndicator(inherited))
 		sb.WriteString("\n")
 	}
 
@@ -561,6 +747,7 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 			label = selectedLabelStyle.Render("On Complete:")
 		}
 
+		inherited := m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.OnComplete
 		completes := config.ValidOnCompletes()
 		var parts []string
 		for i, c := range completes {
@@ -574,7 +761,7 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 				parts = append(parts, dimStyle.Render(" "+string(c)+" "))
 			}
 		}
-		sb.WriteString(label + strings.Join(parts, ""))
+		sb.WriteString(label + strings.Join(parts, "") + inheritIndicator(inherited))
 		sb.WriteString("\n")
 	}
 
@@ -585,6 +772,7 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 			label = selectedLabelStyle.Render("Theme:")
 		}
 
+		inherited := m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.Theme
 		themes := []config.Theme{config.ThemeAuto, config.ThemeLight, config.ThemeDark}
 		var parts []string
 		for i, t := range themes {
@@ -598,7 +786,7 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 				parts = append(parts, dimStyle.Render(" "+string(t)+" "))
 			}
 		}
-		sb.WriteString(label + strings.Join(parts, ""))
+		sb.WriteString(label + strings.Join(parts, "") + inheritIndicator(inherited))
 		sb.WriteString("\n")
 	}
 
@@ -609,6 +797,7 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 			label = selectedLabelStyle.Render("Non-Git Workspace:")
 		}
 
+		inherited := m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.NonGitWorkspace
 		workspaces := []string{"shared", "copy"}
 		var parts []string
 		for i, w := range workspaces {
@@ -622,7 +811,7 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 				parts = append(parts, dimStyle.Render(" "+w+" "))
 			}
 		}
-		sb.WriteString(label + strings.Join(parts, ""))
+		sb.WriteString(label + strings.Join(parts, "") + inheritIndicator(inherited))
 		sb.WriteString("\n")
 	}
 
@@ -633,6 +822,7 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 			label = selectedLabelStyle.Render("Verify Required:")
 		}
 
+		inherited := m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.VerifyRequired
 		var onText, offText string
 		if m.config.VerifyRequired {
 			if m.field == SettingsFieldVerifyRequired {
@@ -649,7 +839,7 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 				offText = valueStyle.Render("[off]")
 			}
 		}
-		sb.WriteString(label + onText + " " + offText)
+		sb.WriteString(label + onText + " " + offText + inheritIndicator(inherited))
 		sb.WriteString("\n")
 	}
 }
@@ -728,18 +918,29 @@ func (m *SettingsUI) renderNotificationsTab(sb *strings.Builder, labelStyle, sel
 
 // Result returns the settings result.
 func (m *SettingsUI) Result() SettingsResult {
+	// Apply changes to ensure config is up-to-date
+	m.applyChanges()
+
+	// Attach inherit config to project config
+	m.projectConfig.Inherit = m.inheritConfig
+
 	return SettingsResult{
-		Config:    m.config,
-		Cancelled: m.cancelled,
+		GlobalConfig:  m.globalConfig,
+		ProjectConfig: m.projectConfig,
+		InheritConfig: m.inheritConfig,
+		Scope:         m.scope,
+		Cancelled:     m.cancelled,
 	}
 }
 
 // RunSettingsUI runs the settings UI and returns the result.
-func RunSettingsUI(cfg *config.Config, isGitRepo bool) (*SettingsResult, error) {
+// globalCfg is the global config from $HOME/.paw/config.
+// projectCfg is the project config from .paw/config.
+func RunSettingsUI(globalCfg, projectCfg *config.Config, isGitRepo bool) (*SettingsResult, error) {
 	logging.Debug("-> RunSettingsUI(isGitRepo=%v)", isGitRepo)
 	defer logging.Debug("<- RunSettingsUI")
 
-	m := NewSettingsUI(cfg, isGitRepo)
+	m := NewSettingsUI(globalCfg, projectCfg, isGitRepo)
 	logging.Debug("RunSettingsUI: starting tea.Program")
 	p := tea.NewProgram(m)
 
@@ -751,6 +952,6 @@ func RunSettingsUI(cfg *config.Config, isGitRepo bool) (*SettingsResult, error) 
 
 	ui := finalModel.(*SettingsUI)
 	result := ui.Result()
-	logging.Debug("RunSettingsUI: completed, cancelled=%v", result.Cancelled)
+	logging.Debug("RunSettingsUI: completed, cancelled=%v, scope=%d", result.Cancelled, result.Scope)
 	return &result, nil
 }
