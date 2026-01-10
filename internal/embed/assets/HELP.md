@@ -27,7 +27,7 @@ Claude Code-based autonomous agent work environment
 ### Toggle Panels
   ⌃T          Toggle templates (show template selector)
   ⌃O          Toggle logs (show log viewer)
-  ⌃G          Toggle git status
+  ⌃G          Toggle git viewer
   ⌃B          Toggle bottom (shell pane)
   ⌃/          Toggle help
 

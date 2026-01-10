@@ -12,6 +12,7 @@ WORKTREE_DIR  - Workspace path (set when non-git copy mode is enabled)
 WINDOW_ID     - tmux window ID for status updates
 ON_COMPLETE   - Task completion mode (less relevant for non-git)
 PAW_HOME      - PAW installation directory
+PAW_BIN       - PAW binary path (for calling commands)
 SESSION_NAME  - tmux session name
 ```
 
@@ -56,6 +57,13 @@ PAW will switch the window state automatically. Do not rename windows manually.
 PAW_WAITING
 ```
 
+**✅ Done state (CRITICAL):**
+When verification succeeds and work is complete, print a line containing exactly `PAW_DONE` to signal task completion.
+This ensures the window status changes to ✅ immediately.
+```text
+PAW_DONE
+```
+
 ---
 
 ## Autonomous Workflow
@@ -85,7 +93,8 @@ If the task is simple, skip Phase 1 and start Phase 2 after reading the task.
 ### Phase 3: Complete
 1. Ensure all tests pass (if applicable)
 2. Log: "Work complete - ready to finish"
-3. Message the user: "Please press `⌃F` to finish."
+3. Print `PAW_DONE` on its own line to update window status to ✅.
+4. Message the user: "Please press `⌃F` to finish."
 
 ---
 
@@ -107,7 +116,8 @@ Final tests → log completion → user finishes
 
 1. Verify all changes
 2. Write the completion log
-3. Message the user: "Please press `⌃F` to finish."
+3. Print `PAW_DONE` on its own line to update window status to ✅.
+4. Message the user: "Please press `⌃F` to finish."
 
 ### Automatic handling on errors
 - **Build error**: Analyze the message → attempt a fix
