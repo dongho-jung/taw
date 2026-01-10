@@ -154,23 +154,16 @@ func (m *TaskInput) renderOptionsPanel() string {
 		}
 
 		models := config.ValidModels()
-		maxLen := 0
-		for _, model := range models {
-			if len(model) > maxLen {
-				maxLen = len(model)
-			}
-		}
 		var parts []string
 		for i, model := range models {
-			paddedName := fmt.Sprintf("%-*s", maxLen, string(model))
 			if i == m.modelIdx {
 				if isSelected {
-					parts = append(parts, selectedValueStyle.Render("["+paddedName+"]"))
+					parts = append(parts, selectedValueStyle.Render("["+string(model)+"]"))
 				} else {
-					parts = append(parts, valueStyle.Render("["+paddedName+"]"))
+					parts = append(parts, valueStyle.Render("["+string(model)+"]"))
 				}
 			} else {
-				parts = append(parts, dimStyle.Render(" "+paddedName+" "))
+				parts = append(parts, dimStyle.Render(" "+string(model)+" "))
 			}
 		}
 		modelLine := label + strings.Join(parts, "")
