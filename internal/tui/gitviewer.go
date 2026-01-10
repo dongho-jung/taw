@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // gitMode represents different git command modes
@@ -98,7 +99,15 @@ func (m *GitViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "right", "l":
 		if !m.wordWrap {
+			// Limit horizontal scroll to max line width minus screen width
+			maxScroll := m.maxLineWidth() - m.width
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
 			m.horizontalPos += 10
+			if m.horizontalPos > maxScroll {
+				m.horizontalPos = maxScroll
+			}
 		}
 
 	case "g":
@@ -135,9 +144,10 @@ func (m *GitViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "w":
 		// Toggle word wrap
 		m.wordWrap = !m.wordWrap
-		if m.wordWrap {
-			m.horizontalPos = 0
-		}
+		// Reset scroll positions when toggling wrap mode
+		// (line count changes, so current position may be invalid)
+		m.scrollPos = 0
+		m.horizontalPos = 0
 
 	case "pgup", "ctrl+b":
 		m.scrollUp(m.contentHeight())
@@ -192,20 +202,22 @@ func (m *GitViewer) getDisplayLines() []string {
 		return m.lines
 	}
 
-	// Word wrap mode: wrap long lines
+	// Word wrap mode: wrap long lines (ANSI-aware)
 	var wrapped []string
 	for _, line := range m.lines {
-		if len(line) <= m.width {
+		lineWidth := ansi.StringWidth(line)
+		if lineWidth <= m.width {
 			wrapped = append(wrapped, line)
 		} else {
-			// Wrap the line
-			for len(line) > 0 {
-				end := m.width
-				if end > len(line) {
-					end = len(line)
+			// Wrap the line using visual positions
+			pos := 0
+			for pos < lineWidth {
+				end := pos + m.width
+				if end > lineWidth {
+					end = lineWidth
 				}
-				wrapped = append(wrapped, line[:end])
-				line = line[end:]
+				wrapped = append(wrapped, ansi.Cut(line, pos, end))
+				pos = end
 			}
 		}
 	}
@@ -236,23 +248,29 @@ func (m *GitViewer) View() tea.View {
 	// Render visible lines
 	for i := m.scrollPos; i < endPos; i++ {
 		line := displayLines[i]
+		lineWidth := ansi.StringWidth(line)
 
 		if !m.wordWrap {
-			// Apply horizontal scroll
-			if m.horizontalPos < len(line) {
-				line = line[m.horizontalPos:]
+			// Apply horizontal scroll (ANSI-aware)
+			if m.horizontalPos < lineWidth {
+				line = ansi.Cut(line, m.horizontalPos, lineWidth)
+				lineWidth = ansi.StringWidth(line)
 			} else {
 				line = ""
+				lineWidth = 0
 			}
 		}
 
-		// Truncate to screen width
-		if len(line) > m.width {
-			line = line[:m.width]
+		// Truncate to screen width (ANSI-aware)
+		if lineWidth > m.width {
+			line = ansi.Cut(line, 0, m.width)
+			lineWidth = m.width
 		}
 
-		// Pad to full width
-		line = fmt.Sprintf("%-*s", m.width, line)
+		// Pad to full width (accounting for visual width)
+		if lineWidth < m.width {
+			line = line + strings.Repeat(" ", m.width-lineWidth)
+		}
 		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
@@ -292,12 +310,12 @@ func (m *GitViewer) View() tea.View {
 		status += "(empty) "
 	}
 
-	// Keybindings hint
+	// Keybindings hint (use ansi.StringWidth for unicode characters like ⌃)
 	hint := "s:status L:log a:all w:wrap g/G:top/end ⌃G/q:close"
-	padding := m.width - len(status) - len(hint)
+	padding := m.width - ansi.StringWidth(status) - ansi.StringWidth(hint)
 	if padding < 0 {
 		hint = "⌃G/q:close"
-		padding = m.width - len(status) - len(hint)
+		padding = m.width - ansi.StringWidth(status) - ansi.StringWidth(hint)
 		if padding < 0 {
 			padding = 0
 		}
@@ -322,6 +340,18 @@ func (m *GitViewer) contentHeight() int {
 		h = 1
 	}
 	return h
+}
+
+// maxLineWidth returns the maximum visual width among all lines.
+func (m *GitViewer) maxLineWidth() int {
+	maxWidth := 0
+	for _, line := range m.lines {
+		w := ansi.StringWidth(line)
+		if w > maxWidth {
+			maxWidth = w
+		}
+	}
+	return maxWidth
 }
 
 // loadGitOutput loads git output based on the current mode.
