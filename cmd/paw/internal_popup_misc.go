@@ -139,13 +139,15 @@ var toggleCmdPaletteCmd = &cobra.Command{
 		// Run command palette in popup
 		paletteCmd := fmt.Sprintf("%s internal cmd-palette-tui %s", pawBin, sessionName)
 
-		return tm.DisplayPopup(tmux.PopupOpts{
+		// Ignore error - popup returns non-zero when closed with Esc/Ctrl+C
+		_ = tm.DisplayPopup(tmux.PopupOpts{
 			Width:  constants.PopupWidthPalette,
 			Height: constants.PopupHeightPalette,
 			Title:  "",
 			Close:  true,
 			Style:  "fg=terminal,bg=terminal",
 		}, paletteCmd)
+		return nil
 	},
 }
 
@@ -213,13 +215,16 @@ var cmdPaletteTUICmd = &cobra.Command{
 
 		switch selected.ID {
 		case "settings":
-			logging.Debug("cmdPaletteTUICmd: executing toggle-settings")
-			settingsCmd := exec.Command(pawBin, "internal", "toggle-settings", sessionName)
-			if err := settingsCmd.Run(); err != nil {
-				logging.Debug("cmdPaletteTUICmd: toggle-settings failed: %v", err)
-				return err
-			}
+			// Queue the settings popup to open after this popup closes
+			// Use tmux run-shell -b (background) with a small delay
+			logging.Debug("cmdPaletteTUICmd: queuing toggle-settings in background")
+			tm := tmux.New(sessionName)
+			// Run toggle-settings in background after popup closes
+			_ = tm.Run("run-shell", "-b",
+				fmt.Sprintf("sleep 0.1 && %s internal toggle-settings %s", pawBin, sessionName))
+			// Exit immediately to close this popup
 			return nil
+
 		case "show-diff":
 			// Queue the diff popup to open after this popup closes
 			// Use tmux run-shell -b (background) with a small delay
@@ -279,7 +284,8 @@ var toggleSettingsCmd = &cobra.Command{
 		settingsCmd := fmt.Sprintf("%s internal settings-tui %s", pawBin, sessionName)
 		logging.Debug("toggleSettingsCmd: opening popup with cmd=%s", settingsCmd)
 
-		err = tm.DisplayPopup(tmux.PopupOpts{
+		// Ignore error - popup returns non-zero when closed with Esc/Ctrl+C
+		_ = tm.DisplayPopup(tmux.PopupOpts{
 			Width:     "70%",
 			Height:    "60%",
 			Title:     " Settings ",
@@ -287,10 +293,7 @@ var toggleSettingsCmd = &cobra.Command{
 			Style:     "fg=terminal,bg=terminal",
 			Directory: appCtx.ProjectDir,
 		}, settingsCmd)
-		if err != nil {
-			logging.Debug("toggleSettingsCmd: DisplayPopup failed: %v", err)
-		}
-		return err
+		return nil
 	},
 }
 
