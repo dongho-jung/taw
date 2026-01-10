@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -534,28 +535,17 @@ var historyPickerCmd = &cobra.Command{
 			return nil
 		}
 
-		// If user selected something, send it to the task input
+		// If user selected something, write it to the history selection file
+		// The TaskInput will read and apply this content on its next update
 		if action == tui.InputHistorySelect && selected != "" {
 			logging.Trace("historyPickerCmd: selected history item")
-			tm := tmux.New(sessionName)
 
-			// Get the current window name to check if we're in the new task window
-			windowName, _ := tm.Display("#{window_name}")
-			windowName = strings.TrimSpace(windowName)
-
-			// Only send keys if we're in the new task window (⭐️)
-			if strings.HasPrefix(windowName, constants.EmojiNew) {
-				// Send Ctrl+A to select all existing text, then send the selected content
-				// This replaces existing content instead of appending
-				if err := tm.SendKeys("", "C-a"); err != nil {
-					logging.Warn("Failed to send Ctrl+A: %v", err)
-				}
-				// Send the selected content (this will replace the selection)
-				if err := tm.SendKeysLiteral("", selected); err != nil {
-					logging.Warn("Failed to send history content: %v", err)
-				}
+			// Write selection to temp file for TaskInput to pick up
+			selectionPath := filepath.Join(appCtx.PawDir, constants.HistorySelectionFile)
+			if err := os.WriteFile(selectionPath, []byte(selected), 0644); err != nil {
+				logging.Warn("Failed to write history selection: %v", err)
 			} else {
-				logging.Debug("Not in new task window, skipping history injection")
+				logging.Debug("Wrote history selection to %s", selectionPath)
 			}
 		}
 

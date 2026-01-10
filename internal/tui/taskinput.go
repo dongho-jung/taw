@@ -253,6 +253,10 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
+	// Check for history selection file (from Ctrl+R picker)
+	// This replaces the current content with the selected history item
+	m.checkHistorySelection()
+
 	switch msg := msg.(type) {
 	case tickMsg:
 		// Refresh Kanban data on tick (expensive I/O is done here, not in View)

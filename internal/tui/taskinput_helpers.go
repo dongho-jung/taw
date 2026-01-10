@@ -1,11 +1,15 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/dongho-jung/paw/internal/constants"
 )
 
 // isCancelPending returns true if we're waiting for the second ESC/Ctrl+C press.
@@ -72,6 +76,33 @@ func (m *TaskInput) SetContent(content string) {
 	m.textarea.SetValue(content)
 	// Move cursor to end
 	m.textarea.CursorEnd()
+}
+
+// checkHistorySelection checks for a history selection file from Ctrl+R picker.
+// If found, it replaces the current content with the selected history item and deletes the file.
+func (m *TaskInput) checkHistorySelection() {
+	pawDir := findPawDir()
+	if pawDir == "" {
+		return
+	}
+
+	selectionPath := filepath.Join(pawDir, constants.HistorySelectionFile)
+	data, err := os.ReadFile(selectionPath)
+	if err != nil {
+		// File doesn't exist or can't be read - this is normal (no pending selection)
+		return
+	}
+
+	// Got a selection - replace content and delete the file
+	content := string(data)
+	if content != "" {
+		m.textarea.SetValue(content)
+		m.textarea.CursorEnd()
+		m.updateTextareaHeight()
+	}
+
+	// Delete the file to prevent re-loading on next update
+	_ = os.Remove(selectionPath)
 }
 
 // RunTaskInput runs the task input and returns the result.
