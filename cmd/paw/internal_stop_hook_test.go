@@ -103,6 +103,21 @@ func TestHasDoneMarker(t *testing.T) {
 			content: "Some output\nTask completed.\nPAW_DONE\nReady for review.\n",
 			want:    true,
 		},
+		{
+			name:    "done marker without segment marker but within strict distance",
+			content: "Line 1\nLine 2\nLine 3\nPAW_DONE\nLine 4\nLine 5\n",
+			want:    true, // Within 20 lines from end
+		},
+		{
+			name:    "old done marker without segment marker (beyond strict distance)",
+			content: "PAW_DONE\n" + generateLines(25) + "New work started...\n",
+			want:    false, // PAW_DONE is more than 20 lines from end, no segment marker
+		},
+		{
+			name:    "old done marker with new segment marker",
+			content: "PAW_DONE\n" + generateLines(25) + "⏺ New response\nWorking...\n",
+			want:    false, // PAW_DONE is in old segment
+		},
 		// Stale marker tests (user input after PAW_DONE)
 		{
 			name:    "stale marker - user input on same line as prompt",
@@ -139,6 +154,15 @@ func TestHasDoneMarker(t *testing.T) {
 			}
 		})
 	}
+}
+
+// generateLines creates N lines of filler content for testing distance limits.
+func generateLines(n int) string {
+	var result string
+	for i := 0; i < n; i++ {
+		result += "Line filler content...\n"
+	}
+	return result
 }
 
 func TestHasWaitingMarker(t *testing.T) {

@@ -395,6 +395,10 @@ func matchesWaitingMarkerStopHook(line string) bool {
 	return false
 }
 
+// doneMarkerNoSegmentDistance is the max distance to search for PAW_DONE when no segment marker is found.
+// This is much stricter than doneMarkerMaxDistance to prevent false positives from old markers.
+const doneMarkerNoSegmentDistance = 20
+
 // hasDoneMarker checks if the pane content contains the PAW_DONE marker.
 // The marker must appear on its own line (possibly with whitespace)
 // AND in the last segment (after the last ⏺ marker, which indicates a new Claude response).
@@ -413,11 +417,20 @@ func hasDoneMarker(content string) bool {
 
 	// Find the last segment (after the last ⏺ marker)
 	// This ensures we only detect PAW_DONE in the most recent agent response
-	segmentStart := findLastSegmentStartStopHook(lines)
+	segmentStart, hasSegment := findLastSegmentStartStopHookWithFlag(lines)
 
-	// Check the last N lines from the segment for the marker (agent may output text after PAW_DONE)
-	// Uses doneMarkerMaxDistance from wait.go for consistency
-	start := len(lines) - doneMarkerMaxDistance
+	// Determine how far back to search for the marker
+	var maxDistance int
+	if hasSegment {
+		// With segment marker: use generous distance (agent may output text after PAW_DONE)
+		maxDistance = doneMarkerMaxDistance
+	} else {
+		// Without segment marker: use strict distance to prevent false positives
+		// from old PAW_DONE markers that were output in previous responses
+		maxDistance = doneMarkerNoSegmentDistance
+	}
+
+	start := len(lines) - maxDistance
 	if start < segmentStart {
 		start = segmentStart
 	}
@@ -515,13 +528,20 @@ func isUIDecoration(line string) bool {
 // findLastSegmentStartStopHook finds the index of the last line starting with ⏺.
 // Returns 0 if no segment marker is found (search entire content).
 func findLastSegmentStartStopHook(lines []string) int {
+	idx, _ := findLastSegmentStartStopHookWithFlag(lines)
+	return idx
+}
+
+// findLastSegmentStartStopHookWithFlag finds the index of the last line starting with ⏺.
+// Returns (index, true) if found, or (0, false) if no segment marker is found.
+func findLastSegmentStartStopHookWithFlag(lines []string) (int, bool) {
 	for i := len(lines) - 1; i >= 0; i-- {
 		trimmed := strings.TrimSpace(lines[i])
 		if strings.HasPrefix(trimmed, "⏺") {
-			return i
+			return i, true
 		}
 	}
-	return 0
+	return 0, false
 }
 
 // matchesDoneMarkerStopHook checks if a line contains the PAW_DONE marker.
