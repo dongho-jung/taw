@@ -364,6 +364,35 @@ func (k *KanbanView) InitializeColumnSelection(col int) {
 	}
 }
 
+// GetSelectedTask returns the currently selected task in the focused column.
+// Returns nil if no column is focused or no task is selected.
+func (k *KanbanView) GetSelectedTask() *service.DiscoveredTask {
+	if k.focusedCol < 0 || k.focusedCol > 3 {
+		return nil
+	}
+	idx := k.selectedTaskIdx[k.focusedCol]
+	if idx < 0 {
+		return nil
+	}
+
+	var tasks []*service.DiscoveredTask
+	switch k.focusedCol {
+	case 0:
+		tasks = k.working
+	case 1:
+		tasks = k.waiting
+	case 2:
+		tasks = k.done
+	case 3:
+		tasks = k.warning
+	}
+
+	if idx >= len(tasks) {
+		return nil
+	}
+	return tasks[idx]
+}
+
 // ColumnWidth returns the width of each column (including border and padding).
 func (k *KanbanView) ColumnWidth() int {
 	// Must match the calculation in Render()

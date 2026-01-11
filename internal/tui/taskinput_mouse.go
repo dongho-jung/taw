@@ -282,6 +282,12 @@ func (m *TaskInput) updateKanbanPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "pgdown", "ctrl+d":
 		m.kanban.ScrollDown(5)
 		return m, nil
+	// Enter/Space: jump to selected task
+	case "enter", " ":
+		if task := m.kanban.GetSelectedTask(); task != nil {
+			return m, jumpToTask(task)
+		}
+		return m, nil
 	}
 
 	return m, nil
