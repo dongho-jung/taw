@@ -19,11 +19,13 @@ const (
 )
 
 // TaskEmojis contains all emojis used for task windows.
+// Note: EmojiWarning is kept for backward compatibility with old window names
+// but is no longer used for new windows. Warning state now maps to Waiting.
 var TaskEmojis = []string{
 	EmojiWorking,
 	EmojiWaiting,
 	EmojiDone,
-	EmojiWarning,
+	EmojiWarning, // Legacy: kept for detecting old windows, new windows use EmojiWaiting
 }
 
 // IsTaskWindow returns true if the window name has a task emoji prefix.

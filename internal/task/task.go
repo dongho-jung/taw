@@ -310,15 +310,15 @@ func (t *Task) HasPR() bool {
 }
 
 // GetWindowName returns the window name with status emoji.
+// Note: StatusCorrupted maps to Waiting emoji (Warning status removed from UI).
 func (t *Task) GetWindowName() string {
 	emoji := constants.EmojiWorking
 	switch t.Status {
-	case StatusWaiting:
+	case StatusWaiting, StatusCorrupted:
+		// Corrupted status now displays as Waiting (Warning removed from UI)
 		emoji = constants.EmojiWaiting
 	case StatusDone:
 		emoji = constants.EmojiDone
-	case StatusCorrupted:
-		emoji = constants.EmojiWarning
 	}
 
 	return emoji + constants.TruncateForWindowName(t.Name)

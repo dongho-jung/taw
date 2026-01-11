@@ -52,9 +52,8 @@ Claude Code-based autonomous agent work environment
 
   ⭐️  New task input window
   🤖  Agent working
-  💬  Waiting for user input
+  💬  Waiting for user input / needs attention
   ✅  Task completed
-  ⚠️  Warning (merge failed, needs manual resolution)
 
 ## Template Selector (⌃T)
 

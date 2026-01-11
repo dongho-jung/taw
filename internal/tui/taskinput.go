@@ -358,50 +358,41 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.kanban.SetSize(msg.Width, kanbanHeight)
 
 		// Calculate widths for alignment with Kanban columns.
-		// Adaptive layout: switches between normal and narrow mode based on terminal width.
+		// 3-column Kanban layout: Working, Waiting, Done
 		//
-		// Normal mode (wide terminal):
-		// - Textarea right border aligns with Done column right border (3rd column)
-		// - Options right border aligns with Warning column right border (4th column)
+		// Alignment goals:
+		// - Textarea right border aligns with Waiting column (2nd column)
+		// - Options right border aligns with Done column (3rd column)
 		//
-		// Narrow mode (narrow terminal, when single column < minOptionsPanelWidth):
-		// - Textarea right border aligns with Waiting column right border (2nd column)
-		// - Options left border aligns with Done column left border (3rd column)
-		// - Options right border aligns with Warning column right border (4th column)
-		const kanbanColumnGap = 8 // Same as kanban.go: 4 columns × 2 chars border
+		// On narrow terminals where column width < minOptionsPanelWidth,
+		// we prioritize Options minimum width over perfect alignment.
+		const kanbanColumnGap = 6 // Same as kanban.go: 3 columns × 2 chars border
 		const minOptionsInnerWidth = 37
 		const optionsPaddingBorder = 6                                           // padding(4) + border(2)
 		const minOptionsPanelWidth = minOptionsInnerWidth + optionsPaddingBorder // 43
+		const minTextareaContentWidth = 30
 
 		// Calculate kanban column display width (must match kanban.go calculation)
-		kanbanColWidth := (msg.Width - kanbanColumnGap) / 4
+		kanbanColWidth := (msg.Width - kanbanColumnGap) / 3
 		kanbanColDisplayWidth := kanbanColWidth + 2 // +2 for border
 
-		// Detect narrow terminal: switch layout when single column is too narrow for options
-		isNarrow := kanbanColDisplayWidth < minOptionsPanelWidth
-
 		var textareaDisplayWidth int
-		if isNarrow {
-			// Narrow mode: textarea spans 2 columns (Working + Waiting)
-			// Waiting right = 2 * kanbanColDisplayWidth
-			textareaDisplayWidth = 2 * kanbanColDisplayWidth
-			// Options spans 2 columns (Done + Warning)
-			m.optionsPanelWidth = 2 * kanbanColDisplayWidth
+		if kanbanColDisplayWidth >= minOptionsPanelWidth {
+			// Wide enough: use exact column-aligned widths
+			// This ensures perfect border alignment with Kanban columns
+			textareaDisplayWidth = 2 * kanbanColDisplayWidth // Aligns with Waiting right border
+			m.optionsPanelWidth = kanbanColDisplayWidth      // Aligns with Done right border
 		} else {
-			// Normal mode: textarea spans 3 columns (Working + Waiting + Done)
-			// Done right = 3 * kanbanColDisplayWidth
-			textareaDisplayWidth = 3 * kanbanColDisplayWidth
-			// Options spans 1 column (Warning)
-			// But ensure minimum width for content
-			m.optionsPanelWidth = max(minOptionsPanelWidth, kanbanColDisplayWidth)
+			// Narrow terminal: prioritize Options minimum width over alignment
+			m.optionsPanelWidth = minOptionsPanelWidth
+			textareaDisplayWidth = msg.Width - m.optionsPanelWidth
 		}
 
-		// Textarea display width = calculated above based on mode
-		// SetWidth sets content+padding width, border adds 2 more
 		textareaContentWidth := textareaDisplayWidth - 2 // -2 for border
-		if textareaContentWidth > 30 {
-			m.textarea.SetWidth(textareaContentWidth)
+		if textareaContentWidth < minTextareaContentWidth {
+			textareaContentWidth = minTextareaContentWidth
 		}
+		m.textarea.SetWidth(textareaContentWidth)
 
 	case tea.KeyMsg:
 		keyStr := msg.String()
@@ -479,13 +470,13 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		// Toggle panel backward: Alt+Shift+Tab (cycle backward through panels)
-		// Cycle order: Left → Kanban(col 3) → Kanban(col 2) → Kanban(col 1) → Kanban(col 0) → Right → Left
+		// Cycle order: Left → Kanban(col 2) → Kanban(col 1) → Kanban(col 0) → Right → Left
 		case "alt+shift+tab":
 			m.applyOptionInputValues()
 			switch m.focusPanel {
 			case FocusPanelLeft:
-				// Move to last Kanban column
-				m.switchFocusToKanbanColumn(3)
+				// Move to last Kanban column (Done = column 2)
+				m.switchFocusToKanbanColumn(2)
 			case FocusPanelRight:
 				m.switchFocusTo(FocusPanelLeft)
 			case FocusPanelKanban:

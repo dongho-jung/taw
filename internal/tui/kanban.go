@@ -16,6 +16,7 @@ import (
 )
 
 // KanbanView renders a Kanban-style task board.
+// The board has 3 columns: Working, Waiting, Done.
 type KanbanView struct {
 	width   int
 	height  int
@@ -23,24 +24,24 @@ type KanbanView struct {
 	service *service.TaskDiscoveryService
 
 	// Cached task data (refreshed on tick, not on every render)
+	// 3 columns: Working, Waiting, Done (Warning merged into Waiting)
 	working []*service.DiscoveredTask
 	waiting []*service.DiscoveredTask
 	done    []*service.DiscoveredTask
-	warning []*service.DiscoveredTask
 
 	// Scroll state
 	scrollOffset int
 	focused      bool
-	focusedCol   int // -1 = none, 0-3 = specific column
+	focusedCol   int // -1 = none, 0-2 = specific column
 
 	// Task selection state (per column)
 	// -1 = no task selected, 0+ = index of selected task
-	selectedTaskIdx [4]int
+	selectedTaskIdx [3]int
 
 	// Text selection state (column-aware)
 	selecting     bool
 	hasSelection  bool // True if a selection was made (persists until ClearSelection)
-	selectColumn  int  // Column being selected (0-3), -1 if none
+	selectColumn  int  // Column being selected (0-2), -1 if none
 	selectStartX  int  // Start X position (relative to column)
 	selectStartY  int  // Start row (relative to kanban top)
 	selectEndX    int  // End X position (relative to column)
@@ -54,9 +55,9 @@ func NewKanbanView(isDark bool) *KanbanView {
 	return &KanbanView{
 		isDark:          isDark,
 		service:         service.NewTaskDiscoveryService(),
-		focusedCol:      -1,                  // No column focused initially
-		selectColumn:    -1,                  // No column selected initially
-		selectedTaskIdx: [4]int{-1, -1, -1, -1}, // No task selected in any column
+		focusedCol:      -1,              // No column focused initially
+		selectColumn:    -1,              // No column selected initially
+		selectedTaskIdx: [3]int{-1, -1, -1}, // No task selected in any column
 	}
 }
 
@@ -74,14 +75,15 @@ func (k *KanbanView) SetSize(width, height int) {
 // Refresh updates the cached task data by discovering all tasks.
 // This should be called periodically (e.g., on tick) rather than on every render.
 func (k *KanbanView) Refresh() {
-	k.working, k.waiting, k.done, k.warning = k.service.DiscoverAll()
+	k.working, k.waiting, k.done = k.service.DiscoverAll()
 }
 
 // Render renders the Kanban board using cached task data.
 // Call Refresh() first to update the cache.
 func (k *KanbanView) Render() string {
 	// Use cached task data (populated by Refresh())
-	working, waiting, done, warning := k.working, k.waiting, k.done, k.warning
+	// 3 columns: Working, Waiting, Done (Warning merged into Waiting)
+	working, waiting, done := k.working, k.waiting, k.done
 
 	// Styles (adaptive to light/dark mode)
 	lightDark := lipgloss.LightDark(k.isDark)
@@ -106,18 +108,18 @@ func (k *KanbanView) Render() string {
 		Foreground(dimColor).
 		Italic(true)
 
-	// Calculate column width (4 columns with gaps)
+	// Calculate column width (3 columns with gaps)
 	// Minimum width per column
 	const minColumnWidth = 15
 	// columnGap accounts for borders only (padding is included in lipgloss Width):
 	// - In lipgloss v2, Width(X) sets content+padding width, then border is added
-	// - Borders: 4 columns × 2 chars = 8
+	// - Borders: 3 columns × 2 chars = 6
 	// Note: Scrollbar (2 chars) is added separately after columns, not included here
-	const columnGap = 8
-	if k.width < minColumnWidth*4+columnGap {
+	const columnGap = 6
+	if k.width < minColumnWidth*3+columnGap {
 		return ""
 	}
-	columnWidth := (k.width - columnGap) / 4
+	columnWidth := (k.width - columnGap) / 3
 
 	// Build each column
 	// Colors are chosen to have good contrast on both light and dark backgrounds
@@ -125,7 +127,6 @@ func (k *KanbanView) Render() string {
 	workingColor := lightDark(lipgloss.Color("28"), lipgloss.Color("34"))   // Dark green / Bright green
 	waitingColor := lightDark(lipgloss.Color("130"), lipgloss.Color("178")) // Dark orange / Gold
 	doneColor := lightDark(lipgloss.Color("240"), lipgloss.Color("250"))    // Dark gray / Light gray
-	warningColor := lightDark(lipgloss.Color("160"), lipgloss.Color("203")) // Dark red / Light red
 
 	columns := []struct {
 		emoji string
@@ -136,7 +137,6 @@ func (k *KanbanView) Render() string {
 		{constants.EmojiWorking, "Working", working, workingColor},
 		{constants.EmojiWaiting, "Waiting", waiting, waitingColor},
 		{constants.EmojiDone, "Done", done, doneColor},
-		{constants.EmojiWarning, "Warning", warning, warningColor},
 	}
 
 	var columnViews []string
@@ -249,12 +249,12 @@ func (k *KanbanView) Render() string {
 
 // HasTasks returns true if there are any cached tasks to display.
 func (k *KanbanView) HasTasks() bool {
-	return len(k.working)+len(k.waiting)+len(k.done)+len(k.warning) > 0
+	return len(k.working)+len(k.waiting)+len(k.done) > 0
 }
 
 // TaskCount returns the total number of cached tasks.
 func (k *KanbanView) TaskCount() int {
-	return len(k.working) + len(k.waiting) + len(k.done) + len(k.warning)
+	return len(k.working) + len(k.waiting) + len(k.done)
 }
 
 // SetFocused sets the focus state of the kanban view.
@@ -270,9 +270,9 @@ func (k *KanbanView) IsFocused() bool {
 	return k.focused
 }
 
-// SetFocusedColumn sets which column is focused (0-3), or -1 for none.
+// SetFocusedColumn sets which column is focused (0-2), or -1 for none.
 func (k *KanbanView) SetFocusedColumn(col int) {
-	if col >= -1 && col < 4 {
+	if col >= -1 && col < 3 {
 		k.focusedCol = col
 	}
 }
@@ -291,8 +291,6 @@ func (k *KanbanView) ColumnTaskCount(col int) int {
 		return len(k.waiting)
 	case 2:
 		return len(k.done)
-	case 3:
-		return len(k.warning)
 	default:
 		return 0
 	}
@@ -300,7 +298,7 @@ func (k *KanbanView) ColumnTaskCount(col int) int {
 
 // SelectedTaskIndex returns the selected task index for a column (-1 if none).
 func (k *KanbanView) SelectedTaskIndex(col int) int {
-	if col < 0 || col > 3 {
+	if col < 0 || col > 2 {
 		return -1
 	}
 	return k.selectedTaskIdx[col]
@@ -308,7 +306,7 @@ func (k *KanbanView) SelectedTaskIndex(col int) int {
 
 // SetSelectedTaskIndex sets the selected task index for a column.
 func (k *KanbanView) SetSelectedTaskIndex(col, idx int) {
-	if col < 0 || col > 3 {
+	if col < 0 || col > 2 {
 		return
 	}
 	taskCount := k.ColumnTaskCount(col)
@@ -327,7 +325,7 @@ func (k *KanbanView) SetSelectedTaskIndex(col, idx int) {
 
 // SelectPreviousTask moves selection up in the focused column.
 func (k *KanbanView) SelectPreviousTask() {
-	if k.focusedCol < 0 || k.focusedCol > 3 {
+	if k.focusedCol < 0 || k.focusedCol > 2 {
 		return
 	}
 	taskCount := k.ColumnTaskCount(k.focusedCol)
@@ -345,7 +343,7 @@ func (k *KanbanView) SelectPreviousTask() {
 
 // SelectNextTask moves selection down in the focused column.
 func (k *KanbanView) SelectNextTask() {
-	if k.focusedCol < 0 || k.focusedCol > 3 {
+	if k.focusedCol < 0 || k.focusedCol > 2 {
 		return
 	}
 	taskCount := k.ColumnTaskCount(k.focusedCol)
@@ -364,7 +362,7 @@ func (k *KanbanView) SelectNextTask() {
 // InitializeColumnSelection initializes selection when a column gains focus.
 // If the column has tasks and no selection, selects the first task.
 func (k *KanbanView) InitializeColumnSelection(col int) {
-	if col < 0 || col > 3 {
+	if col < 0 || col > 2 {
 		return
 	}
 	taskCount := k.ColumnTaskCount(col)
@@ -376,7 +374,7 @@ func (k *KanbanView) InitializeColumnSelection(col int) {
 // GetSelectedTask returns the currently selected task in the focused column.
 // Returns nil if no column is focused or no task is selected.
 func (k *KanbanView) GetSelectedTask() *service.DiscoveredTask {
-	if k.focusedCol < 0 || k.focusedCol > 3 {
+	if k.focusedCol < 0 || k.focusedCol > 2 {
 		return nil
 	}
 	idx := k.selectedTaskIdx[k.focusedCol]
@@ -392,8 +390,6 @@ func (k *KanbanView) GetSelectedTask() *service.DiscoveredTask {
 		tasks = k.waiting
 	case 2:
 		tasks = k.done
-	case 3:
-		tasks = k.warning
 	}
 
 	if idx >= len(tasks) {
@@ -408,12 +404,12 @@ func (k *KanbanView) ColumnWidth() int {
 	const minColumnWidth = 15
 	// columnGap accounts for borders only (padding is included in lipgloss Width):
 	// - In lipgloss v2, Width(X) sets content+padding width, then border is added
-	// - Borders: 4 columns × 2 chars = 8
-	const columnGap = 8
-	if k.width < minColumnWidth*4+columnGap {
+	// - Borders: 3 columns × 2 chars = 6
+	const columnGap = 6
+	if k.width < minColumnWidth*3+columnGap {
 		return 0
 	}
-	columnWidth := (k.width - columnGap) / 4
+	columnWidth := (k.width - columnGap) / 3
 	if columnWidth < minColumnWidth {
 		columnWidth = minColumnWidth
 	}
@@ -454,7 +450,7 @@ func (k *KanbanView) maxScrollOffset() int {
 
 // maxTaskLinesInAnyColumn returns the max number of lines needed across all columns.
 func (k *KanbanView) maxTaskLinesInAnyColumn() int {
-	columns := [][]*service.DiscoveredTask{k.working, k.waiting, k.done, k.warning}
+	columns := [][]*service.DiscoveredTask{k.working, k.waiting, k.done}
 	maxLines := 0
 	for _, tasks := range columns {
 		lines := 0
@@ -607,7 +603,7 @@ func (k *KanbanView) CopySelection() error {
 		return nil
 	}
 
-	if k.selectColumn < 0 || k.selectColumn > 3 {
+	if k.selectColumn < 0 || k.selectColumn > 2 {
 		return nil // No valid column selected
 	}
 
@@ -687,7 +683,7 @@ func displayColToByteOffset(s string, displayCol int) int {
 // applySelectionHighlight applies selection highlight to the rendered board.
 // Selection is column-aware: only highlights within the selected column's boundaries.
 func (k *KanbanView) applySelectionHighlight(board string) string {
-	if k.selectColumn < 0 || k.selectColumn > 3 {
+	if k.selectColumn < 0 || k.selectColumn > 2 {
 		return board // No valid column selected
 	}
 
@@ -773,8 +769,8 @@ func (k *KanbanView) cacheTextForCopy(board string) {
 // Returns -1 if all columns are empty.
 func (k *KanbanView) NextNonEmptyColumn(currentCol int) int {
 	// Try columns after currentCol first
-	for i := 1; i <= 4; i++ {
-		col := (currentCol + i) % 4
+	for i := 1; i <= 3; i++ {
+		col := (currentCol + i) % 3
 		if k.ColumnTaskCount(col) > 0 {
 			return col
 		}
@@ -783,12 +779,12 @@ func (k *KanbanView) NextNonEmptyColumn(currentCol int) int {
 }
 
 // PrevNonEmptyColumn finds the previous column with tasks, starting from currentCol-1.
-// Wraps around to column 3 if no column is found before currentCol.
+// Wraps around to column 2 if no column is found before currentCol.
 // Returns -1 if all columns are empty.
 func (k *KanbanView) PrevNonEmptyColumn(currentCol int) int {
 	// Try columns before currentCol first
-	for i := 1; i <= 4; i++ {
-		col := (currentCol - i + 4) % 4
+	for i := 1; i <= 3; i++ {
+		col := (currentCol - i + 3) % 3
 		if k.ColumnTaskCount(col) > 0 {
 			return col
 		}
@@ -796,10 +792,10 @@ func (k *KanbanView) PrevNonEmptyColumn(currentCol int) int {
 	return -1 // All columns empty
 }
 
-// FirstNonEmptyColumn returns the first column (0-3) that has tasks.
+// FirstNonEmptyColumn returns the first column (0-2) that has tasks.
 // Returns -1 if all columns are empty.
 func (k *KanbanView) FirstNonEmptyColumn() int {
-	for col := 0; col < 4; col++ {
+	for col := 0; col < 3; col++ {
 		if k.ColumnTaskCount(col) > 0 {
 			return col
 		}
@@ -808,11 +804,11 @@ func (k *KanbanView) FirstNonEmptyColumn() int {
 }
 
 // GetTaskAtPosition returns the task at the given column and row position.
-// col is the column index (0-3: working, waiting, done, warning).
+// col is the column index (0-2: working, waiting, done).
 // row is the Y position relative to the kanban area (0-indexed).
 // Returns nil if no task is found at that position.
 func (k *KanbanView) GetTaskAtPosition(col, row int) *service.DiscoveredTask {
-	if col < 0 || col > 3 {
+	if col < 0 || col > 2 {
 		return nil
 	}
 
@@ -825,8 +821,6 @@ func (k *KanbanView) GetTaskAtPosition(col, row int) *service.DiscoveredTask {
 		tasks = k.waiting
 	case 2:
 		tasks = k.done
-	case 3:
-		tasks = k.warning
 	}
 
 	if len(tasks) == 0 {

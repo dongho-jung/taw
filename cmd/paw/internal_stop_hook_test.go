@@ -17,8 +17,8 @@ func TestParseStopHookDecision(t *testing.T) {
 		{name: "working lowercase", output: "working", want: task.StatusWorking, ok: true},
 		{name: "waiting exact maps to working", output: "WAITING", want: task.StatusWorking, ok: true}, // WAITING -> WORKING (watch-wait handles it)
 		{name: "done lowercase", output: "done", want: task.StatusDone, ok: true},
-		{name: "warning exact", output: "WARNING", want: task.StatusCorrupted, ok: true},
-		{name: "warning prefix", output: "warn", want: task.StatusCorrupted, ok: true},
+		{name: "warning exact", output: "WARNING", want: task.StatusWaiting, ok: true}, // WARNING -> WAITING (removed from UI)
+		{name: "warning prefix", output: "warn", want: task.StatusWaiting, ok: true},  // WARNING -> WAITING (removed from UI)
 		{name: "contains working", output: "Status: WORKING", want: task.StatusWorking, ok: true},
 		{name: "contains waiting maps to working", output: "Result: WAITING", want: task.StatusWorking, ok: true}, // WAITING -> WORKING
 		{name: "unknown", output: "maybe", want: "", ok: false},

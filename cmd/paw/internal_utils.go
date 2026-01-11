@@ -237,9 +237,8 @@ func renameWindowWithStatus(tm tmux.Client, windowID, name, pawDir, taskName, so
 	// Send notifications only when status actually changes (avoid duplicates)
 	// This centralized notification ensures DONE state always triggers alerts.
 	//
-	// NOTE: WAITING and WARNING states are handled by their respective code paths:
-	// - WAITING: watch-wait watcher (wait.go) provides action buttons and prompt context
-	// - WARNING: handlers provide contextual messages (merge failed, verification failed, etc.)
+	// NOTE: WAITING state is handled by watch-wait watcher (wait.go) which provides
+	// action buttons and prompt context. Warning states now also display as WAITING.
 	if prevStatus != status && status == task.StatusDone {
 		// Load config to get notification settings
 		var notificationsConfig *config.NotificationsConfig

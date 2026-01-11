@@ -80,7 +80,7 @@ func (m *TaskInput) applyOptionInputValues() {
 }
 
 // renderOptionsPanel renders the options panel for the right side.
-// The panel width is dynamic to align with Kanban Warning column.
+// The panel width is dynamic to align with Kanban Done column.
 func (m *TaskInput) renderOptionsPanel() string {
 	isFocused := m.focusPanel == FocusPanelRight
 

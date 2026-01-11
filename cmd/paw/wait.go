@@ -179,6 +179,8 @@ func isWaitingWindow(name string) bool {
 	return strings.HasPrefix(name, constants.EmojiWaiting)
 }
 
+// isFinalWindow returns true if the window is in a completed state.
+// Includes legacy warning emoji for backward compatibility with old windows.
 func isFinalWindow(name string) bool {
 	return strings.HasPrefix(name, constants.EmojiDone) ||
 		strings.HasPrefix(name, constants.EmojiWarning)

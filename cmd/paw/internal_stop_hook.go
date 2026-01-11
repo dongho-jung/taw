@@ -172,14 +172,16 @@ func classifyStopStatus(taskName, paneContent string) (task.Status, error) {
 	// (PAW_WAITING, AskUserQuestion tool, UI patterns) which are more reliable
 	// than text-based classification that can produce false positives from
 	// conversational phrases like "please test" or "please check".
+	//
+	// NOTE: WARNING status has been removed from UI. Error states now map to WAITING
+	// to indicate user attention is needed.
 	prompt := fmt.Sprintf(`You are classifying the current state of a coding task.
 
-Return exactly one label: WORKING, DONE, or WARNING.
+Return exactly one label: WORKING or DONE.
 
 Definitions:
-- WORKING: actively processing, making tool calls, executing commands, in progress, or asking user questions.
+- WORKING: actively processing, making tool calls, executing commands, in progress, asking user questions, or encountering errors that need attention.
 - DONE: work completed successfully and ready for review/merge.
-- WARNING: errors, failing tests, merge conflicts, or incomplete/failed work.
 
 If unsure, return WORKING.
 
@@ -269,6 +271,9 @@ func parseStopHookDecision(output string) (task.Status, bool) {
 	// NOTE: WAITING is mapped to WORKING because the watch-wait watcher
 	// handles WAITING detection more accurately using specific markers.
 	// This prevents false positives from text-based classification.
+	//
+	// NOTE: WARNING is also mapped to WAITING (StatusCorrupted) which now
+	// displays as Waiting in UI (Warning status removed from UI).
 	switch {
 	case strings.HasPrefix(upper, "WORKING"):
 		return task.StatusWorking, true
@@ -277,7 +282,7 @@ func parseStopHookDecision(output string) (task.Status, bool) {
 	case strings.HasPrefix(upper, "DONE"):
 		return task.StatusDone, true
 	case strings.HasPrefix(upper, "WARNING"), strings.HasPrefix(upper, "WARN"):
-		return task.StatusCorrupted, true
+		return task.StatusWaiting, true // Map to WAITING - Warning removed from UI
 	case strings.Contains(upper, "WORKING"):
 		return task.StatusWorking, true
 	case strings.Contains(upper, "WAITING"):
@@ -285,7 +290,7 @@ func parseStopHookDecision(output string) (task.Status, bool) {
 	case strings.Contains(upper, "DONE"):
 		return task.StatusDone, true
 	case strings.Contains(upper, "WARNING"):
-		return task.StatusCorrupted, true
+		return task.StatusWaiting, true // Map to WAITING - Warning removed from UI
 	default:
 		return "", false
 	}
@@ -294,12 +299,11 @@ func parseStopHookDecision(output string) (task.Status, bool) {
 func windowNameForStatus(taskName string, status task.Status) string {
 	emoji := constants.EmojiWorking
 	switch status {
-	case task.StatusWaiting:
+	case task.StatusWaiting, task.StatusCorrupted:
+		// Corrupted status now displays as Waiting (Warning removed from UI)
 		emoji = constants.EmojiWaiting
 	case task.StatusDone:
 		emoji = constants.EmojiDone
-	case task.StatusCorrupted:
-		emoji = constants.EmojiWarning
 	}
 
 	return emoji + constants.TruncateForWindowName(taskName)

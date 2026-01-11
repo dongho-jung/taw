@@ -271,7 +271,8 @@ func (m *Manager) FindStoppedTasks() ([]*StoppedTaskInfo, error) {
 			continue
 		}
 
-		// Skip done or warning windows (task already completed or has issues)
+		// Skip done windows (task already completed)
+		// Also skip legacy warning windows for backward compatibility
 		if strings.HasPrefix(w.Name, constants.EmojiDone) ||
 			strings.HasPrefix(w.Name, constants.EmojiWarning) {
 			continue

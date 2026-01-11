@@ -33,6 +33,8 @@ const (
 	DiscoveredWorking DiscoveredStatus = "working"
 	DiscoveredWaiting DiscoveredStatus = "waiting"
 	DiscoveredDone    DiscoveredStatus = "done"
+	// DiscoveredWarning is kept for backward compatibility with old windows.
+	// New windows no longer use Warning status; it maps to Waiting.
 	DiscoveredWarning DiscoveredStatus = "warning"
 )
 
@@ -58,8 +60,9 @@ func NewTaskDiscoveryService() *TaskDiscoveryService {
 }
 
 // DiscoverAll finds all PAW tasks across all sessions.
-// Returns tasks grouped by status for Kanban display.
-func (s *TaskDiscoveryService) DiscoverAll() (working, waiting, done, warning []*DiscoveredTask) {
+// Returns tasks grouped by status for Kanban display (3 columns: Working, Waiting, Done).
+// Note: Warning status is merged into Waiting (Warning column removed from UI).
+func (s *TaskDiscoveryService) DiscoverAll() (working, waiting, done []*DiscoveredTask) {
 	sockets := s.findPawSockets()
 
 	var allTasks []*DiscoveredTask
@@ -74,21 +77,20 @@ func (s *TaskDiscoveryService) DiscoverAll() (working, waiting, done, warning []
 		return allTasks[i].CreatedAt.Before(allTasks[j].CreatedAt)
 	})
 
-	// Group by status
+	// Group by status (Warning merged into Waiting)
 	for _, task := range allTasks {
 		switch task.Status {
 		case DiscoveredWorking:
 			working = append(working, task)
-		case DiscoveredWaiting:
+		case DiscoveredWaiting, DiscoveredWarning:
+			// Warning tasks now display in Waiting column
 			waiting = append(waiting, task)
 		case DiscoveredDone:
 			done = append(done, task)
-		case DiscoveredWarning:
-			warning = append(warning, task)
 		}
 	}
 
-	return working, waiting, done, warning
+	return working, waiting, done
 }
 
 // findPawSockets finds all PAW tmux sockets.
