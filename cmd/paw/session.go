@@ -243,6 +243,15 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 		logging.Debug("Failed to re-apply tmux config: %v", err)
 	}
 
+	// Always respawn main window on reattach to ensure fresh theme detection.
+	// When user re-attaches from a terminal with different light/dark mode,
+	// the running TUI won't know about the change. Respawning forces theme re-detection.
+	if !versionChanged {
+		if err := respawnMainWindow(appCtx, tm); err != nil {
+			logging.Debug("Failed to respawn main window for theme detection: %v", err)
+		}
+	}
+
 	// Also set terminal title option on re-attach
 	_ = tm.SetOption("set-titles", "on", true)
 	_ = tm.SetOption("set-titles-string", "[paw] "+appCtx.SessionName, true)
