@@ -729,3 +729,63 @@ func (k *KanbanView) cacheTextForCopy(board string) {
 		k.renderedLines[i] = ansi.Strip(line)
 	}
 }
+
+// GetTaskAtPosition returns the task at the given column and row position.
+// col is the column index (0-3: working, waiting, done, warning).
+// row is the Y position relative to the kanban area (0-indexed).
+// Returns nil if no task is found at that position.
+func (k *KanbanView) GetTaskAtPosition(col, row int) *service.DiscoveredTask {
+	if col < 0 || col > 3 {
+		return nil
+	}
+
+	// Get the task list for the column
+	var tasks []*service.DiscoveredTask
+	switch col {
+	case 0:
+		tasks = k.working
+	case 1:
+		tasks = k.waiting
+	case 2:
+		tasks = k.done
+	case 3:
+		tasks = k.warning
+	}
+
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	// Account for header (2 lines: title + separator)
+	// The border adds 1 line at the top, so content starts at row 1 within the rendered kanban
+	// Layout within each column:
+	// Row 0: top border
+	// Row 1: header (emoji + title + count)
+	// Row 2: separator (───)
+	// Row 3+: tasks (each task takes 1-2 lines)
+	taskStartRow := 3
+
+	// Adjust for scroll offset
+	adjustedRow := row - taskStartRow + k.scrollOffset
+
+	if adjustedRow < 0 {
+		return nil
+	}
+
+	// Find which task is at the adjusted row
+	// Each task takes 1 line (name), optionally 2 lines (name + action)
+	currentLine := 0
+	for _, task := range tasks {
+		taskLines := 1
+		if task.CurrentAction != "" {
+			taskLines = 2
+		}
+
+		if adjustedRow >= currentLine && adjustedRow < currentLine+taskLines {
+			return task
+		}
+		currentLine += taskLines
+	}
+
+	return nil
+}

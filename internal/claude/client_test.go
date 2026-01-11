@@ -323,6 +323,7 @@ func (m *mockTmuxClient) GetPaneCommand(target string) (string, error) {
 func (m *mockTmuxClient) HasSession(name string) bool                          { return false }
 func (m *mockTmuxClient) NewSession(opts tmux.SessionOpts) error               { return nil }
 func (m *mockTmuxClient) AttachSession(name string) error                      { return nil }
+func (m *mockTmuxClient) SwitchClient(target string) error                     { return nil }
 func (m *mockTmuxClient) KillSession(name string) error                        { return nil }
 func (m *mockTmuxClient) KillServer() error                                    { return nil }
 func (m *mockTmuxClient) NewWindow(opts tmux.WindowOpts) (string, error)       { return "", nil }

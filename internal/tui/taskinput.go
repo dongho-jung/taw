@@ -10,6 +10,8 @@ import (
 	"github.com/charmbracelet/lipgloss/v2"
 
 	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/service"
+	"github.com/dongho-jung/paw/internal/tmux"
 	"github.com/dongho-jung/paw/internal/tui/textarea"
 )
 
@@ -71,10 +73,13 @@ type TaskInput struct {
 	selectAnchorCol int
 
 	// Kanban mouse selection (column-aware)
-	kanbanSelecting bool
-	kanbanSelectCol int // Column being selected (0-3)
-	kanbanSelectX   int // X position relative to column
-	kanbanSelectY   int // Y position relative to kanban area
+	kanbanSelecting  bool
+	kanbanSelectCol  int // Column being selected (0-3)
+	kanbanSelectX    int // X position relative to column
+	kanbanSelectY    int // Y position relative to kanban area
+	kanbanClickStart struct {
+		x, y int // Initial click position (absolute) for detecting single click vs drag
+	}
 
 	// Kanban view for tasks across all sessions
 	kanban *KanbanView
@@ -93,6 +98,11 @@ type tickMsg time.Time
 
 // cancelClearMsg is used to clear the cancel pending state after timeout.
 type cancelClearMsg struct{}
+
+// jumpToTaskMsg is the result of attempting to jump to a task.
+type jumpToTaskMsg struct {
+	err error
+}
 
 // TaskInputResult contains the result of the task input.
 type TaskInputResult struct {
@@ -214,6 +224,34 @@ func (m *TaskInput) tickCmd() tea.Cmd {
 	})
 }
 
+// jumpToTask returns a command that navigates to the given task.
+// If the task is in a different session, it switches to that session first.
+func jumpToTask(task *service.DiscoveredTask) tea.Cmd {
+	return func() tea.Msg {
+		if task == nil {
+			return jumpToTaskMsg{err: nil}
+		}
+
+		// Create tmux client for the target session
+		tm := tmux.New(task.Session)
+
+		// Check if we need to switch sessions
+		if task.Session != ProjectName {
+			// Different session - switch client first
+			if err := tm.SwitchClient(task.Session); err != nil {
+				return jumpToTaskMsg{err: err}
+			}
+		}
+
+		// Select the task window
+		if err := tm.SelectWindow(task.WindowID); err != nil {
+			return jumpToTaskMsg{err: err}
+		}
+
+		return jumpToTaskMsg{err: nil}
+	}
+}
+
 // updateTextareaHeight calculates and sets the appropriate textarea height based on content.
 // The height expands automatically as content grows, up to textareaMaxHeight (50% of screen).
 func (m *TaskInput) updateTextareaHeight() {
@@ -273,6 +311,10 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clear the cancel pending state after timeout
 		m.cancelPressTime = time.Time{}
 		m.cancelKey = ""
+		return m, nil
+
+	case jumpToTaskMsg:
+		// Jump completed - nothing to do on success, errors are logged by tmux client
 		return m, nil
 
 	case tea.BackgroundColorMsg:
@@ -459,6 +501,10 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				col := m.detectKanbanColumn(msg.X)
 				m.kanban.SetFocusedColumn(col)
 
+				// Track initial click position for single-click vs drag detection
+				m.kanbanClickStart.x = msg.X
+				m.kanbanClickStart.y = msg.Y
+
 				// Start Kanban text selection (column-aware)
 				kanbanY := m.getKanbanRelativeY(msg.Y)
 				kanbanX := m.getKanbanRelativeX(msg.X, col)
@@ -497,6 +543,21 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.kanbanSelecting {
 				m.kanbanSelecting = false
 				m.kanban.EndSelection()
+
+				// Check if this was a single click (minimal movement from click start)
+				// If so, jump to the clicked task instead of selecting text
+				dx := msg.X - m.kanbanClickStart.x
+				dy := msg.Y - m.kanbanClickStart.y
+				if dx >= -2 && dx <= 2 && dy >= -2 && dy <= 2 {
+					// Single click detected - try to jump to task
+					kanbanY := m.getKanbanRelativeY(msg.Y)
+					col := m.detectKanbanColumn(msg.X)
+					if task := m.kanban.GetTaskAtPosition(col, kanbanY); task != nil {
+						// Clear selection since we're jumping, not selecting
+						m.kanban.ClearSelection()
+						return m, jumpToTask(task)
+					}
+				}
 			}
 		}
 

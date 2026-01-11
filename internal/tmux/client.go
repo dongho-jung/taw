@@ -42,6 +42,7 @@ type Client interface {
 	HasSession(name string) bool
 	NewSession(opts SessionOpts) error
 	AttachSession(name string) error
+	SwitchClient(target string) error
 	KillSession(name string) error
 	KillServer() error
 
@@ -241,6 +242,10 @@ func (c *tmuxClient) AttachSession(name string) error {
 
 func (c *tmuxClient) KillSession(name string) error {
 	return c.Run("kill-session", "-t", name)
+}
+
+func (c *tmuxClient) SwitchClient(target string) error {
+	return c.Run("switch-client", "-t", target)
 }
 
 func (c *tmuxClient) KillServer() error {

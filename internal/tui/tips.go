@@ -38,6 +38,7 @@ var tips = []string{
 
 	// Mouse interactions
 	"Use mouse to select and copy text",
+	"Click on a task in kanban to jump to it",
 	"Scroll with mouse wheel in kanban",
 
 	// Workflow tips

@@ -6,6 +6,7 @@ Claude Code-based autonomous agent work environment
 
 ### Mouse
   Click           Select pane
+  Click task      Jump to task (in kanban, works across sessions)
   Drag            Select text (copy mode)
   Scroll          Scroll pane
   Border drag     Resize pane
