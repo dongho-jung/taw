@@ -88,18 +88,19 @@ const (
 
 // Config represents the PAW project configuration.
 type Config struct {
-	WorkMode      WorkMode   `yaml:"work_mode"`
-	OnComplete    OnComplete `yaml:"on_complete"`
-	Theme         string     `yaml:"theme"` // Theme preset: auto, dark, dark-blue, light, light-blue, etc.
-	WorktreeHook  string     `yaml:"worktree_hook"`
-	PreTaskHook   string     `yaml:"pre_task_hook"`
-	PostTaskHook  string     `yaml:"post_task_hook"`
-	PreMergeHook  string     `yaml:"pre_merge_hook"`
-	PostMergeHook string     `yaml:"post_merge_hook"`
-	LogFormat     string     `yaml:"log_format"`
-	LogMaxSizeMB  int        `yaml:"log_max_size_mb"`
-	LogMaxBackups int        `yaml:"log_max_backups"`
-	SelfImprove   bool       `yaml:"self_improve"`
+	WorkMode        WorkMode             `yaml:"work_mode"`
+	OnComplete      OnComplete           `yaml:"on_complete"`
+	Theme           string               `yaml:"theme"` // Theme preset: auto, dark, dark-blue, light, light-blue, etc.
+	PreWorktreeHook string               `yaml:"pre_worktree_hook"`
+	PreTaskHook     string               `yaml:"pre_task_hook"`
+	PostTaskHook    string               `yaml:"post_task_hook"`
+	PreMergeHook    string               `yaml:"pre_merge_hook"`
+	PostMergeHook   string               `yaml:"post_merge_hook"`
+	Notifications   *NotificationsConfig `yaml:"notifications"`
+	LogFormat       string               `yaml:"log_format"`
+	LogMaxSizeMB    int                  `yaml:"log_max_size_mb"`
+	LogMaxBackups   int                  `yaml:"log_max_backups"`
+	SelfImprove     bool                 `yaml:"self_improve"`
 
 	// Inherit specifies which fields inherit from global config.
 	// Only used in project-level config files.
@@ -272,19 +273,6 @@ work_mode: %s
 # - auto-pr: Auto commit + push + create pull request
 on_complete: %s
 
-# Hook to run after worktree/workspace creation (optional)
-# Single line example: worktree_hook: npm install
-# Multi-line example:
-#   worktree_hook: |
-#     npm install
-#     npm run build
-
-# Hooks (optional)
-# pre_task_hook: echo "pre task"
-# post_task_hook: echo "post task"
-# pre_merge_hook: echo "pre merge"
-# post_merge_hook: echo "post merge"
-
 # Log format: text or jsonl
 log_format: %s
 
@@ -296,11 +284,18 @@ log_max_backups: %d
 # When enabled, the agent reflects on mistakes at task finish and
 # appends learnings to CLAUDE.md, then merges to the default branch.
 self_improve: %t
+
+# Hooks (optional) (supports multi-line command with ': |')
+# pre_worktree_hook: echo "pre worktree"
+# pre_task_hook: echo "pre task"
+# post_task_hook: echo "post task"
+# pre_merge_hook: echo "pre merge"
+# post_merge_hook: echo "post merge"
 `, c.WorkMode, c.OnComplete, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups, c.SelfImprove)
 
-	// Add worktree_hook if set
-	if c.WorktreeHook != "" {
-		content += formatHook("worktree_hook", c.WorktreeHook)
+	// Add hooks if set
+	if c.PreWorktreeHook != "" {
+		content += formatHook("pre_worktree_hook", c.PreWorktreeHook)
 	}
 	if c.PreTaskHook != "" {
 		content += formatHook("pre_task_hook", c.PreTaskHook)

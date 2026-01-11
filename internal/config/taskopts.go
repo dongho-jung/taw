@@ -52,8 +52,8 @@ type TaskOptions struct {
 	// DependsOn specifies a task dependency
 	DependsOn *TaskDependency `json:"depends_on,omitempty"`
 
-	// WorktreeHook overrides the project's worktree hook for this task
-	WorktreeHook string `json:"worktree_hook,omitempty"`
+	// PreWorktreeHook overrides the project's pre-worktree hook for this task
+	PreWorktreeHook string `json:"pre_worktree_hook,omitempty"`
 }
 
 // DefaultTaskOptions returns the default task options.
@@ -120,8 +120,8 @@ func (o *TaskOptions) Merge(other *TaskOptions) {
 		o.DependsOn = other.DependsOn
 	}
 
-	if other.WorktreeHook != "" {
-		o.WorktreeHook = other.WorktreeHook
+	if other.PreWorktreeHook != "" {
+		o.PreWorktreeHook = other.PreWorktreeHook
 	}
 }
 
@@ -130,7 +130,7 @@ func (o *TaskOptions) Clone() *TaskOptions {
 	clone := &TaskOptions{
 		Model:        o.Model,
 		Ultrathink:   o.Ultrathink,
-		WorktreeHook: o.WorktreeHook,
+		PreWorktreeHook: o.PreWorktreeHook,
 	}
 
 	if o.DependsOn != nil {

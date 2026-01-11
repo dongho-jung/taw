@@ -160,19 +160,13 @@ on_complete: confirm
 # Non-git workspace: shared or copy
 non_git_workspace: shared
 
-# Hook to run after worktree/workspace creation (optional)
-# Single line example: worktree_hook: npm install
-# Multi-line example:
-#   worktree_hook: |
-#     npm install
-#     npm run build
-
 # Verification (optional)
 # verify_command: npm test
 verify_timeout_sec: 600
 verify_required: false
 
-# Hooks (optional)
+# Hooks (optional) (supports multi-line command with ': |')
+# pre_worktree_hook: echo "pre worktree"
 # pre_task_hook: echo "pre task"
 # post_task_hook: echo "post task"
 # pre_merge_hook: echo "pre merge"
@@ -199,10 +193,10 @@ log_max_backups: 3
 |               | `auto-pr` | Auto commit + push + create PR (worktree mode only) |
 | `non_git_workspace` | `shared` | Use the project directory directly (default) |
 |                   | `copy` | Create a per-task workspace copy (isolation) |
-| `worktree_hook` | (command) | Shell command(s) to run after worktree/workspace creation (e.g., `npm install`) |
 | `verify_command` | (command) | Shell command(s) to verify before finish/merge (e.g., `npm test`) |
 | `verify_timeout_sec` | (seconds) | Verification timeout (default: 600) |
 | `verify_required` | `true/false` | Block auto-merge if verification fails |
+| `pre_worktree_hook` | (command) | Runs after worktree/workspace creation (e.g., `npm install`) |
 | `pre_task_hook` | (command) | Runs before starting the agent |
 | `post_task_hook` | (command) | Runs after finishing a task |
 | `pre_merge_hook` | (command) | Runs before auto-merge/merge-task |

@@ -177,18 +177,18 @@ func (m *Manager) SetupWorktree(task *Task) error {
 		}
 	}
 
-	// Execute worktree hook if configured (error is non-fatal)
-	if m.config.WorktreeHook != "" {
-		m.executeWorktreeHook(worktreeDir)
+	// Execute pre-worktree hook if configured (error is non-fatal)
+	if m.config.PreWorktreeHook != "" {
+		m.executePreWorktreeHook(worktreeDir)
 	}
 
 	return nil
 }
 
-// executeWorktreeHook runs the configured worktree hook in the given directory.
-func (m *Manager) executeWorktreeHook(worktreeDir string) {
-	hook := m.config.WorktreeHook
-	logging.Debug("Executing worktree hook: %s", hook)
+// executePreWorktreeHook runs the configured pre-worktree hook in the given directory.
+func (m *Manager) executePreWorktreeHook(worktreeDir string) {
+	hook := m.config.PreWorktreeHook
+	logging.Debug("Executing pre-worktree hook: %s", hook)
 
 	cmd := exec.Command("sh", "-c", hook)
 	cmd.Dir = worktreeDir
@@ -196,13 +196,13 @@ func (m *Manager) executeWorktreeHook(worktreeDir string) {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		logging.Warn("Worktree hook failed: %v\n%s", err, string(output))
+		logging.Warn("Pre-worktree hook failed: %v\n%s", err, string(output))
 		return
 	}
 
-	logging.Debug("Worktree hook completed successfully")
+	logging.Debug("Pre-worktree hook completed successfully")
 	if len(output) > 0 {
-		logging.Trace("Worktree hook output: %s", string(output))
+		logging.Trace("Pre-worktree hook output: %s", string(output))
 	}
 }
 

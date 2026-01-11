@@ -22,8 +22,8 @@ func TestDefaultTaskOptions(t *testing.T) {
 		t.Error("Expected DependsOn to be nil by default")
 	}
 
-	if opts.WorktreeHook != "" {
-		t.Error("Expected WorktreeHook to be empty by default")
+	if opts.PreWorktreeHook != "" {
+		t.Error("Expected PreWorktreeHook to be empty by default")
 	}
 }
 
@@ -57,7 +57,7 @@ func TestTaskOptionsSaveLoad(t *testing.T) {
 			TaskName:  "other-task",
 			Condition: DependsOnSuccess,
 		},
-		WorktreeHook: "npm install",
+		PreWorktreeHook: "npm install",
 	}
 
 	// Save options
@@ -98,8 +98,8 @@ func TestTaskOptionsSaveLoad(t *testing.T) {
 		t.Errorf("Expected condition %s, got %s", opts.DependsOn.Condition, loaded.DependsOn.Condition)
 	}
 
-	if loaded.WorktreeHook != opts.WorktreeHook {
-		t.Errorf("Expected worktree hook %s, got %s", opts.WorktreeHook, loaded.WorktreeHook)
+	if loaded.PreWorktreeHook != opts.PreWorktreeHook {
+		t.Errorf("Expected pre-worktree hook %s, got %s", opts.PreWorktreeHook, loaded.PreWorktreeHook)
 	}
 }
 
@@ -146,7 +146,7 @@ func TestTaskOptionsMerge(t *testing.T) {
 	other := &TaskOptions{
 		Model:        ModelHaiku,
 		Ultrathink:   false,
-		WorktreeHook: "make build",
+		PreWorktreeHook: "make build",
 	}
 
 	base.Merge(other)
@@ -159,8 +159,8 @@ func TestTaskOptionsMerge(t *testing.T) {
 		t.Error("Expected ultrathink to be false after merge")
 	}
 
-	if base.WorktreeHook != "make build" {
-		t.Errorf("Expected worktree hook 'make build', got '%s'", base.WorktreeHook)
+	if base.PreWorktreeHook != "make build" {
+		t.Errorf("Expected pre-worktree hook 'make build', got '%s'", base.PreWorktreeHook)
 	}
 }
 
@@ -183,7 +183,7 @@ func TestTaskOptionsClone(t *testing.T) {
 			TaskName:  "task-1",
 			Condition: DependsOnFailure,
 		},
-		WorktreeHook: "go build",
+		PreWorktreeHook: "go build",
 	}
 
 	clone := original.Clone()
@@ -236,7 +236,7 @@ func TestTaskOptionsJSONMarshal(t *testing.T) {
 			TaskName:  "my-task",
 			Condition: DependsOnAlways,
 		},
-		WorktreeHook: "npm test",
+		PreWorktreeHook: "npm test",
 	}
 
 	data, err := json.Marshal(opts)

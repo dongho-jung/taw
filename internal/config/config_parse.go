@@ -81,8 +81,8 @@ func parseConfig(content string) (*Config, error) {
 			cfg.WorkMode = WorkMode(value)
 		case "on_complete":
 			cfg.OnComplete = OnComplete(value)
-		case "worktree_hook":
-			cfg.WorktreeHook = value
+		case "pre_worktree_hook":
+			cfg.PreWorktreeHook = value
 		case "pre_task_hook":
 			cfg.PreTaskHook = value
 		case "post_task_hook":

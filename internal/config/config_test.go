@@ -11,22 +11,22 @@ import (
 func TestParseConfig_SingleLineHook(t *testing.T) {
 	content := `work_mode: worktree
 on_complete: confirm
-worktree_hook: npm install
+pre_worktree_hook: npm install
 `
 	cfg, err := parseConfig(content)
 	if err != nil {
 		t.Fatalf("parseConfig failed: %v", err)
 	}
 
-	if cfg.WorktreeHook != "npm install" {
-		t.Errorf("expected 'npm install', got '%s'", cfg.WorktreeHook)
+	if cfg.PreWorktreeHook != "npm install" {
+		t.Errorf("expected 'npm install', got '%s'", cfg.PreWorktreeHook)
 	}
 }
 
 func TestParseConfig_MultiLineHook(t *testing.T) {
 	content := `work_mode: worktree
 on_complete: confirm
-worktree_hook: |
+pre_worktree_hook: |
   npm install
   npm run build
 `
@@ -36,14 +36,14 @@ worktree_hook: |
 	}
 
 	expected := "npm install\nnpm run build"
-	if cfg.WorktreeHook != expected {
-		t.Errorf("expected %q, got %q", expected, cfg.WorktreeHook)
+	if cfg.PreWorktreeHook != expected {
+		t.Errorf("expected %q, got %q", expected, cfg.PreWorktreeHook)
 	}
 }
 
 func TestParseConfig_MultiLineHookWithEmptyLines(t *testing.T) {
 	content := `work_mode: worktree
-worktree_hook: |
+pre_worktree_hook: |
   npm install
 
   npm run build
@@ -55,8 +55,8 @@ on_complete: confirm
 	}
 
 	expected := "npm install\n\nnpm run build"
-	if cfg.WorktreeHook != expected {
-		t.Errorf("expected %q, got %q", expected, cfg.WorktreeHook)
+	if cfg.PreWorktreeHook != expected {
+		t.Errorf("expected %q, got %q", expected, cfg.PreWorktreeHook)
 	}
 	if cfg.OnComplete != OnCompleteConfirm {
 		t.Errorf("expected on_complete to be 'confirm', got %s", cfg.OnComplete)
@@ -64,16 +64,16 @@ on_complete: confirm
 }
 
 func TestFormatHook_SingleLine(t *testing.T) {
-	result := formatHook("worktree_hook", "npm install")
-	expected := "worktree_hook: npm install\n"
+	result := formatHook("pre_worktree_hook", "npm install")
+	expected := "pre_worktree_hook: npm install\n"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
 }
 
 func TestFormatHook_MultiLine(t *testing.T) {
-	result := formatHook("worktree_hook", "npm install\nnpm run build")
-	expected := "worktree_hook: |\n  npm install\n  npm run build\n"
+	result := formatHook("pre_worktree_hook", "npm install\nnpm run build")
+	expected := "pre_worktree_hook: |\n  npm install\n  npm run build\n"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
@@ -81,7 +81,7 @@ func TestFormatHook_MultiLine(t *testing.T) {
 
 func TestRoundTrip_SingleLineHook(t *testing.T) {
 	hook := "npm install"
-	formatted := formatHook("worktree_hook", hook)
+	formatted := formatHook("pre_worktree_hook", hook)
 
 	// Prepend with required fields
 	content := "work_mode: worktree\non_complete: confirm\n" + formatted
@@ -91,14 +91,14 @@ func TestRoundTrip_SingleLineHook(t *testing.T) {
 		t.Fatalf("parseConfig failed: %v", err)
 	}
 
-	if cfg.WorktreeHook != hook {
-		t.Errorf("roundtrip failed: expected %q, got %q", hook, cfg.WorktreeHook)
+	if cfg.PreWorktreeHook != hook {
+		t.Errorf("roundtrip failed: expected %q, got %q", hook, cfg.PreWorktreeHook)
 	}
 }
 
 func TestRoundTrip_MultiLineHook(t *testing.T) {
 	hook := "npm install\nnpm run build"
-	formatted := formatHook("worktree_hook", hook)
+	formatted := formatHook("pre_worktree_hook", hook)
 
 	// Prepend with required fields
 	content := "work_mode: worktree\non_complete: confirm\n" + formatted
@@ -108,8 +108,8 @@ func TestRoundTrip_MultiLineHook(t *testing.T) {
 		t.Fatalf("parseConfig failed: %v", err)
 	}
 
-	if cfg.WorktreeHook != hook {
-		t.Errorf("roundtrip failed: expected %q, got %q", hook, cfg.WorktreeHook)
+	if cfg.PreWorktreeHook != hook {
+		t.Errorf("roundtrip failed: expected %q, got %q", hook, cfg.PreWorktreeHook)
 	}
 }
 
@@ -122,8 +122,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.OnComplete != OnCompleteConfirm {
 		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteConfirm)
 	}
-	if cfg.WorktreeHook != "" {
-		t.Errorf("WorktreeHook = %q, want empty", cfg.WorktreeHook)
+	if cfg.PreWorktreeHook != "" {
+		t.Errorf("PreWorktreeHook = %q, want empty", cfg.PreWorktreeHook)
 	}
 	if cfg.LogFormat != "text" {
 		t.Errorf("LogFormat = %q, want %q", cfg.LogFormat, "text")
@@ -213,7 +213,7 @@ func TestLoad_WithConfigFile(t *testing.T) {
 
 	content := `work_mode: main
 on_complete: auto-merge
-worktree_hook: npm install
+pre_worktree_hook: npm install
 `
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to write config: %v", err)
@@ -230,8 +230,8 @@ worktree_hook: npm install
 	if cfg.OnComplete != OnCompleteAutoMerge {
 		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteAutoMerge)
 	}
-	if cfg.WorktreeHook != "npm install" {
-		t.Errorf("WorktreeHook = %q, want %q", cfg.WorktreeHook, "npm install")
+	if cfg.PreWorktreeHook != "npm install" {
+		t.Errorf("PreWorktreeHook = %q, want %q", cfg.PreWorktreeHook, "npm install")
 	}
 }
 
@@ -241,7 +241,7 @@ func TestSave(t *testing.T) {
 	cfg := &Config{
 		WorkMode:     WorkModeWorktree,
 		OnComplete:   OnCompleteAutoPR,
-		WorktreeHook: "pnpm install",
+		PreWorktreeHook: "pnpm install",
 	}
 
 	if err := cfg.Save(tempDir); err != nil {
@@ -260,8 +260,8 @@ func TestSave(t *testing.T) {
 	if loaded.OnComplete != cfg.OnComplete {
 		t.Errorf("OnComplete = %q, want %q", loaded.OnComplete, cfg.OnComplete)
 	}
-	if loaded.WorktreeHook != cfg.WorktreeHook {
-		t.Errorf("WorktreeHook = %q, want %q", loaded.WorktreeHook, cfg.WorktreeHook)
+	if loaded.PreWorktreeHook != cfg.PreWorktreeHook {
+		t.Errorf("PreWorktreeHook = %q, want %q", loaded.PreWorktreeHook, cfg.PreWorktreeHook)
 	}
 }
 
@@ -387,3 +387,134 @@ func TestParseConfig_AllOnCompleteValues(t *testing.T) {
 	}
 }
 
+func TestParseConfig_Notifications_Slack(t *testing.T) {
+	content := `work_mode: worktree
+on_complete: confirm
+notifications:
+  slack:
+    webhook: https://hooks.slack.com/services/xxx
+`
+	cfg, err := parseConfig(content)
+	if err != nil {
+		t.Fatalf("parseConfig failed: %v", err)
+	}
+
+	if cfg.Notifications == nil {
+		t.Fatal("Notifications is nil")
+	}
+	if cfg.Notifications.Slack == nil {
+		t.Fatal("Notifications.Slack is nil")
+	}
+	if cfg.Notifications.Slack.Webhook != "https://hooks.slack.com/services/xxx" {
+		t.Errorf("Slack.Webhook = %q, want %q", cfg.Notifications.Slack.Webhook, "https://hooks.slack.com/services/xxx")
+	}
+}
+
+func TestParseConfig_Notifications_Ntfy(t *testing.T) {
+	content := `work_mode: worktree
+on_complete: confirm
+notifications:
+  ntfy:
+    topic: my-topic
+    server: https://ntfy.example.com
+`
+	cfg, err := parseConfig(content)
+	if err != nil {
+		t.Fatalf("parseConfig failed: %v", err)
+	}
+
+	if cfg.Notifications == nil {
+		t.Fatal("Notifications is nil")
+	}
+	if cfg.Notifications.Ntfy == nil {
+		t.Fatal("Notifications.Ntfy is nil")
+	}
+	if cfg.Notifications.Ntfy.Topic != "my-topic" {
+		t.Errorf("Ntfy.Topic = %q, want %q", cfg.Notifications.Ntfy.Topic, "my-topic")
+	}
+	if cfg.Notifications.Ntfy.Server != "https://ntfy.example.com" {
+		t.Errorf("Ntfy.Server = %q, want %q", cfg.Notifications.Ntfy.Server, "https://ntfy.example.com")
+	}
+}
+
+func TestParseConfig_Notifications_Both(t *testing.T) {
+	content := `work_mode: worktree
+on_complete: confirm
+notifications:
+  slack:
+    webhook: https://hooks.slack.com/services/xxx
+  ntfy:
+    topic: my-topic
+`
+	cfg, err := parseConfig(content)
+	if err != nil {
+		t.Fatalf("parseConfig failed: %v", err)
+	}
+
+	if cfg.Notifications == nil {
+		t.Fatal("Notifications is nil")
+	}
+	if cfg.Notifications.Slack == nil {
+		t.Fatal("Notifications.Slack is nil")
+	}
+	if cfg.Notifications.Ntfy == nil {
+		t.Fatal("Notifications.Ntfy is nil")
+	}
+	if cfg.Notifications.Slack.Webhook != "https://hooks.slack.com/services/xxx" {
+		t.Errorf("Slack.Webhook = %q, want %q", cfg.Notifications.Slack.Webhook, "https://hooks.slack.com/services/xxx")
+	}
+	if cfg.Notifications.Ntfy.Topic != "my-topic" {
+		t.Errorf("Ntfy.Topic = %q, want %q", cfg.Notifications.Ntfy.Topic, "my-topic")
+	}
+}
+
+func TestParseConfig_Notifications_WithOtherConfig(t *testing.T) {
+	content := `work_mode: main
+notifications:
+  slack:
+    webhook: https://hooks.slack.com/xxx
+on_complete: auto-merge
+pre_worktree_hook: npm install
+`
+	cfg, err := parseConfig(content)
+	if err != nil {
+		t.Fatalf("parseConfig failed: %v", err)
+	}
+
+	// Check that other config values are still parsed correctly
+	if cfg.WorkMode != WorkModeMain {
+		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeMain)
+	}
+	if cfg.OnComplete != OnCompleteAutoMerge {
+		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteAutoMerge)
+	}
+	if cfg.PreWorktreeHook != "npm install" {
+		t.Errorf("PreWorktreeHook = %q, want %q", cfg.PreWorktreeHook, "npm install")
+	}
+
+	// Check notifications
+	if cfg.Notifications == nil {
+		t.Fatal("Notifications is nil")
+	}
+	if cfg.Notifications.Slack == nil {
+		t.Fatal("Notifications.Slack is nil")
+	}
+	if cfg.Notifications.Slack.Webhook != "https://hooks.slack.com/xxx" {
+		t.Errorf("Slack.Webhook = %q, want %q", cfg.Notifications.Slack.Webhook, "https://hooks.slack.com/xxx")
+	}
+}
+
+func TestParseConfig_Notifications_Empty(t *testing.T) {
+	content := `work_mode: worktree
+on_complete: confirm
+`
+	cfg, err := parseConfig(content)
+	if err != nil {
+		t.Fatalf("parseConfig failed: %v", err)
+	}
+
+	// Notifications should be nil when not configured
+	if cfg.Notifications != nil {
+		t.Error("Notifications should be nil when not configured")
+	}
+}
