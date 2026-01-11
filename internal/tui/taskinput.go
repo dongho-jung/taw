@@ -661,8 +661,8 @@ func (m *TaskInput) View() tea.View {
 		Bold(true)
 	tipStyle := helpStyle
 
-	// Show warning if terminal is smaller than 85x22
-	isNarrow := m.width < 85 || m.height < 22
+	// Show warning if terminal is smaller than 72x22
+	isNarrow := m.width < 72 || m.height < 22
 
 	// Left side: PAW {version} - {projectName}  Tip: {tip} or Warning
 	versionText := versionStyle.Render("PAW " + Version)

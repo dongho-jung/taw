@@ -127,10 +127,10 @@ func (m *TaskInput) renderOptionsPanel() string {
 	// Build content lines with consistent visible width
 	// Using explicit line-by-line approach to avoid Width() ANSI code issues
 	// Inner width = panel width - padding(4) - border(2)
-	const minInnerWidth = 37
+	// Use a low minimum to allow narrow terminals while ensuring content displays
 	innerWidth := m.optionsPanelWidth - 6 // -6 for padding(4) + border(2)
-	if innerWidth < minInnerWidth {
-		innerWidth = minInnerWidth
+	if innerWidth < 20 {
+		innerWidth = 20 // Minimum to display labels
 	}
 	var lines []string
 
