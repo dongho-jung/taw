@@ -759,6 +759,45 @@ func (k *KanbanView) cacheTextForCopy(board string) {
 	}
 }
 
+// NextNonEmptyColumn finds the next column with tasks, starting from currentCol+1.
+// Wraps around to column 0 if no column is found after currentCol.
+// Returns -1 if all columns are empty.
+func (k *KanbanView) NextNonEmptyColumn(currentCol int) int {
+	// Try columns after currentCol first
+	for i := 1; i <= 4; i++ {
+		col := (currentCol + i) % 4
+		if k.ColumnTaskCount(col) > 0 {
+			return col
+		}
+	}
+	return -1 // All columns empty
+}
+
+// PrevNonEmptyColumn finds the previous column with tasks, starting from currentCol-1.
+// Wraps around to column 3 if no column is found before currentCol.
+// Returns -1 if all columns are empty.
+func (k *KanbanView) PrevNonEmptyColumn(currentCol int) int {
+	// Try columns before currentCol first
+	for i := 1; i <= 4; i++ {
+		col := (currentCol - i + 4) % 4
+		if k.ColumnTaskCount(col) > 0 {
+			return col
+		}
+	}
+	return -1 // All columns empty
+}
+
+// FirstNonEmptyColumn returns the first column (0-3) that has tasks.
+// Returns -1 if all columns are empty.
+func (k *KanbanView) FirstNonEmptyColumn() int {
+	for col := 0; col < 4; col++ {
+		if k.ColumnTaskCount(col) > 0 {
+			return col
+		}
+	}
+	return -1
+}
+
 // GetTaskAtPosition returns the task at the given column and row position.
 // col is the column index (0-3: working, waiting, done, warning).
 // row is the Y position relative to the kanban area (0-indexed).

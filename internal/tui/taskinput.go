@@ -435,23 +435,31 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		// Toggle panel: Alt+Tab (cycle through input box, options, and kanban columns)
-		// Cycle order: Left → Right → Kanban(col 0) → Kanban(col 1) → Kanban(col 2) → Kanban(col 3) → Left
+		// Toggle panel: Alt+Tab (cycle through input box, options, and non-empty kanban columns)
+		// Cycle order: Left → Right → Kanban(non-empty cols only) → Left
+		// Empty kanban columns are skipped during cycling
 		case "alt+tab":
 			m.applyOptionInputValues()
 			switch m.focusPanel {
 			case FocusPanelLeft:
 				m.switchFocusTo(FocusPanelRight)
 			case FocusPanelRight:
-				// Move to first Kanban column
-				m.switchFocusToKanbanColumn(0)
-			case FocusPanelKanban:
-				// Cycle through Kanban columns, then back to Left
-				currentCol := m.kanban.FocusedColumn()
-				if currentCol < 3 {
-					m.switchFocusToKanbanColumn(currentCol + 1)
+				// Move to first non-empty Kanban column, or skip to Left if all empty
+				firstCol := m.kanban.FirstNonEmptyColumn()
+				if firstCol >= 0 {
+					m.switchFocusToKanbanColumn(firstCol)
 				} else {
 					m.switchFocusTo(FocusPanelLeft)
+				}
+			case FocusPanelKanban:
+				// Find next non-empty column, or go back to Left if none
+				currentCol := m.kanban.FocusedColumn()
+				nextCol := m.kanban.NextNonEmptyColumn(currentCol)
+				// If next non-empty column would wrap back to or before current, go to Left
+				if nextCol < 0 || nextCol <= currentCol {
+					m.switchFocusTo(FocusPanelLeft)
+				} else {
+					m.switchFocusToKanbanColumn(nextCol)
 				}
 			}
 			return m, nil

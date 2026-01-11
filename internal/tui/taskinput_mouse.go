@@ -256,23 +256,19 @@ func (m *TaskInput) updateKanbanPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		m.kanban.SelectNextTask()
 		return m, nil
-	// Left/Right: cycle through columns
+	// Left/Right: cycle through non-empty columns only
 	case "left", "h":
 		currentCol := m.kanban.FocusedColumn()
-		if currentCol > 0 {
-			m.switchFocusToKanbanColumn(currentCol - 1)
-		} else {
-			// Wrap to last column
-			m.switchFocusToKanbanColumn(3)
+		prevCol := m.kanban.PrevNonEmptyColumn(currentCol)
+		if prevCol >= 0 {
+			m.switchFocusToKanbanColumn(prevCol)
 		}
 		return m, nil
 	case "right", "l":
 		currentCol := m.kanban.FocusedColumn()
-		if currentCol < 3 {
-			m.switchFocusToKanbanColumn(currentCol + 1)
-		} else {
-			// Wrap to first column
-			m.switchFocusToKanbanColumn(0)
+		nextCol := m.kanban.NextNonEmptyColumn(currentCol)
+		if nextCol >= 0 {
+			m.switchFocusToKanbanColumn(nextCol)
 		}
 		return m, nil
 	// Page scroll (scroll the kanban view)
