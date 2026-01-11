@@ -94,7 +94,7 @@ var mergeTaskCmd = &cobra.Command{
 				hookEnv,
 				targetTask.GetHookOutputPath("pre-merge"),
 				targetTask.GetHookMetaPath("pre-merge"),
-				time.Duration(appCtx.Config.VerifyTimeout)*time.Second,
+				constants.DefaultHookTimeout,
 			); err != nil {
 				logging.Warn("Pre-merge hook failed: %v", err)
 			}
@@ -365,7 +365,7 @@ var mergeTaskCmd = &cobra.Command{
 				hookEnv,
 				targetTask.GetHookOutputPath("post-merge"),
 				targetTask.GetHookMetaPath("post-merge"),
-				time.Duration(appCtx.Config.VerifyTimeout)*time.Second,
+				constants.DefaultHookTimeout,
 			); err != nil {
 				logging.Warn("Post-merge hook failed: %v", err)
 			}

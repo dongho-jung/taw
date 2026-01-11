@@ -56,11 +56,6 @@ func (m *Manager) shouldUseWorktree() bool {
 	return m.isGitRepo && m.config != nil && m.config.WorkMode == config.WorkModeWorktree
 }
 
-// shouldUseWorkspace returns true if non-git workspace isolation is enabled.
-func (m *Manager) shouldUseWorkspace() bool {
-	return !m.isGitRepo && m.config != nil && m.config.NonGitWorkspace == string(config.NonGitWorkspaceCopy)
-}
-
 // CreateTask creates a new task with the given content.
 // It generates a task name using Claude and creates the task directory atomically.
 func (m *Manager) CreateTask(content string) (*Task, error) {

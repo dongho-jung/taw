@@ -184,6 +184,11 @@ const (
 	WindowCreationTimeout = 30 * time.Second
 )
 
+// Hook execution timeout
+const (
+	DefaultHookTimeout = 5 * time.Minute // Default timeout for hooks
+)
+
 // Tmux command timeout
 const (
 	TmuxCommandTimeout = 10 * time.Second
@@ -402,9 +407,9 @@ const (
 	PopupWidthPalette  = "60"
 	PopupHeightPalette = "18"
 
-	// Medium size for settings popup (fits 5 fields + tabs + help)
-	PopupWidthSettings  = "60"
-	PopupHeightSettings = "22"
+	// Medium size for settings popup (percentage-based for auto-scaling)
+	PopupWidthSettings  = "80%"
+	PopupHeightSettings = "50%"
 
 	// Medium size for history picker
 	PopupWidthHistory  = "80%"

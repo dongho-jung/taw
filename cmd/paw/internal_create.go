@@ -111,10 +111,6 @@ var newTaskCmd = &cobra.Command{
 
 		// Get active task names for dependency selection
 		activeTasks := getActiveTaskNames(appCtx.AgentsDir)
-		if !appCtx.IsGitRepo && appCtx.Config != nil && appCtx.Config.NonGitWorkspace != string(config.NonGitWorkspaceCopy) && len(activeTasks) > 0 {
-			logging.Warn("Non-git shared workspace: parallel tasks may conflict")
-			fmt.Println("  ⚠️  Non-git shared workspace: parallel tasks may conflict")
-		}
 
 		// Loop continuously for task creation
 		// History search (Ctrl+R) is handled via tmux popup, not inline

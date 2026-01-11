@@ -101,24 +101,6 @@ var handleTaskCmd = &cobra.Command{
 					logging.Log("Session resume: detected previous session for task %s", taskName)
 				}
 			}
-		} else if !appCtx.IsGitRepo && appCtx.Config != nil && appCtx.Config.NonGitWorkspace == string(config.NonGitWorkspaceCopy) {
-			workspaceDir := t.GetWorktreeDir()
-			if _, err := os.Stat(workspaceDir); os.IsNotExist(err) {
-				timer := logging.StartTimer("workspace setup")
-				if err := mgr.SetupWorkspace(t); err != nil {
-					timer.StopWithResult(false, err.Error())
-					_ = t.RemoveTabLock()
-					return fmt.Errorf("failed to setup workspace: %w", err)
-				}
-				timer.StopWithResult(true, fmt.Sprintf("path=%s", t.WorktreeDir))
-			} else {
-				logging.Debug("Workspace already exists, reusing: %s", workspaceDir)
-				t.WorktreeDir = workspaceDir
-				if t.HasSessionMarker() {
-					isReopen = true
-					logging.Log("Session resume: detected previous session for task %s", taskName)
-				}
-			}
 		} else {
 			// Non-worktree mode: check session marker for reopen
 			if t.HasSessionMarker() {
@@ -192,7 +174,7 @@ var handleTaskCmd = &cobra.Command{
 				hookEnv,
 				t.GetHookOutputPath("pre-task"),
 				t.GetHookMetaPath("pre-task"),
-				time.Duration(appCtx.Config.VerifyTimeout)*time.Second,
+				constants.DefaultHookTimeout,
 			)
 			if err != nil {
 				logging.Warn("Pre-task hook failed: %v", err)
@@ -339,8 +321,6 @@ func buildUserPrompt(appCtx *app.App, t *task.Task, taskName, workDir string) st
 	userPrompt.WriteString(fmt.Sprintf("# Task: %s\n\n", taskName))
 	if appCtx.IsWorktreeMode() {
 		userPrompt.WriteString(fmt.Sprintf("**Worktree**: %s\n", workDir))
-	} else if appCtx.Config != nil && !appCtx.IsGitRepo && appCtx.Config.NonGitWorkspace == string(config.NonGitWorkspaceCopy) {
-		userPrompt.WriteString(fmt.Sprintf("**Workspace**: %s\n", workDir))
 	}
 	userPrompt.WriteString(fmt.Sprintf("**Project**: %s\n\n", appCtx.ProjectDir))
 

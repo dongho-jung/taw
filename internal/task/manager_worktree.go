@@ -185,34 +185,6 @@ func (m *Manager) SetupWorktree(task *Task) error {
 	return nil
 }
 
-// SetupWorkspace creates an isolated workspace copy for non-git tasks.
-func (m *Manager) SetupWorkspace(task *Task) error {
-	if !m.shouldUseWorkspace() {
-		return nil
-	}
-
-	workspaceDir := task.GetWorktreeDir()
-	task.WorktreeDir = workspaceDir
-
-	if _, err := os.Stat(workspaceDir); err == nil {
-		return nil
-	}
-
-	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
-		return fmt.Errorf("failed to create workspace directory: %w", err)
-	}
-
-	if err := copyWorkspace(m.projectDir, workspaceDir); err != nil {
-		return fmt.Errorf("failed to copy workspace: %w", err)
-	}
-
-	if m.config.WorktreeHook != "" {
-		m.executeWorktreeHook(workspaceDir)
-	}
-
-	return nil
-}
-
 // executeWorktreeHook runs the configured worktree hook in the given directory.
 func (m *Manager) executeWorktreeHook(worktreeDir string) {
 	hook := m.config.WorktreeHook
@@ -237,9 +209,6 @@ func (m *Manager) executeWorktreeHook(worktreeDir string) {
 // GetWorkingDirectory returns the working directory for a task.
 func (m *Manager) GetWorkingDirectory(task *Task) string {
 	if m.shouldUseWorktree() {
-		return task.GetWorktreeDir()
-	}
-	if m.shouldUseWorkspace() {
 		return task.GetWorktreeDir()
 	}
 	return m.projectDir

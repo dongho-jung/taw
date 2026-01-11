@@ -76,12 +76,6 @@ var endTaskCmd = &cobra.Command{
 		if appCtx.IsGitRepo {
 			commitChangesIfNeeded(gitClient, workDir)
 
-			// Run verification if configured
-			_, blocked := runVerificationIfConfigured(appCtx, targetTask, windowID, workDir, tm)
-			if blocked {
-				return nil
-			}
-
 			// Push changes (only for auto-pr mode; auto-merge handles merge locally without push)
 			shouldPush := appCtx.Config != nil && appCtx.Config.OnComplete == config.OnCompleteAutoPR
 			branchName := ""
@@ -142,7 +136,7 @@ var endTaskCmd = &cobra.Command{
 				hookEnv,
 				targetTask.GetHookOutputPath("post-task"),
 				targetTask.GetHookMetaPath("post-task"),
-				time.Duration(appCtx.Config.VerifyTimeout)*time.Second,
+				constants.DefaultHookTimeout,
 			); err != nil {
 				logging.Warn("Post-task hook failed: %v", err)
 			}
@@ -347,7 +341,7 @@ func runAutoMerge(appCtx *app.App, targetTask *task.Task, windowID, workDir stri
 			hookEnv,
 			targetTask.GetHookOutputPath("pre-merge"),
 			targetTask.GetHookMetaPath("pre-merge"),
-			time.Duration(appCtx.Config.VerifyTimeout)*time.Second,
+			constants.DefaultHookTimeout,
 		); err != nil {
 			logging.Warn("Pre-merge hook failed: %v", err)
 		}
@@ -526,7 +520,7 @@ func performMerge(appCtx *app.App, targetTask *task.Task, windowID, workDir, mai
 			hookEnv,
 			targetTask.GetHookOutputPath("post-merge"),
 			targetTask.GetHookMetaPath("post-merge"),
-			time.Duration(appCtx.Config.VerifyTimeout)*time.Second,
+			constants.DefaultHookTimeout,
 		); err != nil {
 			logging.Warn("Post-merge hook failed: %v", err)
 		}

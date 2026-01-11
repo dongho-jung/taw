@@ -97,18 +97,6 @@ func parseConfig(content string) (*Config, error) {
 			cfg.PreMergeHook = value
 		case "post_merge_hook":
 			cfg.PostMergeHook = value
-		case "verify_command":
-			cfg.VerifyCommand = value
-		case "verify_timeout_sec":
-			if parsed, err := strconv.Atoi(value); err == nil {
-				cfg.VerifyTimeout = parsed
-			}
-		case "verify_required":
-			if parsed, err := strconv.ParseBool(value); err == nil {
-				cfg.VerifyRequired = parsed
-			}
-		case "non_git_workspace":
-			cfg.NonGitWorkspace = value
 		case "log_format":
 			cfg.LogFormat = value
 		case "log_max_size_mb":
@@ -325,14 +313,8 @@ func parseInheritBlock(lines []string, i *int) *InheritConfig {
 			inherit.WorkMode = boolVal
 		case "on_complete":
 			inherit.OnComplete = boolVal
-		case "non_git_workspace":
-			inherit.NonGitWorkspace = boolVal
-		case "verify_required":
-			inherit.VerifyRequired = boolVal
-		case "verify_timeout":
-			inherit.VerifyTimeout = boolVal
-		case "verify_command":
-			inherit.VerifyCommand = boolVal
+		case "theme":
+			inherit.Theme = boolVal
 		case "log_format":
 			inherit.LogFormat = boolVal
 		case "log_max_size_mb":
@@ -395,6 +377,41 @@ func formatHook(key, hook string) string {
 	return fmt.Sprintf("%s: %s\n", key, hook)
 }
 
+// formatNotificationsBlock formats the notifications configuration block for saving.
+func formatNotificationsBlock(notifications *NotificationsConfig) string {
+	if notifications == nil {
+		return ""
+	}
+
+	// Check if there's anything to write
+	hasSlack := notifications.Slack != nil && notifications.Slack.Webhook != ""
+	hasNtfy := notifications.Ntfy != nil && (notifications.Ntfy.Topic != "" || notifications.Ntfy.Server != "")
+	if !hasSlack && !hasNtfy {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\n# Notification settings\n")
+	sb.WriteString("notifications:\n")
+
+	if hasSlack {
+		sb.WriteString("  slack:\n")
+		sb.WriteString(fmt.Sprintf("    webhook: %s\n", notifications.Slack.Webhook))
+	}
+
+	if hasNtfy {
+		sb.WriteString("  ntfy:\n")
+		if notifications.Ntfy.Topic != "" {
+			sb.WriteString(fmt.Sprintf("    topic: %s\n", notifications.Ntfy.Topic))
+		}
+		if notifications.Ntfy.Server != "" {
+			sb.WriteString(fmt.Sprintf("    server: %s\n", notifications.Ntfy.Server))
+		}
+	}
+
+	return sb.String()
+}
+
 // formatInheritBlock formats the inherit configuration block for saving.
 func formatInheritBlock(inherit *InheritConfig) string {
 	if inherit == nil {
@@ -407,10 +424,7 @@ func formatInheritBlock(inherit *InheritConfig) string {
 	sb.WriteString("inherit:\n")
 	sb.WriteString(fmt.Sprintf("  work_mode: %t\n", inherit.WorkMode))
 	sb.WriteString(fmt.Sprintf("  on_complete: %t\n", inherit.OnComplete))
-	sb.WriteString(fmt.Sprintf("  non_git_workspace: %t\n", inherit.NonGitWorkspace))
-	sb.WriteString(fmt.Sprintf("  verify_required: %t\n", inherit.VerifyRequired))
-	sb.WriteString(fmt.Sprintf("  verify_timeout: %t\n", inherit.VerifyTimeout))
-	sb.WriteString(fmt.Sprintf("  verify_command: %t\n", inherit.VerifyCommand))
+	sb.WriteString(fmt.Sprintf("  theme: %t\n", inherit.Theme))
 	sb.WriteString(fmt.Sprintf("  log_format: %t\n", inherit.LogFormat))
 	sb.WriteString(fmt.Sprintf("  log_max_size_mb: %t\n", inherit.LogMaxSizeMB))
 	sb.WriteString(fmt.Sprintf("  log_max_backups: %t\n", inherit.LogMaxBackups))

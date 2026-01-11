@@ -134,12 +134,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.LogMaxBackups != 3 {
 		t.Errorf("LogMaxBackups = %d, want 3", cfg.LogMaxBackups)
 	}
-	if cfg.VerifyTimeout != 600 {
-		t.Errorf("VerifyTimeout = %d, want 600", cfg.VerifyTimeout)
-	}
-	if cfg.NonGitWorkspace != string(NonGitWorkspaceShared) {
-		t.Errorf("NonGitWorkspace = %q, want %q", cfg.NonGitWorkspace, NonGitWorkspaceShared)
-	}
 }
 
 func TestConfigNormalize_InvalidValues(t *testing.T) {

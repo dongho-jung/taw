@@ -107,11 +107,6 @@ func (m *Manager) FindIncompleteTasks(sessionName string) ([]*Task, error) {
 				// Worktree exists but no window - should reopen
 				shouldReopen = true
 			}
-		} else if m.shouldUseWorkspace() {
-			workspaceDir := task.GetWorktreeDir()
-			if _, err := os.Stat(workspaceDir); err == nil {
-				shouldReopen = true
-			}
 		}
 
 		if shouldReopen {

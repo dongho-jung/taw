@@ -14,36 +14,28 @@ import (
 // InheritConfig defines which fields inherit from global config.
 // Only used in project-level config.
 type InheritConfig struct {
-	WorkMode        bool `yaml:"work_mode"`
-	OnComplete      bool `yaml:"on_complete"`
-	Theme           bool `yaml:"theme"`
-	NonGitWorkspace bool `yaml:"non_git_workspace"`
-	VerifyRequired  bool `yaml:"verify_required"`
-	VerifyTimeout   bool `yaml:"verify_timeout"`
-	VerifyCommand   bool `yaml:"verify_command"`
-	LogFormat       bool `yaml:"log_format"`
-	LogMaxSizeMB    bool `yaml:"log_max_size_mb"`
-	LogMaxBackups   bool `yaml:"log_max_backups"`
-	Notifications   bool `yaml:"notifications"`
-	SelfImprove     bool `yaml:"self_improve"`
+	WorkMode      bool `yaml:"work_mode"`
+	OnComplete    bool `yaml:"on_complete"`
+	Theme         bool `yaml:"theme"`
+	LogFormat     bool `yaml:"log_format"`
+	LogMaxSizeMB  bool `yaml:"log_max_size_mb"`
+	LogMaxBackups bool `yaml:"log_max_backups"`
+	Notifications bool `yaml:"notifications"`
+	SelfImprove   bool `yaml:"self_improve"`
 }
 
 // DefaultInheritConfig returns the default inherit configuration.
 // By default, all settings are inherited from global config.
 func DefaultInheritConfig() *InheritConfig {
 	return &InheritConfig{
-		WorkMode:        true,
-		OnComplete:      true,
-		Theme:           true,
-		NonGitWorkspace: true,
-		VerifyRequired:  true,
-		VerifyTimeout:   true,
-		VerifyCommand:   true,
-		LogFormat:       true,
-		LogMaxSizeMB:    true,
-		LogMaxBackups:   true,
-		Notifications:   true,
-		SelfImprove:     true,
+		WorkMode:      true,
+		OnComplete:    true,
+		Theme:         true,
+		LogFormat:     true,
+		LogMaxSizeMB:  true,
+		LogMaxBackups: true,
+		Notifications: true,
+		SelfImprove:   true,
 	}
 }
 
@@ -96,14 +88,6 @@ const (
 	OnCompleteAutoPR    OnComplete = "auto-pr"    // Auto commit + create PR
 )
 
-// NonGitWorkspaceMode defines workspace behavior when git is not available.
-type NonGitWorkspaceMode string
-
-const (
-	NonGitWorkspaceShared NonGitWorkspaceMode = "shared"
-	NonGitWorkspaceCopy   NonGitWorkspaceMode = "copy"
-)
-
 // SlackConfig holds Slack notification settings.
 type SlackConfig struct {
 	Webhook string `yaml:"webhook"` // Slack incoming webhook URL
@@ -123,23 +107,19 @@ type NotificationsConfig struct {
 
 // Config represents the PAW project configuration.
 type Config struct {
-	WorkMode        WorkMode             `yaml:"work_mode"`
-	OnComplete      OnComplete           `yaml:"on_complete"`
-	Theme           string               `yaml:"theme"` // Theme preset: auto, dark, dark-blue, light, light-blue, etc.
-	WorktreeHook    string               `yaml:"worktree_hook"`
-	PreTaskHook     string               `yaml:"pre_task_hook"`
-	PostTaskHook    string               `yaml:"post_task_hook"`
-	PreMergeHook    string               `yaml:"pre_merge_hook"`
-	PostMergeHook   string               `yaml:"post_merge_hook"`
-	VerifyCommand   string               `yaml:"verify_command"`
-	VerifyTimeout   int                  `yaml:"verify_timeout_sec"`
-	VerifyRequired  bool                 `yaml:"verify_required"`
-	NonGitWorkspace string               `yaml:"non_git_workspace"`
-	Notifications   *NotificationsConfig `yaml:"notifications"`
-	LogFormat       string               `yaml:"log_format"`
-	LogMaxSizeMB    int                  `yaml:"log_max_size_mb"`
-	LogMaxBackups   int                  `yaml:"log_max_backups"`
-	SelfImprove     bool                 `yaml:"self_improve"`
+	WorkMode      WorkMode             `yaml:"work_mode"`
+	OnComplete    OnComplete           `yaml:"on_complete"`
+	Theme         string               `yaml:"theme"` // Theme preset: auto, dark, dark-blue, light, light-blue, etc.
+	WorktreeHook  string               `yaml:"worktree_hook"`
+	PreTaskHook   string               `yaml:"pre_task_hook"`
+	PostTaskHook  string               `yaml:"post_task_hook"`
+	PreMergeHook  string               `yaml:"pre_merge_hook"`
+	PostMergeHook string               `yaml:"post_merge_hook"`
+	Notifications *NotificationsConfig `yaml:"notifications"`
+	LogFormat     string               `yaml:"log_format"`
+	LogMaxSizeMB  int                  `yaml:"log_max_size_mb"`
+	LogMaxBackups int                  `yaml:"log_max_backups"`
+	SelfImprove   bool                 `yaml:"self_improve"`
 
 	// Inherit specifies which fields inherit from global config.
 	// Only used in project-level config files.
@@ -180,19 +160,6 @@ func (c *Config) Normalize() []string {
 		c.OnComplete = OnCompleteConfirm
 	}
 
-	if c.VerifyTimeout <= 0 {
-		c.VerifyTimeout = 600
-	}
-
-	c.NonGitWorkspace = strings.TrimSpace(c.NonGitWorkspace)
-	if c.NonGitWorkspace == "" {
-		c.NonGitWorkspace = string(NonGitWorkspaceShared)
-	}
-	if c.NonGitWorkspace != string(NonGitWorkspaceShared) && c.NonGitWorkspace != string(NonGitWorkspaceCopy) {
-		warnings = append(warnings, fmt.Sprintf("invalid non_git_workspace %q; defaulting to %q", c.NonGitWorkspace, NonGitWorkspaceShared))
-		c.NonGitWorkspace = string(NonGitWorkspaceShared)
-	}
-
 	c.LogFormat = strings.TrimSpace(c.LogFormat)
 	if c.LogFormat == "" {
 		c.LogFormat = "text"
@@ -214,13 +181,11 @@ func (c *Config) Normalize() []string {
 // DefaultConfig returns the default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		WorkMode:        WorkModeWorktree,
-		OnComplete:      OnCompleteConfirm,
-		LogFormat:       "text",
-		LogMaxSizeMB:    10,
-		LogMaxBackups:   3,
-		VerifyTimeout:   600,
-		NonGitWorkspace: string(NonGitWorkspaceShared),
+		WorkMode:      WorkModeWorktree,
+		OnComplete:    OnCompleteConfirm,
+		LogFormat:     "text",
+		LogMaxSizeMB:  10,
+		LogMaxBackups: 3,
 	}
 }
 
@@ -242,18 +207,6 @@ func (c *Config) MergeWithGlobal(global *Config) {
 	}
 	if c.Inherit.Theme {
 		c.Theme = global.Theme
-	}
-	if c.Inherit.NonGitWorkspace {
-		c.NonGitWorkspace = global.NonGitWorkspace
-	}
-	if c.Inherit.VerifyRequired {
-		c.VerifyRequired = global.VerifyRequired
-	}
-	if c.Inherit.VerifyTimeout {
-		c.VerifyTimeout = global.VerifyTimeout
-	}
-	if c.Inherit.VerifyCommand {
-		c.VerifyCommand = global.VerifyCommand
 	}
 	if c.Inherit.LogFormat {
 		c.LogFormat = global.LogFormat
@@ -354,20 +307,12 @@ work_mode: %s
 # - auto-pr: Auto commit + push + create pull request
 on_complete: %s
 
-# Non-git workspace: shared or copy
-non_git_workspace: %s
-
 # Hook to run after worktree/workspace creation (optional)
 # Single line example: worktree_hook: npm install
 # Multi-line example:
 #   worktree_hook: |
 #     npm install
 #     npm run build
-
-# Verification (optional)
-# verify_command: npm test
-verify_timeout_sec: %d
-verify_required: %t
 
 # Hooks (optional)
 # pre_task_hook: echo "pre task"
@@ -386,14 +331,11 @@ log_max_backups: %d
 # When enabled, the agent reflects on mistakes at task finish and
 # appends learnings to CLAUDE.md, then merges to the default branch.
 self_improve: %t
-`, c.WorkMode, c.OnComplete, c.NonGitWorkspace, c.VerifyTimeout, c.VerifyRequired, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups, c.SelfImprove)
+`, c.WorkMode, c.OnComplete, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups, c.SelfImprove)
 
 	// Add worktree_hook if set
 	if c.WorktreeHook != "" {
 		content += formatHook("worktree_hook", c.WorktreeHook)
-	}
-	if c.VerifyCommand != "" {
-		content += formatHook("verify_command", c.VerifyCommand)
 	}
 	if c.PreTaskHook != "" {
 		content += formatHook("pre_task_hook", c.PreTaskHook)
@@ -406,6 +348,11 @@ self_improve: %t
 	}
 	if c.PostMergeHook != "" {
 		content += formatHook("post_merge_hook", c.PostMergeHook)
+	}
+
+	// Add notifications block if set
+	if c.Notifications != nil {
+		content += formatNotificationsBlock(c.Notifications)
 	}
 
 	// Add inherit block if set (project config only)

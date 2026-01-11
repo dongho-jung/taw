@@ -189,10 +189,10 @@ PAW supports both global and project-level settings:
 
 In the Settings UI (⌃P → Settings), press `⌥Tab` to toggle between Global and Project views.
 
-Project settings can **inherit** from global settings. When a field is marked as inherited:
-- The value comes from global config
-- Press `i` on a field to toggle inherit on/off
-- Inherited fields show `(inherited)` indicator
+Project settings can **inherit** from global settings. For fields that support inheritance (Work Mode, On Complete, Self Improve):
+- Select "inherit" as an option using ←/→ keys
+- When "inherit" is selected, the global value is shown in parentheses (e.g., `< inherit > (worktree)`)
+- Other fields (Theme, Non-Git Workspace, Verify settings) do not support inheritance
 
 Example project config with inherit:
 ```yaml

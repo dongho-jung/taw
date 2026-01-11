@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -156,7 +155,7 @@ var cancelTaskCmd = &cobra.Command{
 				hookEnv,
 				targetTask.GetHookOutputPath("post-task"),
 				targetTask.GetHookMetaPath("post-task"),
-				time.Duration(appCtx.Config.VerifyTimeout)*time.Second,
+				constants.DefaultHookTimeout,
 			); err != nil {
 				logging.Warn("Post-task hook failed: %v", err)
 			}

@@ -16,10 +16,8 @@ import (
 	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/logging"
-	"github.com/dongho-jung/paw/internal/notify"
 	"github.com/dongho-jung/paw/internal/service"
 	"github.com/dongho-jung/paw/internal/task"
-	"github.com/dongho-jung/paw/internal/tmux"
 	"github.com/dongho-jung/paw/internal/tui"
 )
 
@@ -167,68 +165,6 @@ func loadTaskOptions(agentDir string) *config.TaskOptions {
 		return config.DefaultTaskOptions()
 	}
 	return opts
-}
-
-// verificationResult represents the outcome of running verification.
-type verificationResult struct {
-	metadata *service.VerificationMetadata
-	error    error
-	success  bool
-}
-
-// runVerificationIfConfigured runs the verification command if configured.
-// Returns verification result and whether auto-merge should be blocked.
-func runVerificationIfConfigured(appCtx *app.App, targetTask *task.Task, windowID, workDir string, tm tmux.Client) (*verificationResult, bool) {
-	if appCtx.Config == nil || appCtx.Config.VerifyCommand == "" {
-		return nil, false
-	}
-
-	verifySpinner := tui.NewSimpleSpinner("Running verification")
-	verifySpinner.Start()
-
-	verifyEnv := appCtx.GetEnvVars(targetTask.Name, workDir, windowID)
-	verifyMeta, verifyErr := service.RunVerification(
-		appCtx.Config.VerifyCommand,
-		workDir,
-		verifyEnv,
-		targetTask.GetVerifyOutputPath(),
-		targetTask.GetVerifyMetaPath(),
-		time.Duration(appCtx.Config.VerifyTimeout)*time.Second,
-	)
-
-	result := &verificationResult{
-		metadata: verifyMeta,
-		error:    verifyErr,
-		success:  verifyMeta != nil && verifyMeta.Success,
-	}
-
-	if !result.success {
-		verifySpinner.Stop(false, "failed")
-	} else {
-		verifySpinner.Stop(true, "")
-	}
-
-	// Check if auto-merge should be blocked
-	shouldBlock := appCtx.Config.OnComplete == config.OnCompleteAutoMerge &&
-		appCtx.Config.VerifyRequired &&
-		!result.success
-
-	if shouldBlock {
-		logging.Warn("Verification failed; skipping auto-merge")
-		fmt.Println()
-		fmt.Println("  ✗ Verification failed - auto-merge blocked")
-		warningWindowName := windowNameForStatus(targetTask.Name, task.StatusCorrupted)
-		if err := renameWindowWithStatus(tm, windowID, warningWindowName, appCtx.PawDir, targetTask.Name, "verify"); err != nil {
-			logging.Warn("Failed to rename window: %v", err)
-		}
-		notify.PlaySound(notify.SoundError)
-		notify.SendAll(appCtx.Config.Notifications, "Verification failed", fmt.Sprintf("⚠️ %s - auto-merge blocked", targetTask.Name))
-		if err := tm.DisplayMessage(fmt.Sprintf("⚠️ Verification failed: %s", targetTask.Name), 3000); err != nil {
-			logging.Trace("Failed to display message: %v", err)
-		}
-	}
-
-	return result, shouldBlock
 }
 
 // commitChangesIfNeeded commits any pending changes in the working directory.

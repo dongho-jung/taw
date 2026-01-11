@@ -36,12 +36,11 @@ type SettingsField int
 const (
 	SettingsFieldWorkMode SettingsField = iota
 	SettingsFieldOnComplete
-	SettingsFieldNonGitWorkspace
-	SettingsFieldVerifyRequired
+	SettingsFieldTheme
 	SettingsFieldSelfImprove
 )
 
-const generalFieldCount = 5
+const generalFieldCount = 4
 
 // Notifications tab fields
 const (
@@ -74,9 +73,11 @@ type SettingsUI struct {
 	colors    ThemeColors
 
 	// Field indices for dropdown-style fields
-	workModeIdx        int
-	onCompleteIdx      int
-	nonGitWorkspaceIdx int
+	// For fields with inherit option, index 0 = "inherit"
+	workModeIdx    int // 0=inherit, 1=worktree, 2=main (project scope) or 0=worktree, 1=main (global scope)
+	onCompleteIdx  int // 0=inherit, 1=confirm, 2=auto-merge, 3=auto-pr (project scope)
+	themeIdx       int // 0=auto, 1...N=presets (no inherit option)
+	selfImproveIdx int // 0=inherit, 1=on, 2=off (project scope) or 0=on, 1=off (global scope)
 
 	// Text input state for editable fields
 	slackWebhook string
@@ -125,59 +126,109 @@ func NewSettingsUI(globalCfg, projectCfg *config.Config, isGitRepo bool) *Settin
 	// Start with project scope, using project config
 	cfg := projectCfg
 
-	// Find current indices for dropdown fields
-	workModeIdx := 0
-	for i, m := range config.ValidWorkModes() {
-		if m == cfg.WorkMode {
-			workModeIdx = i
+	ui := &SettingsUI{
+		scope:         SettingsScopeProject,
+		globalConfig:  globalCfg,
+		projectConfig: projectCfg,
+		inheritConfig: inheritCfg,
+		config:        cfg,
+		tab:           SettingsTabGeneral,
+		field:         0,
+		isDark:        isDark,
+		isGitRepo:     isGitRepo,
+		colors:        NewThemeColors(isDark),
+	}
+
+	// Initialize field indices based on current config
+	ui.initFieldIndices()
+
+	return ui
+}
+
+// initFieldIndices initializes dropdown indices based on current config.
+func (m *SettingsUI) initFieldIndices() {
+	cfg := m.config
+
+	// WorkMode: For project scope, index 0 = inherit
+	// Check if inherited from global
+	if m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.WorkMode {
+		m.workModeIdx = 0 // inherit
+	} else {
+		// Find actual value index (offset by 1 in project scope)
+		offset := 0
+		if m.scope == SettingsScopeProject {
+			offset = 1
+		}
+		for i, mode := range config.ValidWorkModes() {
+			if mode == cfg.WorkMode {
+				m.workModeIdx = i + offset
+				break
+			}
+		}
+	}
+
+	// OnComplete: For project scope, index 0 = inherit
+	if m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.OnComplete {
+		m.onCompleteIdx = 0 // inherit
+	} else {
+		offset := 0
+		if m.scope == SettingsScopeProject {
+			offset = 1
+		}
+		for i, c := range config.ValidOnCompletes() {
+			if c == cfg.OnComplete {
+				m.onCompleteIdx = i + offset
+				break
+			}
+		}
+	}
+
+	// Theme: no inherit option (0=auto, 1+=presets)
+	m.themeIdx = 0 // default to auto
+	themeOptions := getThemeOptions()
+	for i, t := range themeOptions {
+		if t == cfg.Theme {
+			m.themeIdx = i
 			break
 		}
 	}
 
-	onCompleteIdx := 0
-	for i, c := range config.ValidOnCompletes() {
-		if c == cfg.OnComplete {
-			onCompleteIdx = i
-			break
+	// SelfImprove: For project scope, index 0 = inherit
+	if m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.SelfImprove {
+		m.selfImproveIdx = 0 // inherit
+	} else {
+		offset := 0
+		if m.scope == SettingsScopeProject {
+			offset = 1
 		}
-	}
-
-	nonGitWorkspaceIdx := 0
-	if cfg.NonGitWorkspace == string(config.NonGitWorkspaceCopy) {
-		nonGitWorkspaceIdx = 1
+		if cfg.SelfImprove {
+			m.selfImproveIdx = 0 + offset // on
+		} else {
+			m.selfImproveIdx = 1 + offset // off
+		}
 	}
 
 	// Initialize text fields
-	slackWebhook := ""
-	ntfyTopic := ""
-	ntfyServer := ""
+	m.slackWebhook = ""
+	m.ntfyTopic = ""
+	m.ntfyServer = ""
 	if cfg.Notifications != nil {
 		if cfg.Notifications.Slack != nil {
-			slackWebhook = cfg.Notifications.Slack.Webhook
+			m.slackWebhook = cfg.Notifications.Slack.Webhook
 		}
 		if cfg.Notifications.Ntfy != nil {
-			ntfyTopic = cfg.Notifications.Ntfy.Topic
-			ntfyServer = cfg.Notifications.Ntfy.Server
+			m.ntfyTopic = cfg.Notifications.Ntfy.Topic
+			m.ntfyServer = cfg.Notifications.Ntfy.Server
 		}
 	}
+}
 
-	return &SettingsUI{
-		scope:              SettingsScopeProject,
-		globalConfig:       globalCfg,
-		projectConfig:      projectCfg,
-		inheritConfig:      inheritCfg,
-		config:             cfg,
-		tab:                SettingsTabGeneral,
-		field:              0,
-		isDark:             isDark,
-		isGitRepo:          isGitRepo,
-		colors:             NewThemeColors(isDark),
-		workModeIdx:        workModeIdx,
-		onCompleteIdx:      onCompleteIdx,
-		nonGitWorkspaceIdx: nonGitWorkspaceIdx,
-		slackWebhook:       slackWebhook,
-		ntfyTopic:          ntfyTopic,
-		ntfyServer:         ntfyServer,
+// getThemeOptions returns the list of available theme options.
+func getThemeOptions() []string {
+	return []string{
+		"auto",
+		"dark", "dark-blue", "dark-green", "dark-purple", "dark-warm", "dark-mono",
+		"light", "light-blue", "light-green", "light-purple", "light-warm", "light-mono",
 	}
 }
 
@@ -262,62 +313,10 @@ func (m *SettingsUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.handleRight()
 			return m, nil
 
-		case " ":
-			// Toggle for boolean fields
-			if m.tab == SettingsTabGeneral && m.field == SettingsFieldVerifyRequired {
-				m.config.VerifyRequired = !m.config.VerifyRequired
-				return m, nil
-			}
-
-		case "i":
-			// Toggle inherit for current field (project scope only)
-			if m.scope == SettingsScopeProject && m.tab == SettingsTabGeneral {
-				m.toggleInheritForCurrentField()
-				return m, nil
-			}
 		}
 	}
 
 	return m, nil
-}
-
-// toggleInheritForCurrentField toggles the inherit flag for the current field.
-func (m *SettingsUI) toggleInheritForCurrentField() {
-	if m.inheritConfig == nil || m.scope != SettingsScopeProject {
-		return
-	}
-
-	switch m.field {
-	case SettingsFieldWorkMode:
-		m.inheritConfig.WorkMode = !m.inheritConfig.WorkMode
-		if m.inheritConfig.WorkMode {
-			// Copy global value to project
-			m.config.WorkMode = m.globalConfig.WorkMode
-			m.updateFieldIndices()
-		}
-	case SettingsFieldOnComplete:
-		m.inheritConfig.OnComplete = !m.inheritConfig.OnComplete
-		if m.inheritConfig.OnComplete {
-			m.config.OnComplete = m.globalConfig.OnComplete
-			m.updateFieldIndices()
-		}
-	case SettingsFieldNonGitWorkspace:
-		m.inheritConfig.NonGitWorkspace = !m.inheritConfig.NonGitWorkspace
-		if m.inheritConfig.NonGitWorkspace {
-			m.config.NonGitWorkspace = m.globalConfig.NonGitWorkspace
-			m.updateFieldIndices()
-		}
-	case SettingsFieldVerifyRequired:
-		m.inheritConfig.VerifyRequired = !m.inheritConfig.VerifyRequired
-		if m.inheritConfig.VerifyRequired {
-			m.config.VerifyRequired = m.globalConfig.VerifyRequired
-		}
-	case SettingsFieldSelfImprove:
-		m.inheritConfig.SelfImprove = !m.inheritConfig.SelfImprove
-		if m.inheritConfig.SelfImprove {
-			m.config.SelfImprove = m.globalConfig.SelfImprove
-		}
-	}
 }
 
 func (m *SettingsUI) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -377,31 +376,29 @@ func (m *SettingsUI) isTextField() bool {
 }
 
 func (m *SettingsUI) getCurrentTextValue() string {
-	if m.tab != SettingsTabNotifications {
-		return ""
-	}
-	switch m.field {
-	case SettingsFieldSlackWebhook:
-		return m.slackWebhook
-	case SettingsFieldNtfyTopic:
-		return m.ntfyTopic
-	case SettingsFieldNtfyServer:
-		return m.ntfyServer
+	if m.tab == SettingsTabNotifications {
+		switch m.field {
+		case SettingsFieldSlackWebhook:
+			return m.slackWebhook
+		case SettingsFieldNtfyTopic:
+			return m.ntfyTopic
+		case SettingsFieldNtfyServer:
+			return m.ntfyServer
+		}
 	}
 	return ""
 }
 
 func (m *SettingsUI) setCurrentTextValue(val string) {
-	if m.tab != SettingsTabNotifications {
-		return
-	}
-	switch m.field {
-	case SettingsFieldSlackWebhook:
-		m.slackWebhook = val
-	case SettingsFieldNtfyTopic:
-		m.ntfyTopic = val
-	case SettingsFieldNtfyServer:
-		m.ntfyServer = val
+	if m.tab == SettingsTabNotifications {
+		switch m.field {
+		case SettingsFieldSlackWebhook:
+			m.slackWebhook = val
+		case SettingsFieldNtfyTopic:
+			m.ntfyTopic = val
+		case SettingsFieldNtfyServer:
+			m.ntfyServer = val
+		}
 	}
 }
 
@@ -423,14 +420,14 @@ func (m *SettingsUI) handleLeft() {
 			if m.onCompleteIdx > 0 {
 				m.onCompleteIdx--
 			}
-		case SettingsFieldNonGitWorkspace:
-			if m.nonGitWorkspaceIdx > 0 {
-				m.nonGitWorkspaceIdx--
+		case SettingsFieldTheme:
+			if m.themeIdx > 0 {
+				m.themeIdx--
 			}
-		case SettingsFieldVerifyRequired:
-			m.config.VerifyRequired = true
 		case SettingsFieldSelfImprove:
-			m.config.SelfImprove = true
+			if m.selfImproveIdx > 0 {
+				m.selfImproveIdx--
+			}
 		}
 	}
 }
@@ -439,43 +436,103 @@ func (m *SettingsUI) handleRight() {
 	if m.tab == SettingsTabGeneral {
 		switch m.field {
 		case SettingsFieldWorkMode:
-			modes := config.ValidWorkModes()
-			if m.workModeIdx < len(modes)-1 {
+			maxIdx := len(config.ValidWorkModes()) - 1
+			if m.scope == SettingsScopeProject {
+				maxIdx++ // +1 for "inherit" option
+			}
+			if m.workModeIdx < maxIdx {
 				m.workModeIdx++
 			}
 		case SettingsFieldOnComplete:
-			completes := config.ValidOnCompletes()
-			if m.onCompleteIdx < len(completes)-1 {
+			maxIdx := len(config.ValidOnCompletes()) - 1
+			if m.scope == SettingsScopeProject {
+				maxIdx++ // +1 for "inherit" option
+			}
+			if m.onCompleteIdx < maxIdx {
 				m.onCompleteIdx++
 			}
-		case SettingsFieldNonGitWorkspace:
-			if m.nonGitWorkspaceIdx < 1 {
-				m.nonGitWorkspaceIdx++
+		case SettingsFieldTheme:
+			themeOptions := getThemeOptions()
+			if m.themeIdx < len(themeOptions)-1 {
+				m.themeIdx++
 			}
-		case SettingsFieldVerifyRequired:
-			m.config.VerifyRequired = false
 		case SettingsFieldSelfImprove:
-			m.config.SelfImprove = false
+			maxIdx := 1 // on=0, off=1
+			if m.scope == SettingsScopeProject {
+				maxIdx = 2 // inherit=0, on=1, off=2
+			}
+			if m.selfImproveIdx < maxIdx {
+				m.selfImproveIdx++
+			}
 		}
 	}
 }
 
 func (m *SettingsUI) applyChanges() {
-	// Apply general settings
+	// Ensure inherit config exists for project scope
+	if m.scope == SettingsScopeProject && m.inheritConfig == nil {
+		m.inheritConfig = config.DefaultInheritConfig()
+	}
+
+	// Apply WorkMode
 	modes := config.ValidWorkModes()
-	if m.workModeIdx < len(modes) {
-		m.config.WorkMode = modes[m.workModeIdx]
-	}
-
-	completes := config.ValidOnCompletes()
-	if m.onCompleteIdx < len(completes) {
-		m.config.OnComplete = completes[m.onCompleteIdx]
-	}
-
-	if m.nonGitWorkspaceIdx == 0 {
-		m.config.NonGitWorkspace = string(config.NonGitWorkspaceShared)
+	if m.scope == SettingsScopeProject {
+		if m.workModeIdx == 0 {
+			// inherit selected
+			m.inheritConfig.WorkMode = true
+			m.config.WorkMode = m.globalConfig.WorkMode
+		} else {
+			m.inheritConfig.WorkMode = false
+			if m.workModeIdx-1 < len(modes) {
+				m.config.WorkMode = modes[m.workModeIdx-1]
+			}
+		}
 	} else {
-		m.config.NonGitWorkspace = string(config.NonGitWorkspaceCopy)
+		// Global scope - no inherit option
+		if m.workModeIdx < len(modes) {
+			m.config.WorkMode = modes[m.workModeIdx]
+		}
+	}
+
+	// Apply OnComplete
+	completes := config.ValidOnCompletes()
+	if m.scope == SettingsScopeProject {
+		if m.onCompleteIdx == 0 {
+			// inherit selected
+			m.inheritConfig.OnComplete = true
+			m.config.OnComplete = m.globalConfig.OnComplete
+		} else {
+			m.inheritConfig.OnComplete = false
+			if m.onCompleteIdx-1 < len(completes) {
+				m.config.OnComplete = completes[m.onCompleteIdx-1]
+			}
+		}
+	} else {
+		// Global scope - no inherit option
+		if m.onCompleteIdx < len(completes) {
+			m.config.OnComplete = completes[m.onCompleteIdx]
+		}
+	}
+
+	// Apply Theme (no inherit option)
+	themeOptions := getThemeOptions()
+	if m.themeIdx < len(themeOptions) {
+		m.config.Theme = themeOptions[m.themeIdx]
+	}
+
+	// Apply SelfImprove
+	if m.scope == SettingsScopeProject {
+		if m.selfImproveIdx == 0 {
+			// inherit selected
+			m.inheritConfig.SelfImprove = true
+			m.config.SelfImprove = m.globalConfig.SelfImprove
+		} else {
+			m.inheritConfig.SelfImprove = false
+			m.config.SelfImprove = (m.selfImproveIdx == 1) // 1=on, 2=off
+		}
+	} else {
+		// Global scope - no inherit option
+		m.config.SelfImprove = (m.selfImproveIdx == 0) // 0=on, 1=off
 	}
 
 	// Apply notification settings
@@ -525,43 +582,8 @@ func (m *SettingsUI) switchScope() {
 
 // updateFieldIndices updates dropdown indices based on current config.
 func (m *SettingsUI) updateFieldIndices() {
-	// Work mode
-	m.workModeIdx = 0
-	for i, mode := range config.ValidWorkModes() {
-		if mode == m.config.WorkMode {
-			m.workModeIdx = i
-			break
-		}
-	}
-
-	// On complete
-	m.onCompleteIdx = 0
-	for i, c := range config.ValidOnCompletes() {
-		if c == m.config.OnComplete {
-			m.onCompleteIdx = i
-			break
-		}
-	}
-
-	// Non-git workspace
-	m.nonGitWorkspaceIdx = 0
-	if m.config.NonGitWorkspace == string(config.NonGitWorkspaceCopy) {
-		m.nonGitWorkspaceIdx = 1
-	}
-
-	// Update text fields
-	m.slackWebhook = ""
-	m.ntfyTopic = ""
-	m.ntfyServer = ""
-	if m.config.Notifications != nil {
-		if m.config.Notifications.Slack != nil {
-			m.slackWebhook = m.config.Notifications.Slack.Webhook
-		}
-		if m.config.Notifications.Ntfy != nil {
-			m.ntfyTopic = m.config.Notifications.Ntfy.Topic
-			m.ntfyServer = m.config.Notifications.Ntfy.Server
-		}
-	}
+	// Reinitialize all field indices for the current scope
+	m.initFieldIndices()
 }
 
 // View renders the settings UI.
@@ -585,12 +607,12 @@ func (m *SettingsUI) View() tea.View {
 
 	labelStyle := lipgloss.NewStyle().
 		Foreground(c.TextNormal).
-		Width(20)
+		Width(18)
 
 	selectedLabelStyle := lipgloss.NewStyle().
 		Foreground(c.Accent).
 		Bold(true).
-		Width(20)
+		Width(18)
 
 	valueStyle := lipgloss.NewStyle().
 		Foreground(c.TextNormal)
@@ -636,7 +658,11 @@ func (m *SettingsUI) View() tea.View {
 		}
 	}
 	sb.WriteString("\n")
-	sb.WriteString(dimStyle.Render(strings.Repeat("─", 50)))
+	separatorWidth := m.width - 4 // account for margins
+	if separatorWidth < 40 {
+		separatorWidth = 40
+	}
+	sb.WriteString(dimStyle.Render(strings.Repeat("─", separatorWidth)))
 	sb.WriteString("\n\n")
 
 	// Content based on tab
@@ -651,8 +677,6 @@ func (m *SettingsUI) View() tea.View {
 	sb.WriteString("\n")
 	if m.editingText {
 		sb.WriteString(helpStyle.Render("Enter: Confirm  |  Esc: Cancel  |  ←/→: Move cursor"))
-	} else if m.scope == SettingsScopeProject && m.tab == SettingsTabGeneral {
-		sb.WriteString(helpStyle.Render("⌥Tab: Global/Project  |  i: Toggle inherit  |  ↑/↓: Navigate  |  ←/→: Change  |  ⌃S: Save"))
 	} else {
 		sb.WriteString(helpStyle.Render("⌥Tab: Global/Project  |  Tab: Switch tab  |  ↑/↓: Navigate  |  ←/→: Change  |  ⌃S: Save  |  Esc: Cancel"))
 	}
@@ -663,145 +687,128 @@ func (m *SettingsUI) View() tea.View {
 }
 
 func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedLabelStyle, valueStyle, selectedValueStyle, dimStyle lipgloss.Style) {
-	// Helper to render inherit indicator
-	inheritIndicator := func(inherited bool) string {
-		if m.scope != SettingsScopeProject {
-			return ""
+	// Helper to render a selector-style field: < value >
+	renderSelector := func(value string, focused bool, hint string) string {
+		var display string
+		if focused {
+			display = selectedValueStyle.Render("< " + value + " >")
+		} else {
+			display = valueStyle.Render("[ " + value + " ]")
 		}
-		if inherited {
-			return dimStyle.Render(" (inherited)")
+		if hint != "" {
+			display += dimStyle.Render(" " + hint)
 		}
-		return ""
+		return display
 	}
 
-	// Work Mode
+	// Work Mode (with inherit option in project scope)
 	{
 		label := labelStyle.Render("Work Mode:")
 		if m.field == SettingsFieldWorkMode {
 			label = selectedLabelStyle.Render("Work Mode:")
 		}
+		focused := m.field == SettingsFieldWorkMode
 
-		inherited := m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.WorkMode
 		modes := config.ValidWorkModes()
-		var parts []string
-		for i, mode := range modes {
-			if i == m.workModeIdx {
-				if m.field == SettingsFieldWorkMode {
-					parts = append(parts, selectedValueStyle.Render("["+string(mode)+"]"))
-				} else {
-					parts = append(parts, valueStyle.Render("["+string(mode)+"]"))
-				}
-			} else {
-				parts = append(parts, dimStyle.Render(" "+string(mode)+" "))
+		var currentValue string
+		var hint string
+
+		if m.scope == SettingsScopeProject {
+			if m.workModeIdx == 0 {
+				currentValue = "inherit"
+				hint = "(" + string(m.globalConfig.WorkMode) + ")"
+			} else if m.workModeIdx-1 < len(modes) {
+				currentValue = string(modes[m.workModeIdx-1])
+			}
+		} else {
+			if m.workModeIdx < len(modes) {
+				currentValue = string(modes[m.workModeIdx])
 			}
 		}
-		sb.WriteString(label + strings.Join(parts, "") + inheritIndicator(inherited))
+		sb.WriteString(label + renderSelector(currentValue, focused, hint))
 		sb.WriteString("\n")
 	}
 
-	// On Complete
+	// On Complete (with inherit option in project scope)
 	{
 		label := labelStyle.Render("On Complete:")
 		if m.field == SettingsFieldOnComplete {
 			label = selectedLabelStyle.Render("On Complete:")
 		}
+		focused := m.field == SettingsFieldOnComplete
 
-		inherited := m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.OnComplete
 		completes := config.ValidOnCompletes()
-		var parts []string
-		for i, c := range completes {
-			if i == m.onCompleteIdx {
-				if m.field == SettingsFieldOnComplete {
-					parts = append(parts, selectedValueStyle.Render("["+string(c)+"]"))
-				} else {
-					parts = append(parts, valueStyle.Render("["+string(c)+"]"))
-				}
-			} else {
-				parts = append(parts, dimStyle.Render(" "+string(c)+" "))
+		var currentValue string
+		var hint string
+
+		if m.scope == SettingsScopeProject {
+			if m.onCompleteIdx == 0 {
+				currentValue = "inherit"
+				hint = "(" + string(m.globalConfig.OnComplete) + ")"
+			} else if m.onCompleteIdx-1 < len(completes) {
+				currentValue = string(completes[m.onCompleteIdx-1])
 			}
-		}
-		sb.WriteString(label + strings.Join(parts, "") + inheritIndicator(inherited))
-		sb.WriteString("\n")
-	}
-
-	// Non-Git Workspace
-	{
-		label := labelStyle.Render("Non-Git Workspace:")
-		if m.field == SettingsFieldNonGitWorkspace {
-			label = selectedLabelStyle.Render("Non-Git Workspace:")
-		}
-
-		inherited := m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.NonGitWorkspace
-		workspaces := []string{"shared", "copy"}
-		var parts []string
-		for i, w := range workspaces {
-			if i == m.nonGitWorkspaceIdx {
-				if m.field == SettingsFieldNonGitWorkspace {
-					parts = append(parts, selectedValueStyle.Render("["+w+"]"))
-				} else {
-					parts = append(parts, valueStyle.Render("["+w+"]"))
-				}
-			} else {
-				parts = append(parts, dimStyle.Render(" "+w+" "))
-			}
-		}
-		sb.WriteString(label + strings.Join(parts, "") + inheritIndicator(inherited))
-		sb.WriteString("\n")
-	}
-
-	// Verify Required
-	{
-		label := labelStyle.Render("Verify Required:")
-		if m.field == SettingsFieldVerifyRequired {
-			label = selectedLabelStyle.Render("Verify Required:")
-		}
-
-		inherited := m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.VerifyRequired
-		var onText, offText string
-		if m.config.VerifyRequired {
-			if m.field == SettingsFieldVerifyRequired {
-				onText = selectedValueStyle.Render("[on]")
-			} else {
-				onText = valueStyle.Render("[on]")
-			}
-			offText = dimStyle.Render(" off ")
 		} else {
-			onText = dimStyle.Render(" on ")
-			if m.field == SettingsFieldVerifyRequired {
-				offText = selectedValueStyle.Render("[off]")
-			} else {
-				offText = valueStyle.Render("[off]")
+			if m.onCompleteIdx < len(completes) {
+				currentValue = string(completes[m.onCompleteIdx])
 			}
 		}
-		sb.WriteString(label + onText + " " + offText + inheritIndicator(inherited))
+		sb.WriteString(label + renderSelector(currentValue, focused, hint))
 		sb.WriteString("\n")
 	}
 
-	// Self Improve
+	// Theme (no inherit option)
+	{
+		label := labelStyle.Render("Theme:")
+		if m.field == SettingsFieldTheme {
+			label = selectedLabelStyle.Render("Theme:")
+		}
+		focused := m.field == SettingsFieldTheme
+
+		themeOptions := getThemeOptions()
+		currentTheme := "auto"
+		if m.themeIdx < len(themeOptions) {
+			currentTheme = themeOptions[m.themeIdx]
+		}
+		sb.WriteString(label + renderSelector(currentTheme, focused, ""))
+		sb.WriteString("\n")
+	}
+
+	// Self Improve (with inherit option in project scope)
 	{
 		label := labelStyle.Render("Self Improve:")
 		if m.field == SettingsFieldSelfImprove {
 			label = selectedLabelStyle.Render("Self Improve:")
 		}
+		focused := m.field == SettingsFieldSelfImprove
 
-		inherited := m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.SelfImprove
-		var onText, offText string
-		if m.config.SelfImprove {
-			if m.field == SettingsFieldSelfImprove {
-				onText = selectedValueStyle.Render("[on]")
-			} else {
-				onText = valueStyle.Render("[on]")
+		var currentValue string
+		var hint string
+
+		if m.scope == SettingsScopeProject {
+			// inherit=0, on=1, off=2
+			switch m.selfImproveIdx {
+			case 0:
+				currentValue = "inherit"
+				if m.globalConfig.SelfImprove {
+					hint = "(on)"
+				} else {
+					hint = "(off)"
+				}
+			case 1:
+				currentValue = "on"
+			case 2:
+				currentValue = "off"
 			}
-			offText = dimStyle.Render(" off ")
 		} else {
-			onText = dimStyle.Render(" on ")
-			if m.field == SettingsFieldSelfImprove {
-				offText = selectedValueStyle.Render("[off]")
+			// on=0, off=1
+			if m.selfImproveIdx == 0 {
+				currentValue = "on"
 			} else {
-				offText = valueStyle.Render("[off]")
+				currentValue = "off"
 			}
 		}
-		sb.WriteString(label + onText + " " + offText + inheritIndicator(inherited))
+		sb.WriteString(label + renderSelector(currentValue, focused, hint))
 		sb.WriteString("\n")
 	}
 }
