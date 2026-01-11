@@ -451,6 +451,9 @@ func (m *HelpViewer) copySelection() {
 
 // RunHelpViewer runs the help viewer with the given content.
 func RunHelpViewer(content string) error {
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
 	m := NewHelpViewer(content)
 	p := tea.NewProgram(m)
 	_, err := p.Run()

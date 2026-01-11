@@ -164,6 +164,9 @@ func (m *RecoverUI) Result() task.RecoveryAction {
 
 // RunRecoverUI runs the recovery UI and returns the chosen action.
 func RunRecoverUI(t *task.Task) (task.RecoveryAction, error) {
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
 	m := NewRecoverUI(t)
 	p := tea.NewProgram(m)
 

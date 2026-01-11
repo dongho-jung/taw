@@ -837,6 +837,9 @@ func (m *DiffViewer) loadDiffOutput() tea.Cmd {
 
 // RunDiffViewer runs the diff viewer for the given working directory.
 func RunDiffViewer(workDir, mainBranch string) error {
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
 	m := NewDiffViewer(workDir, mainBranch)
 	p := tea.NewProgram(m)
 	_, err := p.Run()

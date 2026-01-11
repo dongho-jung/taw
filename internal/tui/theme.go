@@ -174,6 +174,14 @@ func setCachedDarkMode(isDark bool) {
 	cachedDarkMode.Store(darkModeLight)
 }
 
+// ResetDarkModeCache clears the cached dark mode value, forcing re-detection
+// on the next call to DetectDarkMode(). This should be called before starting
+// a new TUI to ensure the terminal's current theme is detected, especially
+// when the user may have attached from a different terminal or switched themes.
+func ResetDarkModeCache() {
+	cachedDarkMode.Store(darkModeUnknown)
+}
+
 // detectDarkModeWithRetry performs dark mode detection with multiple attempts
 // to improve reliability. The OSC query to detect background color can be
 // unreliable if called too early or if there's buffered input.

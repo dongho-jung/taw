@@ -101,6 +101,9 @@ func (m *BranchMenu) Action() BranchAction {
 
 // RunBranchMenu runs the branch menu and returns the selected action.
 func RunBranchMenu() (BranchAction, error) {
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
 	m := NewBranchMenu()
 	p := tea.NewProgram(m)
 

@@ -368,6 +368,9 @@ func (m *TemplateEditor) Result() TemplateEditorResult {
 
 // RunTemplateEditor runs the template editor and returns the result.
 func RunTemplateEditor(mode TemplateEditorMode, name, content string) (*TemplateEditorResult, error) {
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
 	m := NewTemplateEditor(mode, name, content)
 	p := tea.NewProgram(m)
 

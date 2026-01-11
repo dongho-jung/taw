@@ -117,6 +117,9 @@ func RunTaskInputWithTasks(activeTasks []string) (*TaskInputResult, error) {
 
 // RunTaskInputWithTasksAndContent runs the task input with active task list and initial content.
 func RunTaskInputWithTasksAndContent(activeTasks []string, initialContent string) (*TaskInputResult, error) {
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
 	m := NewTaskInputWithTasks(activeTasks)
 	if initialContent != "" {
 		m.SetContent(initialContent)

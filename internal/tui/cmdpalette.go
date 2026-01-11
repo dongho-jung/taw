@@ -255,6 +255,9 @@ func RunCommandPalette(commands []Command) (CommandPaletteAction, *Command, erro
 	logging.Debug("-> RunCommandPalette(commands=%d)", len(commands))
 	defer logging.Debug("<- RunCommandPalette")
 
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
 	m := NewCommandPalette(commands)
 	logging.Debug("RunCommandPalette: starting tea.Program")
 	p := tea.NewProgram(m)

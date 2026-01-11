@@ -462,6 +462,9 @@ func (m *TemplateUI) Result() (TemplateAction, *config.Template) {
 
 // RunTemplateUI runs the template UI and returns the action and selected template.
 func RunTemplateUI(pawDir string) (TemplateAction, *config.Template, error) {
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
 	m := NewTemplateUI(pawDir)
 	p := tea.NewProgram(m)
 

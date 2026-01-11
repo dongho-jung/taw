@@ -245,6 +245,9 @@ func (m *EndTaskUI) runNextStep() tea.Cmd {
 
 // RunEndTaskUI runs the finish task UI.
 func RunEndTaskUI(taskName string, isGitRepo bool) error {
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
 	m := NewEndTaskUI(taskName, isGitRepo)
 	p := tea.NewProgram(m)
 	_, err := p.Run()

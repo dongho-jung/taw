@@ -159,3 +159,44 @@ func TestCachedDarkModeValue(t *testing.T) {
 	// Clean up
 	cachedDarkMode.Store(darkModeUnknown)
 }
+
+func TestResetDarkModeCache(t *testing.T) {
+	t.Run("Reset clears dark mode cache", func(t *testing.T) {
+		// Set cache to dark
+		setCachedDarkMode(true)
+		isDark, ok := cachedDarkModeValue()
+		if !ok || !isDark {
+			t.Error("expected cache to be set to dark before reset")
+		}
+
+		// Reset cache
+		ResetDarkModeCache()
+
+		// Verify cache is unknown
+		_, ok = cachedDarkModeValue()
+		if ok {
+			t.Error("expected cache to be unknown after reset")
+		}
+	})
+
+	t.Run("Reset clears light mode cache", func(t *testing.T) {
+		// Set cache to light
+		setCachedDarkMode(false)
+		isDark, ok := cachedDarkModeValue()
+		if !ok || isDark {
+			t.Error("expected cache to be set to light before reset")
+		}
+
+		// Reset cache
+		ResetDarkModeCache()
+
+		// Verify cache is unknown
+		_, ok = cachedDarkModeValue()
+		if ok {
+			t.Error("expected cache to be unknown after reset")
+		}
+	})
+
+	// Clean up
+	cachedDarkMode.Store(darkModeUnknown)
+}

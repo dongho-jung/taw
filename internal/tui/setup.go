@@ -218,6 +218,9 @@ func (m *SetupWizard) Result() SetupResult {
 
 // RunSetupWizard runs the setup wizard and returns the result.
 func RunSetupWizard(isGitRepo bool) (*SetupResult, error) {
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
 	m := NewSetupWizard(isGitRepo)
 	p := tea.NewProgram(m)
 

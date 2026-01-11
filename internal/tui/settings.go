@@ -938,6 +938,9 @@ func RunSettingsUI(globalCfg, projectCfg *config.Config, isGitRepo bool) (*Setti
 	logging.Debug("-> RunSettingsUI(isGitRepo=%v)", isGitRepo)
 	defer logging.Debug("<- RunSettingsUI")
 
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
 	m := NewSettingsUI(globalCfg, projectCfg, isGitRepo)
 	logging.Debug("RunSettingsUI: starting tea.Program")
 	p := tea.NewProgram(m)
