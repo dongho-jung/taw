@@ -395,8 +395,11 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		keyStr := msg.String()
 
-		// Handle Ctrl+C for copying selection (textarea or kanban)
-		if keyStr == "ctrl+c" {
+		// Handle Ctrl+C or Cmd+C for copying selection (textarea or kanban)
+		// Cmd+C works on terminals that support the Kitty keyboard protocol
+		key := msg.Key()
+		isCopyKey := keyStr == "ctrl+c" || (key.Code == 'c' && key.Mod&tea.ModSuper != 0)
+		if isCopyKey {
 			if m.focusPanel == FocusPanelLeft && m.textarea.HasSelection() {
 				_ = m.textarea.CopySelection()
 				return m, nil

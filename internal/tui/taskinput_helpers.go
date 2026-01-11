@@ -124,6 +124,9 @@ func RunTaskInputWithTasksAndContent(activeTasks []string, initialContent string
 	if initialContent != "" {
 		m.SetContent(initialContent)
 	}
+	// Note: Cmd+C support depends on terminal supporting Kitty keyboard protocol
+	// (e.g., Kitty, WezTerm, iTerm2 with protocol enabled)
+	// Ctrl+C works in all terminals
 	p := tea.NewProgram(m)
 
 	finalModel, err := p.Run()
