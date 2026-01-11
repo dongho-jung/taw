@@ -121,6 +121,10 @@ func parseConfig(content string) (*Config, error) {
 			if parsed, err := strconv.Atoi(value); err == nil {
 				cfg.LogMaxBackups = parsed
 			}
+		case "self_improve":
+			if parsed, err := strconv.ParseBool(value); err == nil {
+				cfg.SelfImprove = parsed
+			}
 		}
 	}
 
@@ -341,6 +345,8 @@ func parseInheritBlock(lines []string, i *int) *InheritConfig {
 			inherit.LogMaxBackups = boolVal
 		case "notifications":
 			inherit.Notifications = boolVal
+		case "self_improve":
+			inherit.SelfImprove = boolVal
 		}
 
 		*i++
@@ -414,5 +420,6 @@ func formatInheritBlock(inherit *InheritConfig) string {
 	sb.WriteString(fmt.Sprintf("  log_max_size_mb: %t\n", inherit.LogMaxSizeMB))
 	sb.WriteString(fmt.Sprintf("  log_max_backups: %t\n", inherit.LogMaxBackups))
 	sb.WriteString(fmt.Sprintf("  notifications: %t\n", inherit.Notifications))
+	sb.WriteString(fmt.Sprintf("  self_improve: %t\n", inherit.SelfImprove))
 	return sb.String()
 }

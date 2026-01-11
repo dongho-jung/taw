@@ -185,6 +185,19 @@ var endTaskCmd = &cobra.Command{
 			logging.Warn("Failed to save history: %v", err)
 		}
 
+		// Run self-improve if enabled
+		if appCtx.Config != nil && appCtx.Config.SelfImprove && appCtx.IsGitRepo {
+			selfImproveSpinner := tui.NewSimpleSpinner("Running self-improve analysis")
+			selfImproveSpinner.Start()
+
+			if err := runSelfImprove(appCtx.ProjectDir, targetTask.Name, taskContent, paneContent, gitClient); err != nil {
+				selfImproveSpinner.Stop(false, err.Error())
+				logging.Warn("Self-improve failed: %v", err)
+			} else {
+				selfImproveSpinner.Stop(true, "")
+			}
+		}
+
 		// Notify user that task completed successfully
 		logging.Trace("endTaskCmd: playing SoundTaskCompleted for task=%s", targetTask.Name)
 		notify.PlaySound(notify.SoundTaskCompleted)

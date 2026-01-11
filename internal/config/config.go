@@ -25,6 +25,7 @@ type InheritConfig struct {
 	LogMaxSizeMB    bool `yaml:"log_max_size_mb"`
 	LogMaxBackups   bool `yaml:"log_max_backups"`
 	Notifications   bool `yaml:"notifications"`
+	SelfImprove     bool `yaml:"self_improve"`
 }
 
 // DefaultInheritConfig returns the default inherit configuration.
@@ -42,6 +43,7 @@ func DefaultInheritConfig() *InheritConfig {
 		LogMaxSizeMB:    true,
 		LogMaxBackups:   true,
 		Notifications:   true,
+		SelfImprove:     true,
 	}
 }
 
@@ -146,6 +148,7 @@ type Config struct {
 	LogFormat       string               `yaml:"log_format"`
 	LogMaxSizeMB    int                  `yaml:"log_max_size_mb"`
 	LogMaxBackups   int                  `yaml:"log_max_backups"`
+	SelfImprove     bool                 `yaml:"self_improve"`
 
 	// Inherit specifies which fields inherit from global config.
 	// Only used in project-level config files.
@@ -283,6 +286,9 @@ func (c *Config) MergeWithGlobal(global *Config) {
 	if c.Inherit.Notifications && global.Notifications != nil {
 		c.Notifications = global.Notifications
 	}
+	if c.Inherit.SelfImprove {
+		c.SelfImprove = global.SelfImprove
+	}
 }
 
 // Clone creates a deep copy of the config.
@@ -405,7 +411,12 @@ log_format: %s
 # Log rotation (size in MB, backups)
 log_max_size_mb: %d
 log_max_backups: %d
-`, c.WorkMode, c.OnComplete, c.Theme, c.NonGitWorkspace, c.VerifyTimeout, c.VerifyRequired, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups)
+
+# Self-improve: on or off (default: off)
+# When enabled, the agent reflects on mistakes at task finish and
+# appends learnings to CLAUDE.md, then merges to the default branch.
+self_improve: %t
+`, c.WorkMode, c.OnComplete, c.Theme, c.NonGitWorkspace, c.VerifyTimeout, c.VerifyRequired, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups, c.SelfImprove)
 
 	// Add worktree_hook if set
 	if c.WorktreeHook != "" {

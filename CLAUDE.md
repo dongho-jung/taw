@@ -199,12 +199,33 @@ Example project config with inherit:
 work_mode: worktree
 on_complete: confirm
 theme: auto
+self_improve: false
 
 # Inherit settings from global config
 inherit:
   work_mode: true     # Use global work_mode
   on_complete: false  # Use project-specific value
   theme: true         # Use global theme
+  self_improve: true  # Use global self_improve
+```
+
+### Self-Improve Feature
+
+When `self_improve` is enabled (default: off), PAW analyzes completed tasks to identify:
+- **Mistakes made**: Things the agent got wrong or had to retry
+- **Knowledge gaps**: Information the agent didn't know and had to discover
+- **Best practices**: Patterns that worked well and should be documented
+
+At task finish, PAW:
+1. Uses Claude Opus with ultrathink to analyze the session history
+2. Generates learnings and appends them to `CLAUDE.md` in the project root
+3. Commits the changes to the default branch (main/master)
+
+This allows the agent to continuously improve its understanding of the project over time.
+
+To enable in `.paw/config`:
+```yaml
+self_improve: true
 ```
 
 ## Logging levels

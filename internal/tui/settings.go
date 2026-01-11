@@ -39,9 +39,10 @@ const (
 	SettingsFieldTheme
 	SettingsFieldNonGitWorkspace
 	SettingsFieldVerifyRequired
+	SettingsFieldSelfImprove
 )
 
-const generalFieldCount = 5
+const generalFieldCount = 6
 
 // Notifications tab fields
 const (
@@ -337,6 +338,11 @@ func (m *SettingsUI) toggleInheritForCurrentField() {
 		if m.inheritConfig.VerifyRequired {
 			m.config.VerifyRequired = m.globalConfig.VerifyRequired
 		}
+	case SettingsFieldSelfImprove:
+		m.inheritConfig.SelfImprove = !m.inheritConfig.SelfImprove
+		if m.inheritConfig.SelfImprove {
+			m.config.SelfImprove = m.globalConfig.SelfImprove
+		}
 	}
 }
 
@@ -453,6 +459,8 @@ func (m *SettingsUI) handleLeft() {
 			}
 		case SettingsFieldVerifyRequired:
 			m.config.VerifyRequired = true
+		case SettingsFieldSelfImprove:
+			m.config.SelfImprove = true
 		}
 	}
 }
@@ -480,6 +488,8 @@ func (m *SettingsUI) handleRight() {
 			}
 		case SettingsFieldVerifyRequired:
 			m.config.VerifyRequired = false
+		case SettingsFieldSelfImprove:
+			m.config.SelfImprove = false
 		}
 	}
 }
@@ -832,6 +842,34 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 		} else {
 			onText = dimStyle.Render(" on ")
 			if m.field == SettingsFieldVerifyRequired {
+				offText = selectedValueStyle.Render("[off]")
+			} else {
+				offText = valueStyle.Render("[off]")
+			}
+		}
+		sb.WriteString(label + onText + " " + offText + inheritIndicator(inherited))
+		sb.WriteString("\n")
+	}
+
+	// Self Improve
+	{
+		label := labelStyle.Render("Self Improve:")
+		if m.field == SettingsFieldSelfImprove {
+			label = selectedLabelStyle.Render("Self Improve:")
+		}
+
+		inherited := m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.SelfImprove
+		var onText, offText string
+		if m.config.SelfImprove {
+			if m.field == SettingsFieldSelfImprove {
+				onText = selectedValueStyle.Render("[on]")
+			} else {
+				onText = valueStyle.Render("[on]")
+			}
+			offText = dimStyle.Render(" off ")
+		} else {
+			onText = dimStyle.Render(" on ")
+			if m.field == SettingsFieldSelfImprove {
 				offText = selectedValueStyle.Render("[off]")
 			} else {
 				offText = valueStyle.Render("[off]")
