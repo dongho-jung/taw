@@ -280,8 +280,22 @@ PAW uses desktop notifications and sounds to alert users:
 | Cancel pending (⌃K)      | Tink        | -                    | -                 |
 | Error (merge failed etc) | Basso       | Yes                  | `⚠️ Merge failed: {name} - manual resolution needed` |
 
-- Desktop notifications use AppleScript (`osascript`) on macOS
-- Sounds use macOS system sounds (`/System/Library/Sounds/`)
+### Terminal-based notifications (cross-platform)
+
+Desktop notifications use terminal escape sequences (OSC) for cross-platform support:
+
+| Terminal | Protocol | Format |
+|----------|----------|--------|
+| iTerm2 | OSC 9 | `ESC]9;message BEL` |
+| Kitty | OSC 99 | `ESC]99;i=1:d=0:p=2;body BEL` |
+| WezTerm | OSC 777 | `ESC]777;notify;title;body BEL` |
+| Ghostty | OSC 777 | `ESC]777;notify;title;body BEL` |
+| rxvt | OSC 777 | `ESC]777;notify;title;body BEL` |
+| Others | OSC 9 + Bell | Fallback to OSC 9 and terminal bell |
+
+- When running inside tmux, OSC sequences are wrapped for passthrough
+- Terminal bell (`\a`) is always sent as additional fallback
+- Sounds use macOS system sounds on darwin, terminal bell on other platforms
 - Statusline messages display via `tmux display-message -d 2000`
 
 ## Working rules
