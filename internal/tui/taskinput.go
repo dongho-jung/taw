@@ -455,6 +455,27 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
+
+		// Toggle panel backward: Alt+Shift+Tab (cycle backward through panels)
+		// Cycle order: Left → Kanban(col 3) → Kanban(col 2) → Kanban(col 1) → Kanban(col 0) → Right → Left
+		case "alt+shift+tab":
+			m.applyOptionInputValues()
+			switch m.focusPanel {
+			case FocusPanelLeft:
+				// Move to last Kanban column
+				m.switchFocusToKanbanColumn(3)
+			case FocusPanelRight:
+				m.switchFocusTo(FocusPanelLeft)
+			case FocusPanelKanban:
+				// Cycle backward through Kanban columns, then to Right
+				currentCol := m.kanban.FocusedColumn()
+				if currentCol > 0 {
+					m.switchFocusToKanbanColumn(currentCol - 1)
+				} else {
+					m.switchFocusTo(FocusPanelRight)
+				}
+			}
+			return m, nil
 		}
 
 		// Panel-specific key handling

@@ -22,7 +22,8 @@ import (
 //   - Ctrl+/: Toggle help
 //   - Ctrl+R: Toggle history search (in new task window only)
 //   - Alt+Left/Right: Move window
-//   - Alt+Tab: Cycle pane (in task windows) / Cycle options (in new task window)
+//   - Alt+Tab: Cycle pane forward (in task windows) / Cycle options (in new task window)
+//   - Alt+Shift+Tab: Cycle pane backward (in task windows) / Cycle options backward (in new task window)
 func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	// Command shortcuts
 	cmdNewTask := fmt.Sprintf("run-shell '%s internal toggle-new %s'", pawBin, sessionName)
@@ -44,6 +45,7 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	// the correct escape sequence (\x1b\x09) that bubbletea expects for "alt+tab"
 	// -F flag is required so tmux evaluates the format as a boolean, not as a shell command
 	cmdAltTab := `if -F "#{m:⭐️*,#{window_name}}" "send-keys Escape Tab" "select-pane -t :.+"`
+	cmdAltShiftTab := `if -F "#{m:⭐️*,#{window_name}}" "send-keys Escape BTab" "select-pane -t :.-"`
 
 	// Ctrl+R: context-aware - show history picker only in new task window (⭐️)
 	// In other windows, pass through Ctrl+R for normal reverse search
@@ -52,6 +54,7 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
 		{Key: "M-Tab", Command: cmdAltTab, NoPrefix: true},
+		{Key: "M-BTab", Command: cmdAltShiftTab, NoPrefix: true},
 		{Key: "M-Left", Command: "previous-window", NoPrefix: true},
 		{Key: "M-Right", Command: "next-window", NoPrefix: true},
 

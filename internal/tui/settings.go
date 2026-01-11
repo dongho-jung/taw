@@ -260,7 +260,7 @@ func (m *SettingsUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.field = 0
 			return m, nil
 
-		case "alt+tab":
+		case "alt+tab", "alt+shift+tab":
 			// Switch between Global and Project scope
 			m.switchScope()
 			return m, nil
