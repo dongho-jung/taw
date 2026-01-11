@@ -103,6 +103,32 @@ func TestHasDoneMarker(t *testing.T) {
 			content: "Some output\nTask completed.\nPAW_DONE\nReady for review.\n",
 			want:    true,
 		},
+		// Stale marker tests (user input after PAW_DONE)
+		{
+			name:    "stale marker - user input on same line as prompt",
+			content: "⏺ Done with task\nPAW_DONE\nReady for review\n> new request from user\n",
+			want:    false,
+		},
+		{
+			name:    "stale marker - user input after prompt line",
+			content: "⏺ Done with task\nPAW_DONE\n>\nfix the bug in main.go\n",
+			want:    false,
+		},
+		{
+			name:    "stale marker - prompt but no input yet (not stale)",
+			content: "⏺ Done with task\nPAW_DONE\nReady.\n>\n",
+			want:    true,
+		},
+		{
+			name:    "stale marker - user input but new segment started (not stale)",
+			content: "⏺ Old task\nPAW_DONE\n> user input\n⏺ New response\nPAW_DONE\nDone again.\n",
+			want:    true,
+		},
+		{
+			name:    "stale marker - UI decoration should be ignored",
+			content: "⏺ Done\nPAW_DONE\n>\n╭─────────╮\n│ Ready   │\n╰─────────╯\n",
+			want:    true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -337,6 +363,101 @@ func TestHasAskUserQuestionInLastSegment(t *testing.T) {
 			got := hasAskUserQuestionInLastSegment(tt.content)
 			if got != tt.want {
 				t.Fatalf("hasAskUserQuestionInLastSegment() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHasUserInputAfterIndex(t *testing.T) {
+	tests := []struct {
+		name     string
+		lines    []string
+		startIdx int
+		want     bool
+	}{
+		{
+			name:     "user input on same line as prompt",
+			lines:    []string{"PAW_DONE", "> new request"},
+			startIdx: 0,
+			want:     true,
+		},
+		{
+			name:     "user input after separate prompt line",
+			lines:    []string{"PAW_DONE", ">", "fix the bug"},
+			startIdx: 0,
+			want:     true,
+		},
+		{
+			name:     "prompt only, no input",
+			lines:    []string{"PAW_DONE", ">"},
+			startIdx: 0,
+			want:     false,
+		},
+		{
+			name:     "prompt with empty lines after",
+			lines:    []string{"PAW_DONE", ">", "", ""},
+			startIdx: 0,
+			want:     false,
+		},
+		{
+			name:     "new segment after input (not stale)",
+			lines:    []string{"PAW_DONE", "> input", "⏺ new response"},
+			startIdx: 0,
+			want:     false,
+		},
+		{
+			name:     "UI decoration after prompt (not user input)",
+			lines:    []string{"PAW_DONE", ">", "╭─────────╮", "│ Ready   │", "╰─────────╯"},
+			startIdx: 0,
+			want:     false,
+		},
+		{
+			name:     "no prompt at all",
+			lines:    []string{"PAW_DONE", "Ready for review"},
+			startIdx: 0,
+			want:     false,
+		},
+		{
+			name:     "multiple prompts, input on last",
+			lines:    []string{"PAW_DONE", ">", "", ">", "user text"},
+			startIdx: 0,
+			want:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hasUserInputAfterIndex(tt.lines, tt.startIdx)
+			if got != tt.want {
+				t.Fatalf("hasUserInputAfterIndex() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsUIDecoration(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want bool
+	}{
+		{name: "box top left", line: "╭─────────╮", want: true},
+		{name: "box bottom left", line: "╰─────────╯", want: true},
+		{name: "box vertical line", line: "│ content │", want: true},
+		{name: "horizontal line", line: "─────────────", want: true},
+		{name: "ASCII box corner", line: "┌─────────┐", want: true},
+		{name: "ASCII box bottom", line: "└─────────┘", want: true},
+		{name: "regular text", line: "Hello world", want: false},
+		{name: "prompt", line: "> input", want: false},
+		{name: "empty string", line: "", want: false},
+		{name: "spaces only", line: "   ", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isUIDecoration(tt.line)
+			if got != tt.want {
+				t.Fatalf("isUIDecoration(%q) = %v, want %v", tt.line, got, tt.want)
 			}
 		})
 	}

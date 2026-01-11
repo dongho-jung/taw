@@ -399,6 +399,9 @@ func matchesWaitingMarkerStopHook(line string) bool {
 // The marker must appear on its own line (possibly with whitespace)
 // AND in the last segment (after the last ⏺ marker, which indicates a new Claude response).
 // This prevents a previously completed task from staying "done" when given new work.
+//
+// Additionally, if user input is detected after PAW_DONE (indicating a new request was
+// submitted but Claude hasn't responded yet), the marker is considered stale and false is returned.
 func hasDoneMarker(content string) bool {
 	lines := strings.Split(content, "\n")
 	// Trim trailing empty lines to ensure we check the actual content,
@@ -418,10 +421,93 @@ func hasDoneMarker(content string) bool {
 	if start < segmentStart {
 		start = segmentStart
 	}
-	for _, line := range lines[start:] {
-		if matchesDoneMarkerStopHook(line) {
-			return true
+
+	// Find PAW_DONE marker and its line index
+	doneLineIdx := -1
+	for i := start; i < len(lines); i++ {
+		if matchesDoneMarkerStopHook(lines[i]) {
+			doneLineIdx = i
+			break
 		}
+	}
+
+	if doneLineIdx < 0 {
+		return false // No PAW_DONE found
+	}
+
+	// Check if there's user input after PAW_DONE
+	// This happens when user sends a new request but Claude hasn't responded yet (no new ⏺ segment)
+	// In this case, PAW_DONE is from a previous session and should be considered stale
+	if hasUserInputAfterIndex(lines, doneLineIdx) {
+		return false
+	}
+
+	return true
+}
+
+// hasUserInputAfterIndex checks if there appears to be user input after the given line index.
+// User input is detected by looking for:
+// - Text on the same line as ">" prompt (e.g., "> user input here")
+// - Non-empty text after a ">" prompt line (before any new ⏺ segment)
+// Returns true only if user input is found AND no new ⏺ segment follows it.
+// This ensures we don't flag stale markers when Claude has already processed the input.
+func hasUserInputAfterIndex(lines []string, startIdx int) bool {
+	sawPrompt := false
+	foundUserInput := false
+
+	for i := startIdx + 1; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+
+		if trimmed == "" {
+			continue
+		}
+
+		// New Claude segment (⏺) means any previous input was already processed
+		if strings.HasPrefix(trimmed, "⏺") {
+			// If we found user input before this, Claude has processed it (not stale)
+			// If no user input was found, there's nothing stale
+			return false
+		}
+
+		// Claude's prompt line (just ">")
+		if trimmed == ">" {
+			sawPrompt = true
+			continue
+		}
+
+		// User input on same line as prompt ("> text")
+		if strings.HasPrefix(trimmed, "> ") {
+			foundUserInput = true
+			continue
+		}
+
+		// If we saw a prompt and now see other text, check if it's user input
+		// (skip UI decorations like box-drawing characters)
+		if sawPrompt {
+			if isUIDecoration(trimmed) {
+				continue
+			}
+			foundUserInput = true
+			sawPrompt = false
+			continue
+		}
+	}
+
+	// Return true if we found user input and no ⏺ came after it
+	return foundUserInput
+}
+
+// isUIDecoration checks if a line is a UI decoration (box-drawing, etc.)
+// that should not be considered as user input.
+func isUIDecoration(line string) bool {
+	if len(line) == 0 {
+		return false
+	}
+	// Check for common UI decoration patterns (box-drawing characters)
+	firstRune := []rune(line)[0]
+	switch firstRune {
+	case '╭', '╰', '│', '─', '├', '┤', '┬', '┴', '┼', '╮', '╯', '┌', '┐', '└', '┘':
+		return true
 	}
 	return false
 }
