@@ -11,30 +11,13 @@ before:
     - go mod download
 
 builds:
-  # Darwin build (includes paw-notify.app in archive)
-  - id: paw-darwin
+  - id: paw
     main: ./cmd/paw
     binary: paw
     env:
       - CGO_ENABLED=0
     goos:
       - darwin
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - -s -w
-      - -X main.Version={{.Version}}
-      - -X main.Commit={{.Commit}}
-      - -X main.Date={{.Date}}
-
-  # Non-darwin build (linux, windows)
-  - id: paw-other
-    main: ./cmd/paw
-    binary: paw
-    env:
-      - CGO_ENABLED=0
-    goos:
       - linux
       - windows
     goarch:
@@ -50,24 +33,6 @@ builds:
       - -X main.Date={{.Date}}
 
 archives:
-  # Darwin archives include paw-notify.app
-  - id: darwin
-    formats:
-      - tar.gz
-    builds:
-      - paw-darwin
-    name_template: >-
-      {{ .ProjectName }}_
-      {{- .Version }}_
-      {{- .Os }}_
-      {{- .Arch }}
-    files:
-      - README.md
-      - LICENSE*
-      - src: paw-notify.app
-        dst: .
-
-  # Non-darwin archives (linux, windows)
   - id: default
     formats:
       - tar.gz
@@ -75,8 +40,6 @@ archives:
       - goos: windows
         formats:
           - zip
-    builds:
-      - paw-other
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
@@ -129,27 +92,6 @@ brews:
       - name: tmux
     install: |
       bin.install "paw"
-      # Install paw-notify.app for macOS desktop notifications
-      if File.exist?("paw-notify.app")
-        (share/"paw").install "paw-notify.app"
-      end
-    post_install: |
-      # Copy paw-notify.app to user's local share directory
-      if File.exist?("#{share}/paw/paw-notify.app")
-        user_share = "#{ENV["HOME"]}/.local/share/paw"
-        mkdir_p user_share unless File.directory?(user_share)
-        system "rm", "-rf", "#{user_share}/paw-notify.app"
-        system "cp", "-R", "#{share}/paw/paw-notify.app", user_share
-        # Remove quarantine attribute and sign
-        system "xattr", "-cr", "#{user_share}/paw-notify.app"
-        system "codesign", "-fs", "-", "#{user_share}/paw-notify.app"
-      end
-    caveats: |
-      paw-notify.app has been installed to ~/.local/share/paw/
-
-      To enable desktop notifications, you may need to:
-      1. Run: paw check
-      2. Grant notification permissions when prompted
     test: |
       system "#{bin}/paw", "version"
 

@@ -1,24 +1,21 @@
-// Package notify provides simple desktop notifications.
+// Package notify provides cross-platform desktop notifications using terminal escape sequences.
 package notify
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 
 	"github.com/dongho-jung/paw/internal/logging"
 )
 
+// Terminal escape sequences
 const (
-	// NotifyAppName is the name of the notification helper app bundle.
-	NotifyAppName = "paw-notify.app"
-	// NotifyBinaryName is the name of the executable inside the app bundle.
-	NotifyBinaryName = "paw-notify"
+	ESC = "\033"
+	BEL = "\a"
+	ST  = ESC + "\\" // String Terminator
 )
 
 // SoundType represents different notification sounds.
@@ -37,245 +34,179 @@ const (
 	SoundCancelPending SoundType = "Tink"
 )
 
-// Send shows a desktop notification when supported.
-// It prefers using the paw-notify helper for consistent icon display,
-// falling back to AppleScript if the helper is not available.
+// Terminal types
+const (
+	termITerm2  = "iterm2"
+	termKitty   = "kitty"
+	termWezTerm = "wezterm"
+	termGhostty = "ghostty"
+	termRxvt    = "rxvt"
+	termUnknown = "unknown"
+)
+
+// Send shows a desktop notification using terminal escape sequences.
+// Supports multiple terminals (iTerm2, Kitty, WezTerm, Ghostty, rxvt) with fallback to terminal bell.
 func Send(title, message string) error {
 	logging.Debug("-> Send(title=%q, message=%q)", title, message)
 	defer logging.Debug("<- Send")
 
-	if runtime.GOOS != "darwin" {
-		return nil
-	}
-
-	// Try paw-notify helper first for consistent icon display
-	if helperPath := findNotifyHelper(); helperPath != "" {
-		if err := sendViaHelper(helperPath, title, message); err == nil {
-			logging.Trace("Send: sent via paw-notify helper")
-			return nil
-		}
-		logging.Trace("Send: paw-notify helper failed, falling back to AppleScript")
-	}
-
-	// Fall back to AppleScript
-	script := fmt.Sprintf(`display notification %q with title %q`, message, title)
-	cmd := appleScriptCommand("-e", script)
-	if err := cmd.Run(); err != nil {
-		fallbackErr := exec.Command("osascript", "-e", script).Run()
-		if fallbackErr == nil {
-			return nil
-		}
-		return err
-	}
+	sendTerminalNotification(title, message)
 	return nil
 }
 
-// sendViaHelper sends a simple notification using the paw-notify helper.
-// Note: We don't pass icon as attachment because it would show on the right side
-// of the notification banner, taking space from action buttons. The app bundle
-// icon automatically shows on the left side.
-func sendViaHelper(helperPath, title, message string) error {
-	args := []string{
-		"--title", title,
-		"--body", message,
-		"--timeout", "1", // Short timeout since we don't need to wait for response
+// sendTerminalNotification sends notification using appropriate terminal protocol.
+func sendTerminalNotification(title, message string) {
+	term := detectTerminal()
+	inTmux := os.Getenv("TMUX") != ""
+
+	logging.Trace("sendTerminalNotification: term=%s, inTmux=%v", term, inTmux)
+
+	// Send appropriate OSC based on terminal
+	switch term {
+	case termKitty:
+		// Kitty supports both OSC 9 and OSC 99, prefer OSC 99 for richer notifications
+		sendOSC99(title, message, inTmux)
+	case termITerm2:
+		// iTerm2 pioneered OSC 9
+		sendOSC9(message, inTmux)
+	case termWezTerm, termGhostty:
+		// WezTerm and Ghostty support both OSC 9 and OSC 777
+		// Use OSC 777 for title+body support
+		sendOSC777(title, message, inTmux)
+	case termRxvt:
+		// rxvt-unicode uses OSC 777
+		sendOSC777(title, message, inTmux)
+	default:
+		// Try OSC 9 (most widely supported) for unknown terminals
+		sendOSC9(message, inTmux)
 	}
 
-	// Run the helper via 'open' command to ensure proper bundle ID recognition
-	openArgs := []string{
-		"-W", // Wait for app to finish
-		"-a", helperPath,
-		"--args",
-	}
-	openArgs = append(openArgs, args...)
-
-	cmd := exec.Command("open", openArgs...)
-	return cmd.Run()
+	// Always send bell as additional alert
+	// Terminals can be configured to show notification on bell
+	fmt.Fprint(os.Stderr, BEL)
 }
 
-// FindIconPath locates the paw icon for notifications.
-func FindIconPath() string {
-	candidates := []string{}
-
-	// ~/.local/share/paw/icon.png
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, filepath.Join(home, ".local", "share", "paw", "icon.png"))
+// detectTerminal returns the terminal emulator type.
+func detectTerminal() string {
+	// Check terminal-specific environment variables
+	if os.Getenv("KITTY_WINDOW_ID") != "" {
+		return termKitty
+	}
+	if os.Getenv("WEZTERM_PANE") != "" {
+		return termWezTerm
+	}
+	if os.Getenv("GHOSTTY_RESOURCES_DIR") != "" {
+		return termGhostty
+	}
+	if os.Getenv("WARP_TERMINAL_VERSION") != "" {
+		// Warp doesn't support OSC notifications yet
+		return termUnknown
 	}
 
-	// Same directory as current executable
-	if exe, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exe)
-		candidates = append(candidates, filepath.Join(exeDir, "icon.png"))
+	// Check TERM_PROGRAM
+	termProgram := strings.ToLower(os.Getenv("TERM_PROGRAM"))
+	if strings.Contains(termProgram, "iterm") {
+		return termITerm2
+	}
+	if strings.Contains(termProgram, "wezterm") {
+		return termWezTerm
+	}
+	if strings.Contains(termProgram, "ghostty") {
+		return termGhostty
 	}
 
-	// Inside the app bundle's Resources
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, filepath.Join(home, ".local", "share", "paw",
-			NotifyAppName, "Contents", "Resources", "icon.png"))
+	// Check TERM for rxvt
+	term := strings.ToLower(os.Getenv("TERM"))
+	if strings.Contains(term, "rxvt") {
+		return termRxvt
 	}
 
-	for _, path := range candidates {
-		if _, err := os.Stat(path); err == nil {
-			logging.Trace("findIconPath: found at %s", path)
-			return path
-		}
-	}
-
-	logging.Trace("findIconPath: not found")
-	return ""
+	return termUnknown
 }
 
-// PlaySound plays a system sound (macOS only).
-// It runs in the background and does not block.
-// Uses nohup to ensure the sound plays even if parent process exits.
+// sendOSC9 sends iTerm2-style notification.
+// Format: ESC ] 9 ; message BEL
+// Supported by: iTerm2, Kitty, WezTerm, Ghostty
+func sendOSC9(message string, inTmux bool) {
+	osc := fmt.Sprintf("%s]9;%s%s", ESC, message, BEL)
+	writeOSC(osc, inTmux)
+}
+
+// sendOSC99 sends Kitty-style notification.
+// Format: ESC ] 99 ; i=id:d=done:p=urgency ; body BEL
+// Supported by: Kitty
+// See: https://sw.kovidgoyal.net/kitty/desktop-notifications/
+func sendOSC99(title, message string, inTmux bool) {
+	body := title
+	if message != "" && message != title {
+		body = title + ": " + message
+	}
+	// i=1: notification id (for updates/close)
+	// d=0: notification is not done (show it)
+	// p=2: high urgency
+	osc := fmt.Sprintf("%s]99;i=1:d=0:p=2;%s%s", ESC, body, BEL)
+	writeOSC(osc, inTmux)
+}
+
+// sendOSC777 sends rxvt-unicode style notification.
+// Format: ESC ] 777 ; notify ; title ; body BEL
+// Supported by: rxvt-unicode, WezTerm, Ghostty
+func sendOSC777(title, message string, inTmux bool) {
+	osc := fmt.Sprintf("%s]777;notify;%s;%s%s", ESC, title, message, BEL)
+	writeOSC(osc, inTmux)
+}
+
+// writeOSC writes an OSC sequence, wrapping for tmux passthrough if needed.
+func writeOSC(osc string, inTmux bool) {
+	if inTmux {
+		osc = wrapTmuxPassthrough(osc)
+	}
+	fmt.Fprint(os.Stderr, osc)
+}
+
+// wrapTmuxPassthrough wraps an OSC sequence for tmux passthrough.
+// Format: ESC P tmux; ESC <escaped-content> ESC \
+// The escape characters inside need to be doubled.
+func wrapTmuxPassthrough(osc string) string {
+	// Double all escape characters for tmux passthrough
+	escaped := strings.ReplaceAll(osc, ESC, ESC+ESC)
+	return fmt.Sprintf("%sPtmux;%s%s", ESC, escaped, ST)
+}
+
+// PlaySound plays an alert sound.
+// On macOS, uses system sounds via afplay. On other platforms, uses terminal bell.
 func PlaySound(soundType SoundType) {
 	logging.Debug("-> PlaySound(soundType=%s)", soundType)
 	defer logging.Debug("<- PlaySound")
 
-	if runtime.GOOS != "darwin" {
-		return
+	if runtime.GOOS == "darwin" {
+		soundPath := fmt.Sprintf("/System/Library/Sounds/%s.aiff", soundType)
+		if _, err := os.Stat(soundPath); err == nil {
+			// Run afplay in background (don't wait)
+			cmd := exec.Command("afplay", soundPath)
+			cmd.Stdout = nil
+			cmd.Stderr = nil
+			cmd.Stdin = nil
+			if err := cmd.Start(); err != nil {
+				logging.Warn("PlaySound: failed to start afplay err=%v", err)
+			}
+			return
+		}
 	}
 
-	soundPath := fmt.Sprintf("/System/Library/Sounds/%s.aiff", soundType)
-
-	// Check if sound file exists
-	if _, err := os.Stat(soundPath); os.IsNotExist(err) {
-		logging.Trace("PlaySound: sound file not found path=%s", soundPath)
-		return
-	}
-
-	// Run afplay via nohup to ensure it survives parent process exit
-	// Redirect output to /dev/null to fully detach
-	cmd := exec.Command("nohup", "afplay", soundPath)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	cmd.Stdin = nil
-	if err := cmd.Start(); err != nil {
-		logging.Warn("PlaySound: failed to start afplay err=%v", err)
-	}
+	// Fallback: terminal bell
+	fmt.Fprint(os.Stderr, BEL)
 }
 
-func appleScriptCommand(args ...string) *exec.Cmd {
-	if runtime.GOOS != "darwin" {
-		return exec.Command("osascript", args...)
-	}
-	uid := os.Getuid()
-	if uid > 0 {
-		cmdArgs := append([]string{"asuser", fmt.Sprintf("%d", uid), "osascript"}, args...)
-		return exec.Command("launchctl", cmdArgs...)
-	}
-	return exec.Command("osascript", args...)
-}
-
-// SendWithActions shows a notification with action buttons and returns the selected action index.
-// Returns the 0-based index of the selected action, or -1 if dismissed/timed out/clicked without action.
-// If the notification helper is not available, falls back to a simple notification and returns -1.
+// SendWithActions shows a notification. Action buttons are not supported
+// in terminal-based notifications, so this just sends a simple notification.
+// Always returns -1 (no action selected).
 func SendWithActions(title, message, iconPath string, actions []string, timeoutSec int) (int, error) {
-	logging.Debug("-> SendWithActions(title=%q, actions=%v, timeout=%d)", title, actions, timeoutSec)
+	logging.Debug("-> SendWithActions(title=%q, actions=%v)", title, actions)
 	defer logging.Debug("<- SendWithActions")
 
-	if runtime.GOOS != "darwin" {
-		return -1, nil
+	if err := Send(title, message); err != nil {
+		return -1, err
 	}
-
-	// Find the notification helper
-	helperPath := findNotifyHelper()
-	if helperPath == "" {
-		logging.Debug("SendWithActions: notification helper not found, falling back to simple notification")
-		if err := Send(title, message); err != nil {
-			return -1, err
-		}
-		return -1, nil
-	}
-
-	logging.Trace("SendWithActions: using helper at %s", helperPath)
-
-	// Build command arguments
-	args := []string{
-		"--title", title,
-		"--body", message,
-		"--timeout", strconv.Itoa(timeoutSec),
-	}
-	if iconPath != "" {
-		args = append(args, "--icon", iconPath)
-	}
-	for _, action := range actions {
-		args = append(args, "--action", action)
-	}
-
-	// Run the helper via 'open' command to ensure proper bundle ID recognition
-	openArgs := []string{
-		"--stdout", "/dev/stdout",
-		"--stderr", "/dev/stderr",
-		"-W", // Wait for app to finish
-		"-a", helperPath,
-		"--args",
-	}
-	openArgs = append(openArgs, args...)
-
-	cmd := exec.Command("open", openArgs...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	logging.Trace("SendWithActions: running command: open %v", openArgs)
-	if err := cmd.Run(); err != nil {
-		logging.Debug("SendWithActions: helper failed err=%v stderr=%s", err, stderr.String())
-		// Fall back to simple notification
-		if sendErr := Send(title, message); sendErr != nil {
-			return -1, sendErr
-		}
-		return -1, nil
-	}
-
-	result := strings.TrimSpace(stdout.String())
-	logging.Trace("SendWithActions: helper returned %q", result)
-
-	// Parse result
-	if strings.HasPrefix(result, "ACTION_") {
-		indexStr := strings.TrimPrefix(result, "ACTION_")
-		index, err := strconv.Atoi(indexStr)
-		if err == nil && index >= 0 && index < len(actions) {
-			return index, nil
-		}
-	}
-
 	return -1, nil
 }
-
-// findNotifyHelper locates the paw-notify.app helper.
-// It searches in the following order:
-// 1. ~/.local/share/paw/paw-notify.app (installed location)
-// 2. Same directory as the paw binary
-// 3. Current working directory
-func findNotifyHelper() string {
-	candidates := []string{}
-
-	// 1. ~/.local/share/paw/
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, filepath.Join(home, ".local", "share", "paw", NotifyAppName))
-	}
-
-	// 2. Same directory as paw binary
-	if exe, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exe)
-		candidates = append(candidates, filepath.Join(exeDir, NotifyAppName))
-	}
-
-	// 3. Current working directory
-	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, filepath.Join(cwd, NotifyAppName))
-	}
-
-	for _, path := range candidates {
-		binaryPath := filepath.Join(path, "Contents", "MacOS", NotifyBinaryName)
-		if _, err := os.Stat(binaryPath); err == nil {
-			logging.Trace("findNotifyHelper: found at %s", path)
-			return path
-		}
-	}
-
-	logging.Trace("findNotifyHelper: not found, searched %v", candidates)
-	return ""
-}
-

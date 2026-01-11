@@ -34,8 +34,6 @@ This checks:
 | claude | ✅ | Claude Code CLI for AI-powered task execution |
 | git | ❌ | Git for worktree mode (optional, but recommended) |
 | gh | ❌ | GitHub CLI for PR creation (optional) |
-| paw-notify.app | ❌ | macOS notification helper (optional) |
-| notifications | ❌ | macOS notification permissions (optional) |
 | sounds | ❌ | macOS system sounds for alerts (optional) |
 
 ## Testing
@@ -80,7 +78,6 @@ go tool cover -html=coverage.out -o coverage.html
 | internal/github | 6.1% | gh CLI command construction only |
 | cmd/paw | 4.4% | Cobra command handlers |
 | internal/tmux | 3.1% | Struct defaults and constants only |
-| cmd/paw-notify | 0% | macOS-only CGO binary |
 
 ## Directory structure
 
@@ -108,11 +105,6 @@ paw/                           # This repository
 │   ├── timeparse.go           # Time parsing utilities for logs/history
 │   ├── wait*.go               # Wait detection for user input prompts
 │   └── window_map.go          # Window ID to task name mapping
-├── cmd/paw-notify/            # Notification helper (macOS app bundle)
-│   ├── main.go                # CGO code for UserNotifications (darwin only)
-│   ├── doc.go                 # Stub for non-darwin platforms
-│   ├── icon.png               # App bundle icon
-│   └── Info.plist             # App bundle configuration
 ├── internal/                  # Go internal packages
 │   ├── app/                   # Application context
 │   ├── claude/                # Claude API client
@@ -284,28 +276,27 @@ PAW uses desktop notifications and sounds to alert users:
 |--------------------------|-------------|----------------------|-------------------|
 | Task created             | Glass       | Yes                  | `🤖 Task started: {name}` |
 | Task completed           | Hero        | Yes                  | `✅ Task completed: {name}` |
-| User input needed        | Funk        | Yes (with actions)   | `💬 {name} needs input` |
+| User input needed        | Funk        | Yes                  | `💬 {name} needs input` |
 | Cancel pending (⌃K)      | Tink        | -                    | -                 |
 | Error (merge failed etc) | Basso       | Yes                  | `⚠️ Merge failed: {name} - manual resolution needed` |
 
-- Sounds use macOS system sounds (`/System/Library/Sounds/`)
+### Terminal-based notifications (cross-platform)
+
+Desktop notifications use terminal escape sequences (OSC) for cross-platform support:
+
+| Terminal | Protocol | Format |
+|----------|----------|--------|
+| iTerm2 | OSC 9 | `ESC]9;message BEL` |
+| Kitty | OSC 99 | `ESC]99;i=1:d=0:p=2;body BEL` |
+| WezTerm | OSC 777 | `ESC]777;notify;title;body BEL` |
+| Ghostty | OSC 777 | `ESC]777;notify;title;body BEL` |
+| rxvt | OSC 777 | `ESC]777;notify;title;body BEL` |
+| Others | OSC 9 + Bell | Fallback to OSC 9 and terminal bell |
+
+- When running inside tmux, OSC sequences are wrapped for passthrough
+- Terminal bell (`\a`) is always sent as additional fallback
+- Sounds use macOS system sounds on darwin, terminal bell on other platforms
 - Statusline messages display via `tmux display-message -d 2000`
-
-### Notification Action Buttons
-
-When user input is needed and the prompt has 2-5 simple choices, PAW shows a banner notification with action buttons:
-
-- **Title**: The task name
-- **Body**: The question from the prompt
-- **Icon**: Uses the app bundle icon (shown on the left side only)
-- **Actions**: Up to 5 buttons matching the prompt options
-
-If the user clicks an action button, the response is sent directly to the agent without opening a popup. If the notification times out (30s) or is dismissed, the fallback popup is shown.
-
-**Requirements** (macOS desktop notifications):
-- macOS 10.15+
-- Notification permissions granted for `PAW Notify` app
-- `paw-notify.app` installed to `~/.local/share/paw/`
 
 ## Working rules
 

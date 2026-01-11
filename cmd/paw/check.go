@@ -13,6 +13,15 @@ import (
 	"github.com/dongho-jung/paw/internal/notify"
 )
 
+// soundsToCheck is the list of sound types to verify for macOS.
+var soundsToCheck = []string{
+	string(notify.SoundTaskCreated),
+	string(notify.SoundTaskCompleted),
+	string(notify.SoundNeedInput),
+	string(notify.SoundError),
+	string(notify.SoundCancelPending),
+}
+
 var checkCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check dependencies and project health",
@@ -117,8 +126,6 @@ func collectCheckResults() []checkResult {
 
 	// macOS-specific checks
 	if runtime.GOOS == "darwin" {
-		results = append(results, checkNotifyApp())
-		results = append(results, checkNotificationPermission())
 		results = append(results, checkSounds())
 	}
 
@@ -241,75 +248,14 @@ func checkGh() checkResult {
 	return result
 }
 
-// checkNotifyApp verifies the paw-notify.app is installed.
-func checkNotifyApp() checkResult {
-	result := checkResult{name: "paw-notify.app", required: false}
-
-	// Check in ~/.local/share/paw/
-	home, err := os.UserHomeDir()
-	if err != nil {
-		result.ok = false
-		result.message = "could not determine home directory"
-		return result
-	}
-
-	appPath := filepath.Join(home, ".local", "share", "paw", notify.NotifyAppName)
-	binaryPath := filepath.Join(appPath, "Contents", "MacOS", notify.NotifyBinaryName)
-
-	if _, err := os.Stat(binaryPath); err != nil {
-		result.ok = false
-		result.message = "not installed - run 'brew reinstall paw' or 'make install'"
-		return result
-	}
-
-	result.ok = true
-	result.message = "installed"
-	return result
-}
-
-// checkNotificationPermission verifies notification permissions are granted.
-func checkNotificationPermission() checkResult {
-	result := checkResult{name: "notifications", required: false}
-
-	// Check if we can find the notification helper
-	home, err := os.UserHomeDir()
-	if err != nil {
-		result.ok = false
-		result.message = "could not determine home directory"
-		return result
-	}
-
-	appPath := filepath.Join(home, ".local", "share", "paw", notify.NotifyAppName)
-	if _, err := os.Stat(appPath); err != nil {
-		result.ok = false
-		result.message = "paw-notify.app not installed (install it first)"
-		return result
-	}
-
-	// Since we can't directly query notification permissions without running the app,
-	// we provide guidance on how to check permissions.
-	// User should verify via System Settings > Notifications > PAW Notify
-	result.ok = true
-	result.message = "verify in System Settings > Notifications > PAW Notify"
-	return result
-}
-
 // checkSounds verifies system sounds are available.
 func checkSounds() checkResult {
 	result := checkResult{name: "sounds", required: false}
 
-	sounds := []string{
-		string(notify.SoundTaskCreated),
-		string(notify.SoundTaskCompleted),
-		string(notify.SoundNeedInput),
-		string(notify.SoundError),
-		string(notify.SoundCancelPending),
-	}
-
 	soundDir := "/System/Library/Sounds"
 	missing := []string{}
 
-	for _, sound := range sounds {
+	for _, sound := range soundsToCheck {
 		soundPath := filepath.Join(soundDir, sound+".aiff")
 		if _, err := os.Stat(soundPath); err != nil {
 			missing = append(missing, sound)

@@ -56,10 +56,9 @@ Build artifacts are retained for 7 days.
 
 ### Release Process
 
-1. Build `paw-notify.app` on macOS and package it for distribution (included in darwin archives and uploaded separately).
-2. GoReleaser builds binaries for 5 platforms (linux amd64/arm64, darwin amd64/arm64, windows amd64).
-3. Create archives (tar.gz, zip for Windows) and generate SHA256 checksums.
-4. Auto-create GitHub Release and upload the standalone `paw-notify.app.zip`.
+1. GoReleaser builds binaries for 5 platforms (linux amd64/arm64, darwin amd64/arm64, windows amd64).
+2. Create archives (tar.gz, zip for Windows) and generate SHA256 checksums.
+3. Auto-create GitHub Release.
 
 ### GoReleaser Configuration
 
@@ -76,7 +75,7 @@ Build artifacts are retained for 7 days.
 | linux/darwin | tar.gz | `paw_1.0.0_darwin_arm64.tar.gz` |
 | windows | zip | `paw_1.0.0_windows_amd64.zip` |
 
-Darwin archives bundle `paw-notify.app`, and the release workflow also uploads `paw-notify.app.zip` as a separate asset for macOS notifications.
+All archives include the binary, README, and LICENSE.
 
 **Changelog**:
 - Auto-grouping based on Conventional Commits

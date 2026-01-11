@@ -225,7 +225,6 @@ Use `paw check` to verify prerequisites.
 | claude | Yes | Claude Code CLI for running agents |
 | git | Optional | Needed for worktree mode in git repositories |
 | gh | Optional | PR creation for `auto-pr` mode |
-| paw-notify.app (macOS) | Optional | Desktop notifications and action buttons |
 
 Install tmux/gh via Homebrew: `brew install tmux gh`. Install the Claude Code CLI from https://claude.ai/claude-code.
 
