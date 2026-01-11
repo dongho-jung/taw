@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -128,6 +129,40 @@ var newTaskCmd = &cobra.Command{
 			if result.Cancelled {
 				fmt.Println("Task creation cancelled.")
 				continue
+			}
+
+			// Handle cross-project jump request
+			if result.JumpTarget != nil {
+				target := result.JumpTarget
+				logging.Debug("Cross-project jump requested: session=%s, window=%s", target.Session, target.WindowID)
+
+				// Create tmux client for target session and select the window first
+				targetTm := tmux.New(target.Session)
+				if err := targetTm.SelectWindow(target.WindowID); err != nil {
+					logging.Warn("Failed to select target window: %v", err)
+				}
+
+				// Replace current process with tmux attach to target session
+				// This switches the terminal from current project's socket to target project's socket
+				socket := constants.TmuxSocketPrefix + target.Session
+				tmuxPath, err := exec.LookPath("tmux")
+				if err != nil {
+					logging.Error("tmux not found: %v", err)
+					fmt.Printf("Failed to find tmux: %v\n", err)
+					continue
+				}
+
+				logging.Debug("Exec'ing into tmux attach: socket=%s, session=%s", socket, target.Session)
+				err = syscall.Exec(tmuxPath,
+					[]string{"tmux", "-L", socket, "attach-session", "-t", target.Session},
+					os.Environ())
+				if err != nil {
+					// If exec fails (shouldn't normally happen), continue the loop
+					logging.Error("Failed to exec tmux attach: %v", err)
+					fmt.Printf("Failed to switch to session %s: %v\n", target.Session, err)
+					continue
+				}
+				// If exec succeeds, this line is never reached (process is replaced)
 			}
 
 			if result.Content == "" {

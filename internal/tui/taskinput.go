@@ -91,6 +91,9 @@ type TaskInput struct {
 	// Tip caching - only changes every minute
 	currentTip     string
 	lastTipRefresh time.Time
+
+	// Cross-project jump target (set when user requests to jump to external project)
+	jumpTarget *JumpTarget
 }
 
 // tickMsg is used for periodic Kanban refresh.
@@ -99,16 +102,24 @@ type tickMsg time.Time
 // cancelClearMsg is used to clear the cancel pending state after timeout.
 type cancelClearMsg struct{}
 
+// JumpTarget contains information for jumping to a task in an external project.
+type JumpTarget struct {
+	Session  string // Target session name (project name)
+	WindowID string // Target window ID
+}
+
 // jumpToTaskMsg is the result of attempting to jump to a task.
 type jumpToTaskMsg struct {
-	err error
+	err        error
+	jumpTarget *JumpTarget // Non-nil for cross-project jumps
 }
 
 // TaskInputResult contains the result of the task input.
 type TaskInputResult struct {
-	Content   string
-	Options   *config.TaskOptions
-	Cancelled bool
+	Content    string
+	Options    *config.TaskOptions
+	Cancelled  bool
+	JumpTarget *JumpTarget // Non-nil if user requested to jump to an external project task
 }
 
 // NewTaskInput creates a new task input model.
@@ -225,30 +236,34 @@ func (m *TaskInput) tickCmd() tea.Cmd {
 }
 
 // jumpToTask returns a command that navigates to the given task.
-// If the task is in a different session, it switches to that session first.
+// For same-project tasks, it directly selects the window.
+// For different-project tasks, it returns a jump target for the parent to handle
+// (since cross-socket jumps require replacing the current process).
 func jumpToTask(task *service.DiscoveredTask) tea.Cmd {
 	return func() tea.Msg {
 		if task == nil {
-			return jumpToTaskMsg{err: nil}
+			return jumpToTaskMsg{}
 		}
 
-		// Create tmux client for the target session
-		tm := tmux.New(task.Session)
-
-		// Check if we need to switch sessions
+		// Check if we need to jump to a different project
 		if task.Session != ProjectName {
-			// Different session - switch client first
-			if err := tm.SwitchClient(task.Session); err != nil {
-				return jumpToTaskMsg{err: err}
+			// Different project - return jump target for parent to handle
+			// Cross-socket jumps require replacing the current process with tmux attach
+			return jumpToTaskMsg{
+				jumpTarget: &JumpTarget{
+					Session:  task.Session,
+					WindowID: task.WindowID,
+				},
 			}
 		}
 
-		// Select the task window
+		// Same project - just select the window directly
+		tm := tmux.New(task.Session)
 		if err := tm.SelectWindow(task.WindowID); err != nil {
 			return jumpToTaskMsg{err: err}
 		}
 
-		return jumpToTaskMsg{err: nil}
+		return jumpToTaskMsg{}
 	}
 }
 
@@ -314,7 +329,13 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case jumpToTaskMsg:
-		// Jump completed - nothing to do on success, errors are logged by tmux client
+		if msg.jumpTarget != nil {
+			// Cross-project jump - store the target and exit TUI
+			// The parent command will handle the actual jump via syscall.Exec
+			m.jumpTarget = msg.jumpTarget
+			return m, tea.Quit
+		}
+		// Same-project jump completed - nothing to do on success
 		return m, nil
 
 	case tea.BackgroundColorMsg:

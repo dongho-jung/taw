@@ -65,9 +65,10 @@ func embedScrollbarInTextarea(view string, scrollbar string, visibleLines int) s
 func (m *TaskInput) Result() TaskInputResult {
 	m.applyOptionInputValues()
 	return TaskInputResult{
-		Content:   strings.TrimSpace(m.textarea.Value()),
-		Options:   m.options,
-		Cancelled: m.cancelled,
+		Content:    strings.TrimSpace(m.textarea.Value()),
+		Options:    m.options,
+		Cancelled:  m.cancelled,
+		JumpTarget: m.jumpTarget,
 	}
 }
 
