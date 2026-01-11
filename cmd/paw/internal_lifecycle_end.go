@@ -291,13 +291,15 @@ var endTaskUICmd = &cobra.Command{
 
 		// Build end-task command that runs in the pane
 		// Include pane-capture-file flag if we have pre-captured content
+		// CRITICAL: Pass PAW_DIR as env var so end-task can find the correct project
+		// even if the agent changed its working directory (e.g., cd /tmp)
 		var endTaskCmdStr string
 		if capturePath != "" {
-			endTaskCmdStr = fmt.Sprintf("%s internal end-task --user-initiated --pane-capture-file=%q %s %s; echo; echo 'Press Enter to close...'; read",
-				pawBin, capturePath, sessionName, windowID)
+			endTaskCmdStr = fmt.Sprintf("PAW_DIR='%s' %s internal end-task --user-initiated --pane-capture-file=%q %s %s; echo; echo 'Press Enter to close...'; read",
+				appCtx.PawDir, pawBin, capturePath, sessionName, windowID)
 		} else {
-			endTaskCmdStr = fmt.Sprintf("%s internal end-task --user-initiated %s %s; echo; echo 'Press Enter to close...'; read",
-				pawBin, sessionName, windowID)
+			endTaskCmdStr = fmt.Sprintf("PAW_DIR='%s' %s internal end-task --user-initiated %s %s; echo; echo 'Press Enter to close...'; read",
+				appCtx.PawDir, pawBin, sessionName, windowID)
 		}
 
 		// Create a top pane (40% height) spanning full window width

@@ -252,8 +252,10 @@ var cancelTaskUICmd = &cobra.Command{
 		}
 
 		// Build cancel-task command
-		cancelTaskCmdStr := fmt.Sprintf("%s internal cancel-task %s %s; echo; echo 'Press Enter to close...'; read",
-			pawBin, sessionName, windowID)
+		// CRITICAL: Pass PAW_DIR as env var so cancel-task can find the correct project
+		// even if the agent changed its working directory (e.g., cd /tmp)
+		cancelTaskCmdStr := fmt.Sprintf("PAW_DIR='%s' %s internal cancel-task %s %s; echo; echo 'Press Enter to close...'; read",
+			appCtx.PawDir, pawBin, sessionName, windowID)
 
 		// Create a top pane (40% height) spanning full window width
 		_, err = tm.SplitWindowPane(tmux.SplitOpts{

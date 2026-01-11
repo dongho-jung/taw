@@ -216,8 +216,10 @@ var handleTaskCmd = &cobra.Command{
 		endTaskContent := fmt.Sprintf(`#!/bin/bash
 # Auto-generated end-task script for this task
 # Finish is user-initiated (Ctrl+F). This script is retained for reference.
+# PAW_DIR is set to ensure the correct project is found
+export PAW_DIR="%s"
 exec "%s" internal end-task "%s" "%s"
-`, pawBin, sessionName, windowID)
+`, appCtx.PawDir, pawBin, sessionName, windowID)
 		if err := os.WriteFile(endTaskScriptPath, []byte(endTaskContent), 0755); err != nil {
 			logging.Warn("Failed to create end-task script: %v", err)
 		} else {
