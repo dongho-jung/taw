@@ -284,18 +284,47 @@ PAW uses desktop notifications and sounds to alert users:
 
 Desktop notifications use terminal escape sequences (OSC) for cross-platform support:
 
-| Terminal | Protocol | Format |
-|----------|----------|--------|
-| iTerm2 | OSC 9 | `ESC]9;message BEL` |
-| Kitty | OSC 99 | `ESC]99;i=1:d=0:p=2;body BEL` |
-| WezTerm | OSC 777 | `ESC]777;notify;title;body BEL` |
-| Ghostty | OSC 777 | `ESC]777;notify;title;body BEL` |
-| rxvt | OSC 777 | `ESC]777;notify;title;body BEL` |
+| Terminal | Protocol | Features |
+|----------|----------|----------|
+| iTerm2 | OSC 9 | Basic notifications |
+| Kitty | OSC 99 | Rich notifications with urgency, icons, click-to-focus |
+| WezTerm | OSC 777 | Title + body support |
+| Ghostty | OSC 777 | Title + body support |
+| Windows Terminal | OSC 9 | Basic notifications |
+| VSCode Terminal | OSC 9 | Forwarded through SSH connections |
+| foot | OSC 99 | Rich notifications with urgency, icons |
+| Contour | OSC 99 | Rich notifications with urgency, icons |
+| rxvt-unicode | OSC 777 | Title + body support |
+| Linux (fallback) | notify-send | Uses libnotify when available |
 | Others | OSC 9 + Bell | Fallback to OSC 9 and terminal bell |
 
-- When running inside tmux, OSC sequences are wrapped for passthrough
+#### OSC Protocol Details
+
+- **OSC 9** (iTerm2 style): `ESC]9;message BEL` - Simple message-only format
+- **OSC 99** (Kitty style): `ESC]99;metadata;payload BEL` - Rich format with:
+  - Urgency levels (low, normal, critical)
+  - Standard icons (info, warning, error, question, help)
+  - Occasion control (show only when unfocused)
+  - Activation actions (focus window on click)
+- **OSC 777** (rxvt style): `ESC]777;notify;title;body BEL` - Title + body support
+
+#### Notification Options
+
+PAW supports notification urgency levels:
+- **Low**: For non-critical notifications
+- **Normal**: Standard notifications (default)
+- **Critical**: Important notifications that should not be missed
+
+Standard icon support (for terminals that support OSC 99):
+- `info`, `warning`, `error`, `question`, `help`
+
+#### Platform Notes
+
+- **macOS**: Uses system sounds via `afplay`, OSC sequences for notifications
+- **Linux**: Falls back to `notify-send` when terminal doesn't support OSC notifications
+- **Windows**: Uses OSC 9 via Windows Terminal
+- **tmux**: OSC sequences are automatically wrapped for passthrough (`ESC P tmux;...`)
 - Terminal bell (`\a`) is always sent as additional fallback
-- Sounds use macOS system sounds on darwin, terminal bell on other platforms
 - Statusline messages display via `tmux display-message -d 2000`
 
 ## Working rules

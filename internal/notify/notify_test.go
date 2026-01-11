@@ -55,6 +55,11 @@ func TestDetectTerminal(t *testing.T) {
 			expected: termGhostty,
 		},
 		{
+			name:     "Windows Terminal",
+			envVars:  map[string]string{"WT_SESSION": "abc-123"},
+			expected: termWindowsTerminal,
+		},
+		{
 			name:     "iTerm2 via TERM_PROGRAM",
 			envVars:  map[string]string{"TERM_PROGRAM": "iTerm.app"},
 			expected: termITerm2,
@@ -65,9 +70,39 @@ func TestDetectTerminal(t *testing.T) {
 			expected: termWezTerm,
 		},
 		{
+			name:     "VSCode via TERM_PROGRAM",
+			envVars:  map[string]string{"TERM_PROGRAM": "vscode"},
+			expected: termVSCode,
+		},
+		{
+			name:     "VSCode via VSCODE_INJECTION",
+			envVars:  map[string]string{"VSCODE_INJECTION": "1"},
+			expected: termVSCode,
+		},
+		{
+			name:     "VSCode via VSCODE_GIT_IPC_HANDLE",
+			envVars:  map[string]string{"VSCODE_GIT_IPC_HANDLE": "/tmp/vscode.sock"},
+			expected: termVSCode,
+		},
+		{
 			name:     "rxvt via TERM",
 			envVars:  map[string]string{"TERM": "rxvt-unicode-256color"},
 			expected: termRxvt,
+		},
+		{
+			name:     "foot terminal via TERM",
+			envVars:  map[string]string{"TERM": "foot"},
+			expected: termFoot,
+		},
+		{
+			name:     "foot-extra terminal via TERM",
+			envVars:  map[string]string{"TERM": "foot-extra"},
+			expected: termFoot,
+		},
+		{
+			name:     "Contour terminal via TERM",
+			envVars:  map[string]string{"TERM": "contour"},
+			expected: termContour,
 		},
 		{
 			name:     "Warp terminal (no OSC support)",
@@ -86,7 +121,8 @@ func TestDetectTerminal(t *testing.T) {
 			// Clear relevant env vars using t.Setenv (auto-restores after test)
 			envKeys := []string{
 				"KITTY_WINDOW_ID", "WEZTERM_PANE", "GHOSTTY_RESOURCES_DIR",
-				"WARP_TERMINAL_VERSION", "TERM_PROGRAM", "TERM",
+				"WT_SESSION", "WARP_TERMINAL_VERSION", "TERM_PROGRAM", "TERM",
+				"VSCODE_INJECTION", "VSCODE_GIT_IPC_HANDLE",
 			}
 			for _, key := range envKeys {
 				t.Setenv(key, "")
@@ -152,4 +188,111 @@ func TestPlaySoundDoesNotPanic(t *testing.T) {
 	PlaySound(SoundNeedInput)
 	PlaySound(SoundError)
 	PlaySound(SoundCancelPending)
+}
+
+func TestUrgencyConstants(t *testing.T) {
+	// Verify urgency constants have expected values
+	if UrgencyLow != 0 {
+		t.Errorf("UrgencyLow = %d, want 0", UrgencyLow)
+	}
+	if UrgencyNormal != 1 {
+		t.Errorf("UrgencyNormal = %d, want 1", UrgencyNormal)
+	}
+	if UrgencyCritical != 2 {
+		t.Errorf("UrgencyCritical = %d, want 2", UrgencyCritical)
+	}
+}
+
+func TestIconConstants(t *testing.T) {
+	// Verify icon constants have expected values
+	icons := map[Icon]string{
+		IconNone:     "",
+		IconInfo:     "info",
+		IconWarning:  "warning",
+		IconError:    "error",
+		IconQuestion: "question",
+		IconHelp:     "help",
+	}
+
+	for icon, expected := range icons {
+		if string(icon) != expected {
+			t.Errorf("Icon %q = %q, want %q", icon, string(icon), expected)
+		}
+	}
+}
+
+func TestTerminalTypeConstants(t *testing.T) {
+	// Verify all terminal type constants are unique and non-empty
+	terminals := []string{
+		termITerm2,
+		termKitty,
+		termWezTerm,
+		termGhostty,
+		termRxvt,
+		termWindowsTerminal,
+		termVSCode,
+		termFoot,
+		termContour,
+		termUnknown,
+	}
+
+	seen := make(map[string]bool)
+	for _, term := range terminals {
+		if term == "" {
+			t.Error("Terminal type constant should not be empty")
+		}
+		if seen[term] {
+			t.Errorf("Duplicate terminal type constant: %q", term)
+		}
+		seen[term] = true
+	}
+}
+
+func TestSendWithUrgencyDoesNotPanic(t *testing.T) {
+	// Verify SendWithUrgency doesn't panic with different urgency levels
+	err := SendWithUrgency("Test", "Message", UrgencyLow)
+	if err != nil {
+		t.Errorf("SendWithUrgency(UrgencyLow) returned error: %v", err)
+	}
+
+	err = SendWithUrgency("Test", "Message", UrgencyNormal)
+	if err != nil {
+		t.Errorf("SendWithUrgency(UrgencyNormal) returned error: %v", err)
+	}
+
+	err = SendWithUrgency("Test", "Message", UrgencyCritical)
+	if err != nil {
+		t.Errorf("SendWithUrgency(UrgencyCritical) returned error: %v", err)
+	}
+}
+
+func TestSendWithOptionsDoesNotPanic(t *testing.T) {
+	// Verify SendWithOptions doesn't panic with various options
+	opts := NotifyOptions{
+		Urgency: UrgencyCritical,
+		Icon:    IconError,
+	}
+	err := SendWithOptions("Test", "Message", opts)
+	if err != nil {
+		t.Errorf("SendWithOptions() returned error: %v", err)
+	}
+
+	// Test with default options
+	err = SendWithOptions("Test", "Message", NotifyOptions{})
+	if err != nil {
+		t.Errorf("SendWithOptions() with default options returned error: %v", err)
+	}
+}
+
+func TestNotifyOptionsDefaults(t *testing.T) {
+	// Verify NotifyOptions has sensible zero values
+	opts := NotifyOptions{}
+
+	if opts.Urgency != UrgencyLow {
+		t.Errorf("Default Urgency = %d, want %d (UrgencyLow)", opts.Urgency, UrgencyLow)
+	}
+
+	if opts.Icon != IconNone {
+		t.Errorf("Default Icon = %q, want %q (IconNone)", opts.Icon, IconNone)
+	}
 }

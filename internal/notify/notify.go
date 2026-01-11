@@ -1,4 +1,16 @@
 // Package notify provides cross-platform desktop notifications using terminal escape sequences.
+//
+// Supported terminals and protocols:
+//   - iTerm2: OSC 9 (basic notifications)
+//   - Kitty: OSC 99 (rich notifications with urgency, icons, sounds)
+//   - WezTerm: OSC 777 (title + body)
+//   - Ghostty: OSC 777 (title + body), OSC 9
+//   - Windows Terminal: OSC 9 (basic notifications)
+//   - VSCode Terminal: OSC 9 (forwarded through SSH)
+//   - foot: OSC 777, OSC 99
+//   - Contour: OSC 99, OSC 777
+//   - rxvt-unicode: OSC 777
+//   - Linux: notify-send fallback when available
 package notify
 
 import (
@@ -16,6 +28,38 @@ const (
 	ESC = "\033"
 	BEL = "\a"
 	ST  = ESC + "\\" // String Terminator
+)
+
+// Urgency represents notification urgency levels.
+// Supported by Kitty (OSC 99) and Linux notify-send.
+type Urgency int
+
+const (
+	// UrgencyLow for non-critical notifications.
+	UrgencyLow Urgency = 0
+	// UrgencyNormal for standard notifications (default).
+	UrgencyNormal Urgency = 1
+	// UrgencyCritical for important notifications that should not be missed.
+	UrgencyCritical Urgency = 2
+)
+
+// Icon represents standard notification icon names.
+// Supported by terminals implementing OSC 99 with icon support (Kitty, foot).
+type Icon string
+
+const (
+	// IconNone indicates no icon should be shown.
+	IconNone Icon = ""
+	// IconInfo for informational notifications.
+	IconInfo Icon = "info"
+	// IconWarning for warning notifications.
+	IconWarning Icon = "warning"
+	// IconError for error notifications.
+	IconError Icon = "error"
+	// IconQuestion for prompts requiring user input.
+	IconQuestion Icon = "question"
+	// IconHelp for help-related notifications.
+	IconHelp Icon = "help"
 )
 
 // SoundType represents different notification sounds.
@@ -36,36 +80,60 @@ const (
 
 // Terminal types
 const (
-	termITerm2  = "iterm2"
-	termKitty   = "kitty"
-	termWezTerm = "wezterm"
-	termGhostty = "ghostty"
-	termRxvt    = "rxvt"
-	termUnknown = "unknown"
+	termITerm2          = "iterm2"
+	termKitty           = "kitty"
+	termWezTerm         = "wezterm"
+	termGhostty         = "ghostty"
+	termRxvt            = "rxvt"
+	termWindowsTerminal = "windows-terminal"
+	termVSCode          = "vscode"
+	termFoot            = "foot"
+	termContour         = "contour"
+	termUnknown         = "unknown"
 )
 
-// Send shows a desktop notification using terminal escape sequences.
-// Supports multiple terminals (iTerm2, Kitty, WezTerm, Ghostty, rxvt) with fallback to terminal bell.
-func Send(title, message string) error {
-	logging.Debug("-> Send(title=%q, message=%q)", title, message)
-	defer logging.Debug("<- Send")
+// NotifyOptions contains optional parameters for notifications.
+type NotifyOptions struct {
+	Urgency Urgency // Notification urgency level (default: UrgencyNormal)
+	Icon    Icon    // Standard icon name (default: none)
+}
 
-	sendTerminalNotification(title, message)
+// Send shows a desktop notification using terminal escape sequences.
+// Supports multiple terminals (iTerm2, Kitty, WezTerm, Ghostty, rxvt, Windows Terminal,
+// VSCode, foot, Contour) with fallback to Linux notify-send and terminal bell.
+func Send(title, message string) error {
+	return SendWithOptions(title, message, NotifyOptions{Urgency: UrgencyNormal})
+}
+
+// SendWithUrgency shows a desktop notification with the specified urgency level.
+func SendWithUrgency(title, message string, urgency Urgency) error {
+	return SendWithOptions(title, message, NotifyOptions{Urgency: urgency})
+}
+
+// SendWithOptions shows a desktop notification with custom options.
+func SendWithOptions(title, message string, opts NotifyOptions) error {
+	logging.Debug("-> SendWithOptions(title=%q, message=%q, urgency=%d, icon=%q)", title, message, opts.Urgency, opts.Icon)
+	defer logging.Debug("<- SendWithOptions")
+
+	sendTerminalNotification(title, message, opts)
 	return nil
 }
 
 // sendTerminalNotification sends notification using appropriate terminal protocol.
-func sendTerminalNotification(title, message string) {
+func sendTerminalNotification(title, message string, opts NotifyOptions) {
 	term := detectTerminal()
 	inTmux := os.Getenv("TMUX") != ""
 
-	logging.Trace("sendTerminalNotification: term=%s, inTmux=%v", term, inTmux)
+	logging.Trace("sendTerminalNotification: term=%s, inTmux=%v, urgency=%d", term, inTmux, opts.Urgency)
 
 	// Send appropriate OSC based on terminal
 	switch term {
 	case termKitty:
-		// Kitty supports both OSC 9 and OSC 99, prefer OSC 99 for richer notifications
-		sendOSC99(title, message, inTmux)
+		// Kitty supports OSC 99 with rich features (urgency, icons, occasion control)
+		sendOSC99Enhanced(title, message, opts, inTmux)
+	case termFoot, termContour:
+		// foot and Contour support OSC 99 with icon support
+		sendOSC99Enhanced(title, message, opts, inTmux)
 	case termITerm2:
 		// iTerm2 pioneered OSC 9
 		sendOSC9(message, inTmux)
@@ -73,12 +141,20 @@ func sendTerminalNotification(title, message string) {
 		// WezTerm and Ghostty support both OSC 9 and OSC 777
 		// Use OSC 777 for title+body support
 		sendOSC777(title, message, inTmux)
+	case termWindowsTerminal, termVSCode:
+		// Windows Terminal and VSCode support OSC 9
+		sendOSC9(message, inTmux)
 	case termRxvt:
 		// rxvt-unicode uses OSC 777
 		sendOSC777(title, message, inTmux)
 	default:
-		// Try OSC 9 (most widely supported) for unknown terminals
-		sendOSC9(message, inTmux)
+		// Try notify-send on Linux first, then fall back to OSC 9
+		if runtime.GOOS == "linux" && tryNotifySend(title, message, opts) {
+			// notify-send succeeded, still send bell for terminal alert
+		} else {
+			// Try OSC 9 (most widely supported) for unknown terminals
+			sendOSC9(message, inTmux)
+		}
 	}
 
 	// Always send bell as additional alert
@@ -88,7 +164,7 @@ func sendTerminalNotification(title, message string) {
 
 // detectTerminal returns the terminal emulator type.
 func detectTerminal() string {
-	// Check terminal-specific environment variables
+	// Check terminal-specific environment variables (most reliable)
 	if os.Getenv("KITTY_WINDOW_ID") != "" {
 		return termKitty
 	}
@@ -98,27 +174,43 @@ func detectTerminal() string {
 	if os.Getenv("GHOSTTY_RESOURCES_DIR") != "" {
 		return termGhostty
 	}
+	// Windows Terminal sets WT_SESSION
+	if os.Getenv("WT_SESSION") != "" {
+		return termWindowsTerminal
+	}
 	if os.Getenv("WARP_TERMINAL_VERSION") != "" {
 		// Warp doesn't support OSC notifications yet
 		return termUnknown
 	}
 
-	// Check TERM_PROGRAM
+	// Check TERM_PROGRAM for macOS and cross-platform terminals
 	termProgram := strings.ToLower(os.Getenv("TERM_PROGRAM"))
-	if strings.Contains(termProgram, "iterm") {
+	switch {
+	case strings.Contains(termProgram, "iterm"):
 		return termITerm2
-	}
-	if strings.Contains(termProgram, "wezterm") {
+	case strings.Contains(termProgram, "wezterm"):
 		return termWezTerm
-	}
-	if strings.Contains(termProgram, "ghostty") {
+	case strings.Contains(termProgram, "ghostty"):
 		return termGhostty
+	case termProgram == "vscode":
+		return termVSCode
 	}
 
-	// Check TERM for rxvt
+	// Check TERM for terminal-specific identifiers
 	term := strings.ToLower(os.Getenv("TERM"))
-	if strings.Contains(term, "rxvt") {
+	switch {
+	case strings.Contains(term, "rxvt"):
 		return termRxvt
+	case strings.HasPrefix(term, "foot"):
+		return termFoot
+	case strings.HasPrefix(term, "contour"):
+		return termContour
+	}
+
+	// Check for VSCode via alternative detection
+	// VSCode sets VSCODE_INJECTION when running in integrated terminal
+	if os.Getenv("VSCODE_INJECTION") != "" || os.Getenv("VSCODE_GIT_IPC_HANDLE") != "" {
+		return termVSCode
 	}
 
 	return termUnknown
@@ -132,7 +224,7 @@ func sendOSC9(message string, inTmux bool) {
 	writeOSC(osc, inTmux)
 }
 
-// sendOSC99 sends Kitty-style notification.
+// sendOSC99 sends basic Kitty-style notification (legacy function for compatibility).
 // Format: ESC ] 99 ; i=id:d=done:p=urgency ; body BEL
 // Supported by: Kitty
 // See: https://sw.kovidgoyal.net/kitty/desktop-notifications/
@@ -146,6 +238,44 @@ func sendOSC99(title, message string, inTmux bool) {
 	// p=2: high urgency
 	osc := fmt.Sprintf("%s]99;i=1:d=0:p=2;%s%s", ESC, body, BEL)
 	writeOSC(osc, inTmux)
+}
+
+// sendOSC99Enhanced sends Kitty-style notification with full options.
+// Format: ESC ] 99 ; metadata ; payload <terminator>
+// Metadata keys:
+//   - i: notification id for updates/close
+//   - d: done flag (0=incomplete, 1=complete)
+//   - u: urgency (0=low, 1=normal, 2=critical)
+//   - o: occasion (always, unfocused, invisible)
+//   - a: activation action (focus, report)
+//   - c: close event notification (0 or 1)
+//   - n: icon name (base64 encoded for symbolic names)
+//
+// Supported by: Kitty, foot, Contour
+// See: https://sw.kovidgoyal.net/kitty/desktop-notifications/
+func sendOSC99Enhanced(title, message string, opts NotifyOptions, inTmux bool) {
+	// Build metadata string with all supported options
+	// i=paw: unique notification id (allows updating/closing)
+	// d=0: notification is not done (show it immediately)
+	// u=N: urgency level
+	// o=unfocused: only show when terminal is not focused (reduces noise)
+	// a=focus: clicking the notification focuses the terminal window
+	metadata := fmt.Sprintf("i=paw:d=0:u=%d:o=unfocused:a=focus", opts.Urgency)
+
+	// Add icon if specified (use standard icon names)
+	if opts.Icon != IconNone {
+		metadata += ":n=" + string(opts.Icon)
+	}
+
+	// First, send title payload
+	titleOSC := fmt.Sprintf("%s]99;%s:p=title;%s%s", ESC, metadata, title, BEL)
+	writeOSC(titleOSC, inTmux)
+
+	// Then send body payload if message differs from title
+	if message != "" && message != title {
+		bodyOSC := fmt.Sprintf("%s]99;i=paw:p=body;%s%s", ESC, message, BEL)
+		writeOSC(bodyOSC, inTmux)
+	}
 }
 
 // sendOSC777 sends rxvt-unicode style notification.
@@ -171,6 +301,71 @@ func wrapTmuxPassthrough(osc string) string {
 	// Double all escape characters for tmux passthrough
 	escaped := strings.ReplaceAll(osc, ESC, ESC+ESC)
 	return fmt.Sprintf("%sPtmux;%s%s", ESC, escaped, ST)
+}
+
+// notifySendPath caches the path to notify-send binary.
+// Empty string means not checked, "-" means not found.
+var notifySendPath string
+
+// tryNotifySend attempts to send notification via Linux notify-send.
+// Returns true if notification was sent successfully.
+// This is used as a fallback for Linux systems when terminal doesn't support OSC notifications.
+func tryNotifySend(title, message string, opts NotifyOptions) bool {
+	// Check if notify-send is available (cached)
+	if notifySendPath == "" {
+		path, err := exec.LookPath("notify-send")
+		if err != nil {
+			notifySendPath = "-" // Mark as not found
+		} else {
+			notifySendPath = path
+		}
+	}
+
+	if notifySendPath == "-" {
+		return false
+	}
+
+	// Build notify-send command with options
+	args := []string{}
+
+	// Add urgency level
+	switch opts.Urgency {
+	case UrgencyLow:
+		args = append(args, "-u", "low")
+	case UrgencyNormal:
+		args = append(args, "-u", "normal")
+	case UrgencyCritical:
+		args = append(args, "-u", "critical")
+	}
+
+	// Add icon if specified
+	if opts.Icon != IconNone {
+		// notify-send accepts standard icon names directly
+		args = append(args, "-i", string(opts.Icon))
+	}
+
+	// Add app name for identification
+	args = append(args, "-a", "PAW")
+
+	// Add title and message
+	args = append(args, title)
+	if message != "" && message != title {
+		args = append(args, message)
+	}
+
+	// Run notify-send in background (don't wait)
+	cmd := exec.Command(notifySendPath, args...)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = nil
+
+	if err := cmd.Start(); err != nil {
+		logging.Debug("tryNotifySend: failed to start notify-send err=%v", err)
+		return false
+	}
+
+	logging.Trace("tryNotifySend: sent notification via notify-send")
+	return true
 }
 
 // PlaySound plays an alert sound.
