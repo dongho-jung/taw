@@ -100,7 +100,7 @@ func TestAssetsFS(t *testing.T) {
 	}
 
 	// Check for expected files
-	expectedFiles := []string{"HELP.md", "PROMPT.md", "PROMPT-nogit.md", "tmux.conf", "claude"}
+	expectedFiles := []string{"HELP.md", "PROMPT.md", "PROMPT-nogit.md", "tmux.conf", "claude", "HELP-FOR-PAW.md"}
 	for _, expected := range expectedFiles {
 		found := false
 		for _, entry := range entries {
@@ -201,5 +201,89 @@ func TestWriteClaudeFilesCreatesSettings(t *testing.T) {
 	settingsPath := filepath.Join(targetDir, "settings.local.json")
 	if _, err := os.Stat(settingsPath); err != nil {
 		t.Errorf("settings.local.json not found: %v", err)
+	}
+}
+
+func TestWriteClaudeFilesCreatesCLAUDEMd(t *testing.T) {
+	tempDir := t.TempDir()
+	targetDir := filepath.Join(tempDir, ".claude")
+
+	if err := WriteClaudeFiles(targetDir); err != nil {
+		t.Fatalf("WriteClaudeFiles() error = %v", err)
+	}
+
+	// Check that CLAUDE.md exists
+	claudeMdPath := filepath.Join(targetDir, "CLAUDE.md")
+	if _, err := os.Stat(claudeMdPath); err != nil {
+		t.Errorf("CLAUDE.md not found: %v", err)
+	}
+
+	// Check content
+	content, err := os.ReadFile(claudeMdPath)
+	if err != nil {
+		t.Fatalf("Failed to read CLAUDE.md: %v", err)
+	}
+
+	// CLAUDE.md should mention HELP-FOR-PAW.md
+	if !strings.Contains(string(content), "HELP-FOR-PAW.md") {
+		t.Error("CLAUDE.md should reference HELP-FOR-PAW.md")
+	}
+}
+
+func TestGetPawHelp(t *testing.T) {
+	content, err := GetPawHelp()
+	if err != nil {
+		t.Fatalf("GetPawHelp() error = %v", err)
+	}
+
+	if content == "" {
+		t.Error("GetPawHelp() returned empty content")
+	}
+
+	// Help file should contain PAW-specific terms
+	expectedTerms := []string{"PAW", "config", "hooks", "pre_worktree_hook"}
+	for _, term := range expectedTerms {
+		if !strings.Contains(content, term) {
+			t.Errorf("PAW help content should contain %q", term)
+		}
+	}
+}
+
+func TestWritePawHelpFile(t *testing.T) {
+	tempDir := t.TempDir()
+
+	if err := WritePawHelpFile(tempDir); err != nil {
+		t.Fatalf("WritePawHelpFile() error = %v", err)
+	}
+
+	// Check that HELP-FOR-PAW.md exists
+	helpPath := filepath.Join(tempDir, "HELP-FOR-PAW.md")
+	if _, err := os.Stat(helpPath); err != nil {
+		t.Errorf("HELP-FOR-PAW.md not found: %v", err)
+	}
+
+	// Check content matches GetPawHelp()
+	content, err := os.ReadFile(helpPath)
+	if err != nil {
+		t.Fatalf("Failed to read HELP-FOR-PAW.md: %v", err)
+	}
+
+	expected, _ := GetPawHelp()
+	if string(content) != expected {
+		t.Error("Written content should match GetPawHelp()")
+	}
+}
+
+func TestWritePawHelpFileOverwrites(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// First write
+	if err := WritePawHelpFile(tempDir); err != nil {
+		t.Fatalf("First WritePawHelpFile() error = %v", err)
+	}
+
+	// Second write (should not error)
+	if err := WritePawHelpFile(tempDir); err != nil {
+		t.Fatalf("Second WritePawHelpFile() error = %v", err)
 	}
 }

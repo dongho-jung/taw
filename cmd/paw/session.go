@@ -79,6 +79,11 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 		logging.Warn("Failed to write claude files: %v", err)
 	}
 
+	// Write PAW help file for agents to .paw/
+	if err := embed.WritePawHelpFile(appCtx.PawDir); err != nil {
+		logging.Warn("Failed to write PAW help file: %v", err)
+	}
+
 	// Update .gitignore
 	if appCtx.IsGitRepo {
 		updateGitignore(appCtx.ProjectDir)

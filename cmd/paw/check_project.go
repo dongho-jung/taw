@@ -102,6 +102,18 @@ func projectChecks(appCtx *app.App) []checkResult {
 		},
 	})
 
+	helpFile := filepath.Join(appCtx.PawDir, "HELP-FOR-PAW.md")
+	helpExists := pathExists(helpFile)
+	results = append(results, checkResult{
+		name:     "paw help file",
+		ok:       helpExists,
+		required: false,
+		message:  boolMessage(helpExists, helpFile, "missing"),
+		fix: func() error {
+			return embed.WritePawHelpFile(appCtx.PawDir)
+		},
+	})
+
 	historyDir := filepath.Join(appCtx.PawDir, constants.HistoryDirName)
 	historyExists := pathExists(historyDir)
 	results = append(results, checkResult{

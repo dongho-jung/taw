@@ -42,6 +42,26 @@ func GetTmuxConfig() (string, error) {
 	return string(data), nil
 }
 
+// GetPawHelp returns the PAW help content for agents.
+func GetPawHelp() (string, error) {
+	data, err := Assets.ReadFile("assets/HELP-FOR-PAW.md")
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// WritePawHelpFile writes the HELP-FOR-PAW.md file to the target paw directory.
+// This provides agents with guidance on PAW-specific operations.
+func WritePawHelpFile(pawDir string) error {
+	content, err := GetPawHelp()
+	if err != nil {
+		return err
+	}
+	targetPath := filepath.Join(pawDir, "HELP-FOR-PAW.md")
+	return os.WriteFile(targetPath, []byte(content), 0644)
+}
+
 // WriteClaudeFiles writes the embedded claude directory to the target path.
 // This copies Claude settings to .paw/.claude/
 func WriteClaudeFiles(targetDir string) error {

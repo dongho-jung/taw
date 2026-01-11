@@ -88,19 +88,18 @@ const (
 
 // Config represents the PAW project configuration.
 type Config struct {
-	WorkMode        WorkMode             `yaml:"work_mode"`
-	OnComplete      OnComplete           `yaml:"on_complete"`
-	Theme           string               `yaml:"theme"` // Theme preset: auto, dark, dark-blue, light, light-blue, etc.
-	PreWorktreeHook string               `yaml:"pre_worktree_hook"`
-	PreTaskHook     string               `yaml:"pre_task_hook"`
-	PostTaskHook    string               `yaml:"post_task_hook"`
-	PreMergeHook    string               `yaml:"pre_merge_hook"`
-	PostMergeHook   string               `yaml:"post_merge_hook"`
-	Notifications   *NotificationsConfig `yaml:"notifications"`
-	LogFormat       string               `yaml:"log_format"`
-	LogMaxSizeMB    int                  `yaml:"log_max_size_mb"`
-	LogMaxBackups   int                  `yaml:"log_max_backups"`
-	SelfImprove     bool                 `yaml:"self_improve"`
+	WorkMode        WorkMode   `yaml:"work_mode"`
+	OnComplete      OnComplete `yaml:"on_complete"`
+	Theme           string     `yaml:"theme"` // Theme preset: auto, dark, dark-blue, light, light-blue, etc.
+	PreWorktreeHook string     `yaml:"pre_worktree_hook"`
+	PreTaskHook     string     `yaml:"pre_task_hook"`
+	PostTaskHook    string     `yaml:"post_task_hook"`
+	PreMergeHook    string     `yaml:"pre_merge_hook"`
+	PostMergeHook   string     `yaml:"post_merge_hook"`
+	LogFormat       string     `yaml:"log_format"`
+	LogMaxSizeMB    int        `yaml:"log_max_size_mb"`
+	LogMaxBackups   int        `yaml:"log_max_backups"`
+	SelfImprove     bool       `yaml:"self_improve"`
 
 	// Inherit specifies which fields inherit from global config.
 	// Only used in project-level config files.
