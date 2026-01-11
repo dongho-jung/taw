@@ -85,12 +85,10 @@ var watchWaitCmd = &cobra.Command{
 			}
 
 			isFinal = isFinalWindow(windowName)
-			if isWaitingWindow(windowName) {
-				if !notified {
-					notifyWaitingWithDisplay(tm, taskName, "window")
-					notified = true
-				}
-			} else {
+			// Reset notified flag when window leaves waiting state
+			// This allows re-notification when a new wait state begins
+			// Note: Actual notifications are handled in the content detection section below
+			if !isWaitingWindow(windowName) {
 				notified = false
 			}
 
@@ -141,11 +139,15 @@ var watchWaitCmd = &cobra.Command{
 					}
 					if ok {
 						promptKey := prompt.key()
-						if promptKey != "" && promptKey != lastPromptKey {
+						// Only notify if: prompt is valid, it's a new prompt, and we haven't notified yet
+						// The !notified check prevents notification spam when user types in the
+						// AskUserQuestion field - typing changes the captured content (and thus promptKey)
+						// but we don't want to re-notify for the same logical wait state
+						if promptKey != "" && promptKey != lastPromptKey && !notified {
 							lastPromptKey = promptKey
 							// Try notification actions for simple prompts
-							// Note: tryNotificationAction always shows a notification (either with actions
-							// or fallback to simple), so we mark notified=true before calling it
+							// tryNotificationAction always shows a notification (either with actions
+							// or fallback to simple)
 							notified = true
 							choice := tryNotificationAction(taskName, prompt)
 							// If user selects an action from notification, send it to the agent
