@@ -279,8 +279,8 @@ var toggleSettingsCmd = &cobra.Command{
 
 		// Ignore error - popup returns non-zero when closed with Esc/Ctrl+C
 		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:     "70%",
-			Height:    "60%",
+			Width:     constants.PopupWidthSettings,
+			Height:    constants.PopupHeightSettings,
 			Title:     " Settings ",
 			Close:     true,
 			Style:     "fg=terminal,bg=terminal",

@@ -396,9 +396,13 @@ const (
 	PopupWidthHelp  = "80"
 	PopupHeightHelp = "80%"
 
-	// Small size for command palette
+	// Small size for command palette (fits 3 items + input + help)
 	PopupWidthPalette  = "60"
-	PopupHeightPalette = "20"
+	PopupHeightPalette = "18"
+
+	// Medium size for settings popup (fits 5 fields + tabs + help)
+	PopupWidthSettings  = "60"
+	PopupHeightSettings = "22"
 
 	// Medium size for history picker
 	PopupWidthHistory  = "80%"
