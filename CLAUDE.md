@@ -67,7 +67,7 @@ go tool cover -html=coverage.out -o coverage.html
 |---------|----------|-------|
 | internal/tui/textarea/internal/* | 100.0% | Memoization and runeutil fully covered |
 | internal/constants | 96.1% | Name/window helpers covered |
-| internal/config | 86.0% | Config parsing/saving, templates, and hook formatting |
+| internal/config | 86.0% | Config parsing/saving and hook formatting |
 | internal/app | 79.0% | App context and environment handling |
 | internal/logging | 76.0% | Core logging behavior covered |
 | internal/embed | 75.0% | Embedded asset loading |
@@ -99,7 +99,7 @@ paw/                           # This repository
 │   ├── internal.go            # Internal command registration
 │   ├── internal_create*.go    # Task creation (toggleNew, newTask, spawnTask, handleTask)
 │   ├── internal_lifecycle*.go # Task lifecycle (endTask, cancelTask, merge, helpers)
-│   ├── internal_popup*.go     # Popup/UI (toggleLog, toggleHelp, toggleTemplate, shell)
+│   ├── internal_popup*.go     # Popup/UI (toggleLog, toggleHelp, shell)
 │   ├── internal_sync.go       # Sync commands (syncWithMain)
 │   ├── internal_stop_hook.go  # Claude stop hook handling (task status classification)
 │   ├── internal_user_prompt_hook.go # User prompt submission hook
@@ -139,7 +139,6 @@ paw/                           # This repository
 │   └── tui/                   # Terminal UI components
 │       ├── taskinput*.go      # Task input UI (main, helpers, mouse, options)
 │       ├── taskopts.go        # Task options panel
-│       ├── template*.go       # Template selector and editor
 │       ├── gitviewer.go       # Git viewer (status, log, graph modes)
 │       ├── helpviewer.go      # Help viewer
 │       ├── logviewer.go       # Log viewer with filtering
@@ -155,7 +154,6 @@ paw/                           # This repository
     ├── log                    # Consolidated logs (all scripts write here)
     ├── memory                 # Project memory (YAML, shared across tasks)
     ├── input-history          # Task input history (JSON, for Ctrl+R search)
-    ├── templates.yaml         # Task templates (YAML, for ⌃T template selector)
     ├── PROMPT.md              # Project prompt (user-customizable)
     ├── bin                    # Symlink to current paw binary (updated on attach)
     ├── .version               # PAW version (for upgrade detection on attach)

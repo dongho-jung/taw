@@ -395,7 +395,7 @@ const (
 
 // Popup sizes (percentage-based for compatibility)
 const (
-	// Full size for content viewers (log, git, diff, template)
+	// Full size for content viewers (log, git, diff)
 	PopupWidthFull  = "94%"
 	PopupHeightFull = "90%"
 

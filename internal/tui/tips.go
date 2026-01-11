@@ -30,7 +30,6 @@ var tips = []string{
 
 	// Keyboard shortcuts - Toggle panels
 	"Press ⌃P to open command palette",
-	"Press ⌃T to open template selector",
 	"Press ⌃G to view git status/log",
 	"Press ⌃O to view logs",
 	"Press ⌃B to toggle bottom shell",

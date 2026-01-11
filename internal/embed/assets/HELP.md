@@ -24,7 +24,6 @@ Claude Code-based autonomous agent work environment
   ⌃Q          Quit paw
 
 ### Toggle Panels
-  ⌃T          Toggle templates (show template selector)
   ⌃O          Toggle logs (show log viewer)
   ⌃G          Toggle git viewer
   ⌃B          Toggle bottom (shell pane)
@@ -52,25 +51,6 @@ Claude Code-based autonomous agent work environment
   🤖  Agent working
   💬  Waiting for user input / needs attention
   ✅  Task completed
-
-## Template Selector (⌃T)
-
-Browse and manage reusable task templates with fuzzy search.
-
-### Navigation
-  ↑/↓         Navigate templates
-  ⌃K/⌃J       Navigate templates (vim-style)
-  PgUp/PgDn   Scroll preview panel
-  ⏎           Select template (fills task input)
-  q/Esc/⌃T    Close template selector
-
-### Template Management
-  ⌃N          Create new template
-  ⌃E          Edit selected template
-  ⌃D          Delete selected template
-
-### Search
-  Type any characters to fuzzy search templates by name or content.
 
 ## Log Viewer (⌃O)
 
