@@ -110,9 +110,10 @@ func (m *TaskInput) detectClickedPanel(x, y int) FocusPanel {
 	// Kanban: starts after top section, takes remaining space
 
 	// Calculate textarea width using same adaptive logic as WindowSizeMsg handler
-	const kanbanColumnGap = 8
+	// MUST match the calculation in taskinput.go WindowSizeMsg handler exactly
+	const kanbanColumnGap = 6 // Same as kanban.go: 3 columns × 2 chars border
 	const minOptionsPanelWidth = 43
-	kanbanColWidth := (m.width - kanbanColumnGap) / 4
+	kanbanColWidth := (m.width - kanbanColumnGap) / 3 // 3 columns (Working + Waiting + Done)
 	kanbanColDisplayWidth := kanbanColWidth + 2
 	textareaHeightWithBorder := m.textareaHeight + 2 // Dynamic height + border
 
@@ -120,11 +121,11 @@ func (m *TaskInput) detectClickedPanel(x, y int) FocusPanel {
 	isNarrow := kanbanColDisplayWidth < minOptionsPanelWidth
 	var textareaWidth int
 	if isNarrow {
-		// Narrow mode: textarea spans 2 columns (Working + Waiting)
-		textareaWidth = 2 * kanbanColDisplayWidth
+		// Narrow mode: textarea uses remaining space after options panel
+		textareaWidth = m.width - minOptionsPanelWidth
 	} else {
-		// Normal mode: textarea spans 3 columns (Working + Waiting + Done)
-		textareaWidth = 3 * kanbanColDisplayWidth
+		// Wide mode: textarea spans 2 columns (Working + Waiting)
+		textareaWidth = 2 * kanbanColDisplayWidth
 	}
 	if textareaWidth < 30 {
 		textareaWidth = 30
