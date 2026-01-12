@@ -338,10 +338,20 @@ var toggleProjectPickerCmd = &cobra.Command{
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
+		appCtx, err := getAppFromSession(sessionName)
+		if err != nil {
+			logging.Debug("toggleProjectPickerCmd: getAppFromSession failed: %v", err)
+			return err
+		}
+
 		pawBin, err := os.Executable()
 		if err != nil {
 			pawBin = "paw"
 		}
+
+		// Clean up any stale switch target file before showing popup
+		switchPath := filepath.Join(appCtx.PawDir, constants.ProjectSwitchFileName)
+		_ = os.Remove(switchPath)
 
 		// Run project picker in popup
 		pickerCmd := fmt.Sprintf("%s internal project-picker %s", pawBin, sessionName)
@@ -353,7 +363,29 @@ var toggleProjectPickerCmd = &cobra.Command{
 			Close:  true,
 			Style:  "fg=terminal,bg=terminal",
 		}, pickerCmd)
-		return nil
+
+		// Check if a switch target was written by the project picker
+		targetData, err := os.ReadFile(switchPath)
+		if err != nil {
+			// No switch target - user cancelled or closed popup
+			return nil
+		}
+
+		// Clean up the switch file
+		_ = os.Remove(switchPath)
+
+		targetSession := strings.TrimSpace(string(targetData))
+		if targetSession == "" {
+			return nil
+		}
+
+		logging.Debug("toggleProjectPickerCmd: switching to session %s", targetSession)
+
+		// Use detach-client -E to replace the current client with a new attachment
+		// to the target session. This works across different tmux sockets.
+		targetSocket := constants.TmuxSocketPrefix + targetSession
+		switchCmd := fmt.Sprintf("tmux -L %s attach-session -t %s", targetSocket, targetSession)
+		return tm.Run("detach-client", "-E", switchCmd)
 	},
 }
 
@@ -395,50 +427,25 @@ var projectPickerCmd = &cobra.Command{
 			return nil
 		}
 
-		// If user selected a project, switch to it
+		// If user selected a project, write the selection to a file
+		// The toggle-project-picker command will read this and execute the switch
 		if action == tui.ProjectPickerSelect && selected != nil {
-			// Switch to the selected session's main window
-			targetTm := tmux.New(selected.Name)
-
-			// Find the main window (first window, typically named "⭐️main" or similar)
-			windows, err := targetTm.ListWindows()
-			if err != nil || len(windows) == 0 {
-				// Fallback: just switch to session
-				return switchToSession(currentSession, selected.Name)
+			appCtx, err := getAppFromSession(currentSession)
+			if err != nil {
+				logging.Warn("projectPickerCmd: failed to get app context: %v", err)
+				return nil
 			}
 
-			// Find main window (window index 0 or window named with ⭐️ prefix)
-			mainWindow := windows[0]
-			for _, w := range windows {
-				if strings.HasPrefix(w.Name, constants.EmojiNew) {
-					mainWindow = w
-					break
-				}
+			// Write the target session name to a file
+			switchPath := filepath.Join(appCtx.PawDir, constants.ProjectSwitchFileName)
+			if err := os.WriteFile(switchPath, []byte(selected.Name), 0644); err != nil {
+				logging.Warn("projectPickerCmd: failed to write switch target: %v", err)
+				return nil
 			}
-
-			// Switch client to target session:window
-			return switchToSessionWindow(currentSession, selected.Name, mainWindow.ID)
+			logging.Debug("projectPickerCmd: wrote switch target to %s: %s", switchPath, selected.Name)
 		}
 
 		return nil
 	},
 }
 
-// switchToSession switches the current tmux client to a different PAW session.
-func switchToSession(currentSession, targetSession string) error {
-	// We need to switch from current socket to target socket
-	// This requires switching the client to the target session
-	targetTm := tmux.New(targetSession)
-	return targetTm.SwitchClient(targetSession)
-}
-
-// switchToSessionWindow switches the current tmux client to a specific window in another PAW session.
-func switchToSessionWindow(currentSession, targetSession, windowID string) error {
-	targetTm := tmux.New(targetSession)
-
-	// First select the window in the target session
-	_ = targetTm.SelectWindow(windowID)
-
-	// Then switch client to target session
-	return targetTm.SwitchClient(targetSession)
-}
