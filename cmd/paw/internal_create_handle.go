@@ -363,8 +363,9 @@ func buildStartAgentScript(appCtx *app.App, t *task.Task, taskOpts *config.TaskO
 	}
 
 	// Build model flag for Claude command
+	// Always pass the model flag since Claude CLI's default (sonnet) differs from PAW's default (opus)
 	modelFlag := ""
-	if taskOpts.Model != "" && taskOpts.Model != config.DefaultModel {
+	if taskOpts.Model != "" {
 		modelFlag = fmt.Sprintf(" --model %s", taskOpts.Model)
 	}
 
