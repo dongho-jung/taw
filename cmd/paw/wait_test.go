@@ -41,6 +41,100 @@ func TestDetectWaitInContentMarkerWithoutPrompt(t *testing.T) {
 	}
 }
 
+func TestDetectWaitInContentSegmentAware(t *testing.T) {
+	tests := []struct {
+		name         string
+		content      string
+		expectWait   bool
+		expectReason string
+	}{
+		{
+			name: "AskUserQuestion in current segment - should detect",
+			content: strings.Join([]string{
+				"⏺ Working on task",
+				"AskUserQuestion",
+				"Which option?",
+				"Enter to select - Tab/Arrow keys to navigate - Esc to cancel",
+			}, "\n"),
+			expectWait:   true,
+			expectReason: "AskUserQuestion",
+		},
+		{
+			name: "AskUserQuestion in previous segment with new segment started - should NOT detect",
+			content: strings.Join([]string{
+				"⏺ First response",
+				"AskUserQuestion",
+				"Which option?",
+				"Enter to select - Tab/Arrow keys to navigate - Esc to cancel",
+				"⏺ New response after user answered",
+				"Thank you for your selection!",
+				"Now working on the task...",
+			}, "\n"),
+			expectWait:   false,
+			expectReason: "",
+		},
+		{
+			name: "PAW_WAITING in previous segment with new segment started - should NOT detect",
+			content: strings.Join([]string{
+				"⏺ First response",
+				"PAW_WAITING",
+				"User needs to decide...",
+				"⏺ New response after user input",
+				"Got it! Processing...",
+			}, "\n"),
+			expectWait:   false,
+			expectReason: "",
+		},
+		{
+			name: "AskUserQuestion UI in previous segment - should NOT detect",
+			content: strings.Join([]string{
+				"⏺ Old response with question",
+				"Which approach?",
+				"Enter to select - Tab/Arrow keys to navigate - Esc to cancel",
+				"⏺ New response after answer",
+				"You chose option A. Starting implementation...",
+				"Creating files...",
+			}, "\n"),
+			expectWait:   false,
+			expectReason: "",
+		},
+		{
+			name: "no segment markers with AskUserQuestion - should detect (backward compat)",
+			content: strings.Join([]string{
+				"Working on task",
+				"AskUserQuestion",
+				"Which option?",
+			}, "\n"),
+			expectWait:   true,
+			expectReason: "AskUserQuestion",
+		},
+		{
+			name: "input prompt at end - should detect regardless of segment",
+			content: strings.Join([]string{
+				"⏺ Some work",
+				"Done with that.",
+				"⏺ More work",
+				"Also done.",
+				">",
+			}, "\n"),
+			expectWait:   true,
+			expectReason: "prompt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotWait, gotReason := detectWaitInContent(tt.content)
+			if gotWait != tt.expectWait {
+				t.Errorf("detectWaitInContent() wait = %v, want %v", gotWait, tt.expectWait)
+			}
+			if gotReason != tt.expectReason {
+				t.Errorf("detectWaitInContent() reason = %q, want %q", gotReason, tt.expectReason)
+			}
+		})
+	}
+}
+
 func TestDetectDoneInContent(t *testing.T) {
 	tests := []struct {
 		name     string

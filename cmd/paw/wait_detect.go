@@ -66,8 +66,15 @@ func detectWaitInContent(content string) (bool, string) {
 		return false, ""
 	}
 
+	// Find the last segment start (after the last ⏺ marker)
+	// This ensures we only detect wait markers in the most recent Claude response.
+	// If Claude started a new response after a wait state (e.g., user answered AskUserQuestion),
+	// old wait markers from previous segments should not trigger wait detection.
+	segmentStart := findLastSegmentStart(lines)
+
 	index, reason := findWaitMarker(lines)
-	if index != -1 {
+	if index != -1 && index >= segmentStart {
+		// Wait marker must be in the last segment
 		linesAfter := len(lines) - index - 1
 		maxDistance := waitMarkerMaxDistance
 		if reason == "AskUserQuestion" {
@@ -78,8 +85,9 @@ func detectWaitInContent(content string) (bool, string) {
 		}
 	}
 
-	if index := findAskUserQuestionUIIndex(lines); index != -1 {
-		linesAfter := len(lines) - index - 1
+	if uiIndex := findAskUserQuestionUIIndex(lines); uiIndex != -1 && uiIndex >= segmentStart {
+		// UI marker must also be in the last segment
+		linesAfter := len(lines) - uiIndex - 1
 		if linesAfter <= waitAskUserMaxDistance {
 			return true, "AskUserQuestionUI"
 		}
