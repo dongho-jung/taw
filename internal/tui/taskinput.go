@@ -281,9 +281,11 @@ func (m *TaskInput) updateTextareaHeight() {
 		m.textarea.SetHeight(requiredHeight)
 	}
 
-	// Always adjust viewport position based on content vs visible height
-	// This prevents the "first line cut off" issue when expanding height
-	if contentLines <= m.textareaHeight {
+	// Always adjust viewport position based on visual lines vs visible height
+	// Use TotalVisualLines() which accounts for soft-wrapped lines, not just newlines
+	// This prevents cursor from going outside the box when long lines are wrapped
+	visualLines := m.textarea.TotalVisualLines()
+	if visualLines <= m.textareaHeight {
 		// Content fits in viewport - always show from top (no scrolling needed)
 		m.textarea.GotoTop()
 	} else {
@@ -744,6 +746,18 @@ func (m *TaskInput) View() tea.View {
 		if cursor := m.textarea.Cursor(); cursor != nil {
 			cursor.Y += 2 // Account for help text line + top border
 			cursor.X += 1
+
+			// Clamp cursor Y to textarea visible bounds as a safety measure
+			// This prevents cursor from appearing outside the box in edge cases
+			// (e.g., during rapid scrolling or when soft-wrapping changes)
+			minY := 2                           // help text (1) + top border (1)
+			maxY := 2 + m.textareaHeight - 1    // last visible content line
+			if cursor.Y < minY {
+				cursor.Y = minY
+			} else if cursor.Y > maxY {
+				cursor.Y = maxY
+			}
+
 			v.Cursor = cursor
 		}
 	}

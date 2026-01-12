@@ -1746,6 +1746,16 @@ func (m Model) cursorLineNumber() int {
 	return line
 }
 
+// TotalVisualLines returns the total number of visual lines including soft wrapping.
+// This is useful for determining if the content exceeds the visible viewport.
+func (m Model) TotalVisualLines() int {
+	total := 0
+	for _, row := range m.value {
+		total += len(m.memoizedWrap(row, m.width))
+	}
+	return total
+}
+
 // mergeLineBelow merges the current line the cursor is on with the line below.
 func (m *Model) mergeLineBelow(row int) {
 	if row >= len(m.value)-1 {
