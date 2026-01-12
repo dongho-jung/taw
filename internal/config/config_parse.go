@@ -105,6 +105,10 @@ func parseConfig(content string) (*Config, error) {
 			if parsed, err := strconv.ParseBool(value); err == nil {
 				cfg.SelfImprove = parsed
 			}
+		case "paw_in_project":
+			if parsed, err := strconv.ParseBool(value); err == nil {
+				cfg.PawInProject = parsed
+			}
 		}
 	}
 

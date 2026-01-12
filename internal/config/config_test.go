@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dongho-jung/paw/internal/constants"
@@ -384,5 +385,155 @@ func TestParseConfig_AllOnCompleteValues(t *testing.T) {
 				t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, tt.expected)
 			}
 		})
+	}
+}
+
+func TestParseConfig_PawInProject(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected bool
+	}{
+		{
+			name:     "paw_in_project true",
+			content:  "work_mode: worktree\npaw_in_project: true\n",
+			expected: true,
+		},
+		{
+			name:     "paw_in_project false",
+			content:  "work_mode: worktree\npaw_in_project: false\n",
+			expected: false,
+		},
+		{
+			name:     "paw_in_project not set",
+			content:  "work_mode: worktree\n",
+			expected: false, // default
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := parseConfig(tt.content)
+			if err != nil {
+				t.Fatalf("parseConfig failed: %v", err)
+			}
+			if cfg.PawInProject != tt.expected {
+				t.Errorf("PawInProject = %v, want %v", cfg.PawInProject, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGlobalWorkspacesDir(t *testing.T) {
+	dir := GlobalWorkspacesDir()
+	if dir == "" {
+		t.Skip("Could not determine home directory")
+	}
+
+	// Should be under ~/.local/share/paw/workspaces
+	if !strings.Contains(dir, ".local/share/paw/workspaces") {
+		t.Errorf("GlobalWorkspacesDir() = %q, expected to contain '.local/share/paw/workspaces'", dir)
+	}
+}
+
+func TestProjectWorkspaceID(t *testing.T) {
+	tests := []struct {
+		projectDir string
+	}{
+		{"/home/user/myproject"},
+		{"/tmp/test-project"},
+		{"/Users/dev/projects/paw"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.projectDir, func(t *testing.T) {
+			id := ProjectWorkspaceID(tt.projectDir)
+
+			// ID should not be empty
+			if id == "" {
+				t.Error("ProjectWorkspaceID() returned empty string")
+			}
+
+			// ID should contain project name
+			base := filepath.Base(tt.projectDir)
+			if !strings.HasPrefix(id, base) {
+				t.Errorf("ProjectWorkspaceID(%q) = %q, expected to start with %q", tt.projectDir, id, base)
+			}
+
+			// ID should have a hash suffix
+			if !strings.Contains(id, "-") {
+				t.Errorf("ProjectWorkspaceID(%q) = %q, expected to contain hash separator", tt.projectDir, id)
+			}
+
+			// Same input should produce same output
+			id2 := ProjectWorkspaceID(tt.projectDir)
+			if id != id2 {
+				t.Errorf("ProjectWorkspaceID() not stable: got %q and %q", id, id2)
+			}
+		})
+	}
+}
+
+func TestGetWorkspaceDir_LocalPriority(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create local .paw directory
+	localPawDir := filepath.Join(tempDir, constants.PawDirName)
+	if err := os.MkdirAll(localPawDir, 0755); err != nil {
+		t.Fatalf("Failed to create local .paw: %v", err)
+	}
+
+	// Even with pawInProject=false, local should take priority
+	result := GetWorkspaceDir(tempDir, false)
+	if result != localPawDir {
+		t.Errorf("GetWorkspaceDir() = %q, want %q (local should take priority)", result, localPawDir)
+	}
+}
+
+func TestGetWorkspaceDir_GlobalLocation(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// No local .paw, pawInProject=false -> global workspace
+	result := GetWorkspaceDir(tempDir, false)
+
+	globalDir := GlobalWorkspacesDir()
+	if !strings.HasPrefix(result, globalDir) {
+		t.Errorf("GetWorkspaceDir() = %q, expected to be under %q", result, globalDir)
+	}
+}
+
+func TestGetWorkspaceDir_LocalLocation(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// No local .paw, but pawInProject=true -> local
+	result := GetWorkspaceDir(tempDir, true)
+
+	expectedLocal := filepath.Join(tempDir, constants.PawDirName)
+	if result != expectedLocal {
+		t.Errorf("GetWorkspaceDir() = %q, want %q", result, expectedLocal)
+	}
+}
+
+func TestSave_PawInProject(t *testing.T) {
+	tempDir := t.TempDir()
+
+	cfg := &Config{
+		WorkMode:     WorkModeWorktree,
+		OnComplete:   OnCompleteConfirm,
+		PawInProject: true,
+	}
+
+	if err := cfg.Save(tempDir); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	// Load and verify
+	loaded, err := Load(tempDir)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if loaded.PawInProject != cfg.PawInProject {
+		t.Errorf("PawInProject = %v, want %v", loaded.PawInProject, cfg.PawInProject)
 	}
 }

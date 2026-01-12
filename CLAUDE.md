@@ -169,7 +169,36 @@ paw/                           # This repository
 
 $HOME/.config/paw/                 # Global PAW config (shared across all projects)
 └── config                         # Global config (default settings for all projects)
+
+$HOME/.local/share/paw/            # Global PAW data (when paw_in_project is false)
+└── workspaces/                    # Workspaces for all projects
+    └── {project-name}-{hash}/     # Per-project workspace (same structure as .paw above)
 ```
+
+### Workspace Location
+
+By default, PAW stores workspaces in `$HOME/.local/share/paw/workspaces/` to avoid modifying project `.gitignore` files. This behavior is controlled by the `paw_in_project` global setting.
+
+**Global config (`$HOME/.config/paw/config`):**
+```yaml
+# Workspace location (default: false)
+# - false: Store in ~/.local/share/paw/workspaces/{project-id}/ (recommended)
+# - true: Store in project/.paw/ (requires .gitignore modification)
+paw_in_project: false
+```
+
+**Priority rules:**
+1. If a local `.paw/` directory already exists in the project, it takes priority (for backward compatibility)
+2. Otherwise, the `paw_in_project` global setting determines the location
+
+**Benefits of global workspace (paw_in_project: false):**
+- No need to modify project `.gitignore`
+- Cleaner project directory
+- Workspaces persist even if project is deleted and re-cloned
+
+**When to use local workspace (paw_in_project: true):**
+- When you want PAW data to be project-specific
+- When you need `.paw/config` and `.paw/memory` tracked in version control
 
 ### Global vs Project Settings
 

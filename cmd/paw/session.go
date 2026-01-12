@@ -84,8 +84,8 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 		logging.Warn("Failed to write PAW help file: %v", err)
 	}
 
-	// Update .gitignore
-	if appCtx.IsGitRepo {
+	// Update .gitignore (only if using local workspace)
+	if appCtx.IsGitRepo && !appCtx.IsGlobalWorkspace() {
 		updateGitignore(appCtx.ProjectDir)
 	}
 

@@ -13,6 +13,12 @@ import (
 func TestNew(t *testing.T) {
 	tempDir := t.TempDir()
 
+	// Create local .paw directory so it takes priority over global workspace
+	localPawDir := filepath.Join(tempDir, constants.PawDirName)
+	if err := os.MkdirAll(localPawDir, 0755); err != nil {
+		t.Fatalf("Failed to create local .paw directory: %v", err)
+	}
+
 	app, err := New(tempDir)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -35,6 +41,32 @@ func TestNew(t *testing.T) {
 	expectedSessionName := filepath.Base(tempDir)
 	if app.SessionName != expectedSessionName {
 		t.Errorf("SessionName = %q, want %q", app.SessionName, expectedSessionName)
+	}
+}
+
+func TestNewWithGlobalWorkspace(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Without local .paw, should use global workspace location (default paw_in_project: false)
+	app, err := New(tempDir)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if app.ProjectDir != tempDir {
+		t.Errorf("ProjectDir = %q, want %q", app.ProjectDir, tempDir)
+	}
+
+	// PawDir should be in global workspace location
+	globalWorkspacesDir := config.GlobalWorkspacesDir()
+	if !strings.HasPrefix(app.PawDir, globalWorkspacesDir) {
+		t.Errorf("PawDir = %q, expected to be under %q", app.PawDir, globalWorkspacesDir)
+	}
+
+	// AgentsDir should be under PawDir
+	expectedAgentsDir := filepath.Join(app.PawDir, constants.AgentsDirName)
+	if app.AgentsDir != expectedAgentsDir {
+		t.Errorf("AgentsDir = %q, want %q", app.AgentsDir, expectedAgentsDir)
 	}
 }
 

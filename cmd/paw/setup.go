@@ -173,6 +173,7 @@ func runSetupWizard(appCtx *app.App) error {
 	fmt.Println("\n✅ Configuration saved!")
 	fmt.Printf("   Work mode: %s\n", cfg.WorkMode)
 	fmt.Printf("   On complete: %s\n", cfg.OnComplete)
+	fmt.Printf("   Workspace: %s\n", appCtx.PawDir)
 
 	return nil
 }

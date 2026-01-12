@@ -32,20 +32,31 @@ type App struct {
 }
 
 // New creates a new App instance for the given project directory.
+// It resolves the PawDir based on:
+// 1. Local .paw directory if it exists (takes priority for backward compatibility)
+// 2. Global config's paw_in_project setting (false = global workspace, true = local)
 func New(projectDir string) (*App, error) {
 	absPath, err := filepath.Abs(projectDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve project path: %w", err)
 	}
 
-	pawDir := filepath.Join(absPath, constants.PawDirName)
-	agentsDir := filepath.Join(pawDir, constants.AgentsDirName)
-
 	// Determine session name from project directory name
 	sessionName := filepath.Base(absPath)
 
 	// Check if debug mode is enabled
 	debug := os.Getenv("PAW_DEBUG") == "1"
+
+	// Load global config to check paw_in_project setting
+	globalCfg, _ := config.LoadGlobal()
+	pawInProject := false
+	if globalCfg != nil {
+		pawInProject = globalCfg.PawInProject
+	}
+
+	// Resolve workspace directory (local .paw takes priority if exists)
+	pawDir := config.GetWorkspaceDir(absPath, pawInProject)
+	agentsDir := filepath.Join(pawDir, constants.AgentsDirName)
 
 	app := &App{
 		ProjectDir:  absPath,
@@ -142,6 +153,13 @@ func (a *App) SetGitRepo(isGit bool) {
 // This checks that we're in a git repo, config is loaded, and worktree mode is enabled.
 func (a *App) IsWorktreeMode() bool {
 	return a.IsGitRepo && a.Config != nil && a.Config.WorkMode == config.WorkModeWorktree
+}
+
+// IsGlobalWorkspace returns true if the workspace is stored in the global location
+// (not inside the project directory).
+func (a *App) IsGlobalWorkspace() bool {
+	localPawDir := filepath.Join(a.ProjectDir, constants.PawDirName)
+	return a.PawDir != localPawDir
 }
 
 // UpdateSessionNameForGitRepo updates the session name to include repo name

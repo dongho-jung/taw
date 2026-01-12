@@ -36,10 +36,11 @@ const (
 	SettingsFieldWorkMode SettingsField = iota
 	SettingsFieldOnComplete
 	SettingsFieldTheme
+	SettingsFieldPawInProject
 	SettingsFieldSelfImprove
 )
 
-const generalFieldCount = 4
+const generalFieldCount = 5
 
 // SettingsUI provides an interactive settings configuration form.
 type SettingsUI struct {
@@ -64,10 +65,11 @@ type SettingsUI struct {
 
 	// Field indices for dropdown-style fields
 	// For fields with inherit option, index 0 = "inherit"
-	workModeIdx    int // 0=inherit, 1=worktree, 2=main (project scope) or 0=worktree, 1=main (global scope)
-	onCompleteIdx  int // 0=inherit, 1=confirm, 2=auto-merge, 3=auto-pr (project scope)
-	themeIdx       int // 0=auto, 1...N=presets (no inherit option)
-	selfImproveIdx int // 0=inherit, 1=on, 2=off (project scope) or 0=on, 1=off (global scope)
+	workModeIdx      int // 0=inherit, 1=worktree, 2=main (project scope) or 0=worktree, 1=main (global scope)
+	onCompleteIdx    int // 0=inherit, 1=confirm, 2=auto-merge, 3=auto-pr (project scope)
+	themeIdx         int // 0=auto, 1...N=presets (no inherit option)
+	pawInProjectIdx  int // 0=global workspace, 1=in project (global scope only, no inherit)
+	selfImproveIdx   int // 0=inherit, 1=on, 2=off (project scope) or 0=on, 1=off (global scope)
 }
 
 // SettingsResult contains the result of the settings UI.
@@ -174,6 +176,13 @@ func (m *SettingsUI) initFieldIndices() {
 			m.themeIdx = i
 			break
 		}
+	}
+
+	// PawInProject: global scope only, no inherit option (0=global workspace, 1=in project)
+	if cfg.PawInProject {
+		m.pawInProjectIdx = 1
+	} else {
+		m.pawInProjectIdx = 0
 	}
 
 	// SelfImprove: For project scope, index 0 = inherit
@@ -295,6 +304,11 @@ func (m *SettingsUI) handleLeft() {
 		if m.themeIdx > 0 {
 			m.themeIdx--
 		}
+	case SettingsFieldPawInProject:
+		// Only editable in global scope
+		if m.scope == SettingsScopeGlobal && m.pawInProjectIdx > 0 {
+			m.pawInProjectIdx--
+		}
 	case SettingsFieldSelfImprove:
 		if m.selfImproveIdx > 0 {
 			m.selfImproveIdx--
@@ -324,6 +338,11 @@ func (m *SettingsUI) handleRight() {
 		themeOptions := getThemeOptions()
 		if m.themeIdx < len(themeOptions)-1 {
 			m.themeIdx++
+		}
+	case SettingsFieldPawInProject:
+		// Only editable in global scope (0=global, 1=in project)
+		if m.scope == SettingsScopeGlobal && m.pawInProjectIdx < 1 {
+			m.pawInProjectIdx++
 		}
 	case SettingsFieldSelfImprove:
 		maxIdx := 1 // on=0, off=1
@@ -386,6 +405,11 @@ func (m *SettingsUI) applyChanges() {
 	themeOptions := getThemeOptions()
 	if m.themeIdx < len(themeOptions) {
 		m.config.Theme = themeOptions[m.themeIdx]
+	}
+
+	// Apply PawInProject (global scope only, no inherit option)
+	if m.scope == SettingsScopeGlobal {
+		m.config.PawInProject = (m.pawInProjectIdx == 1)
 	}
 
 	// Apply SelfImprove
@@ -592,6 +616,39 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 			currentTheme = themeOptions[m.themeIdx]
 		}
 		sb.WriteString(label + renderSelector(currentTheme, focused, ""))
+		sb.WriteString("\n")
+	}
+
+	// Paw In Project (global scope only, no inherit)
+	{
+		label := labelStyle.Render("Workspace:")
+		if m.field == SettingsFieldPawInProject {
+			label = selectedLabelStyle.Render("Workspace:")
+		}
+		focused := m.field == SettingsFieldPawInProject
+
+		var currentValue string
+		var hint string
+
+		if m.scope == SettingsScopeGlobal {
+			if m.pawInProjectIdx == 0 {
+				currentValue = "global"
+				hint = "(~/.local/share/paw/workspaces)"
+			} else {
+				currentValue = "in project"
+				hint = "(.paw in project dir)"
+			}
+		} else {
+			// Project scope - show read-only inherited value
+			if m.globalConfig.PawInProject {
+				currentValue = "in project"
+				hint = "(set in global config)"
+			} else {
+				currentValue = "global"
+				hint = "(set in global config)"
+			}
+		}
+		sb.WriteString(label + renderSelector(currentValue, focused, hint))
 		sb.WriteString("\n")
 	}
 

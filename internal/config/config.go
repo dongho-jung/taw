@@ -2,6 +2,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -44,6 +46,71 @@ func GlobalPawDir() string {
 		return ""
 	}
 	return filepath.Join(home, ".config", "paw")
+}
+
+// GlobalWorkspacesDir returns the global workspaces directory path ($HOME/.local/share/paw/workspaces).
+// This is used when paw_in_project is false (default).
+func GlobalWorkspacesDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".local", "share", "paw", "workspaces")
+}
+
+// ProjectWorkspaceID generates a unique workspace ID for a project directory.
+// Uses a hash of the absolute path to ensure uniqueness while keeping names reasonable.
+func ProjectWorkspaceID(projectDir string) string {
+	// Use the last path component + short hash for readability
+	base := filepath.Base(projectDir)
+	absPath, err := filepath.Abs(projectDir)
+	if err != nil {
+		absPath = projectDir
+	}
+
+	// Create a short hash of the full path for uniqueness
+	h := sha256.Sum256([]byte(absPath))
+	shortHash := hex.EncodeToString(h[:])[:8]
+
+	// Clean the base name (remove special characters)
+	cleanBase := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			return r
+		}
+		return '-'
+	}, base)
+
+	// Limit base name length
+	if len(cleanBase) > 32 {
+		cleanBase = cleanBase[:32]
+	}
+
+	return cleanBase + "-" + shortHash
+}
+
+// GetWorkspaceDir returns the workspace directory for a project.
+// If localPawDir exists, it takes priority (for backward compatibility).
+// Otherwise, uses global workspace location based on pawInProject setting.
+func GetWorkspaceDir(projectDir string, pawInProject bool) string {
+	// Local .paw takes priority if it exists
+	localPawDir := filepath.Join(projectDir, constants.PawDirName)
+	if _, err := os.Stat(localPawDir); err == nil {
+		return localPawDir
+	}
+
+	// Use global or local based on setting
+	if pawInProject {
+		return localPawDir
+	}
+
+	// Use global workspace
+	globalDir := GlobalWorkspacesDir()
+	if globalDir == "" {
+		// Fallback to local if we can't determine home directory
+		return localPawDir
+	}
+
+	return filepath.Join(globalDir, ProjectWorkspaceID(projectDir))
 }
 
 // LoadGlobal reads the global configuration from $HOME/.config/paw/config.
@@ -91,6 +158,7 @@ type Config struct {
 	WorkMode        WorkMode   `yaml:"work_mode"`
 	OnComplete      OnComplete `yaml:"on_complete"`
 	Theme           string     `yaml:"theme"` // Theme preset: auto, dark, dark-blue, light, light-blue, etc.
+	PawInProject    bool       `yaml:"paw_in_project"` // If true, store .paw in project dir; if false, use global workspace
 	PreWorktreeHook string     `yaml:"pre_worktree_hook"`
 	PreTaskHook     string     `yaml:"pre_task_hook"`
 	PostTaskHook    string     `yaml:"post_task_hook"`
@@ -272,6 +340,11 @@ work_mode: %s
 # - auto-pr: Auto commit + push + create pull request
 on_complete: %s
 
+# Workspace location: true or false (default: false)
+# - true: Store .paw directory inside the project (requires .gitignore)
+# - false: Store workspace in $HOME/.local/share/paw/workspaces/ (no .gitignore needed)
+paw_in_project: %t
+
 # Log format: text or jsonl
 log_format: %s
 
@@ -290,7 +363,7 @@ self_improve: %t
 # post_task_hook: echo "post task"
 # pre_merge_hook: echo "pre merge"
 # post_merge_hook: echo "post merge"
-`, c.WorkMode, c.OnComplete, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups, c.SelfImprove)
+`, c.WorkMode, c.OnComplete, c.PawInProject, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups, c.SelfImprove)
 
 	// Add hooks if set
 	if c.PreWorktreeHook != "" {
