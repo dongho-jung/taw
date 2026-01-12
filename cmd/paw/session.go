@@ -149,6 +149,22 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 		}
 	}
 
+	// Ensure .claude directory exists with settings.local.json (for stop-hook support)
+	// This is critical for task status updates - without it, tasks stay "working" forever.
+	// The .claude directory may be missing if:
+	// - Workspace was created before .claude support was added
+	// - WriteClaudeFiles failed silently during initial setup
+	// - User is using a global workspace (paw_in_project: false)
+	claudeDir := filepath.Join(appCtx.PawDir, constants.ClaudeLink)
+	if _, err := os.Stat(claudeDir); os.IsNotExist(err) {
+		logging.Log("Creating missing .claude directory for stop-hook support...")
+		if err := embed.WriteClaudeFiles(claudeDir); err != nil {
+			logging.Warn("Failed to write claude files: %v", err)
+		} else {
+			logging.Log("Claude files created successfully")
+		}
+	}
+
 	// Run cleanup and recovery before attaching
 	mgr := task.NewManager(appCtx.AgentsDir, appCtx.ProjectDir, appCtx.PawDir, appCtx.IsGitRepo, appCtx.Config)
 	mgr.SetTmuxClient(tm)
