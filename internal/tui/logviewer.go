@@ -525,7 +525,6 @@ func (m *LogViewer) View() tea.View {
 		// Truncate to screen width (visual width based)
 		if lineWidth > m.width {
 			line = ansi.Cut(line, 0, m.width)
-			lineWidth = m.width
 		}
 
 		// Apply log level colorization
