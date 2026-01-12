@@ -12,30 +12,27 @@ import (
 
 // SetupWizard provides an interactive setup wizard.
 type SetupWizard struct {
-	step       int
-	workMode   config.WorkMode
-	onComplete config.OnComplete
-	isGitRepo  bool
-	cursor     int
-	done       bool
-	cancelled  bool
+	step      int
+	workMode  config.WorkMode
+	isGitRepo bool
+	cursor    int
+	done      bool
+	cancelled bool
 }
 
 // SetupResult contains the result of the setup wizard.
 type SetupResult struct {
-	WorkMode   config.WorkMode
-	OnComplete config.OnComplete
-	Cancelled  bool
+	WorkMode  config.WorkMode
+	Cancelled bool
 }
 
 // NewSetupWizard creates a new setup wizard.
 func NewSetupWizard(isGitRepo bool) *SetupWizard {
 	return &SetupWizard{
-		step:       0,
-		workMode:   config.WorkModeWorktree,
-		onComplete: config.OnCompleteConfirm,
-		isGitRepo:  isGitRepo,
-		cursor:     0,
+		step:      0,
+		workMode:  config.WorkModeWorktree,
+		isGitRepo: isGitRepo,
+		cursor:    0,
 	}
 }
 
@@ -92,127 +89,71 @@ func (m *SetupWizard) View() tea.View {
 		Foreground(lipgloss.Color("240"))
 
 	sb.WriteString("\n")
-	sb.WriteString(titleStyle.Render("🚀 PAW Setup Wizard"))
+	sb.WriteString(titleStyle.Render("PAW Setup Wizard"))
 	sb.WriteString("\n\n")
 
-	switch m.step {
-	case 0:
-		if m.isGitRepo {
-			sb.WriteString("Work Mode:\n")
-			sb.WriteString(descStyle.Render("Choose how tasks work with git\n\n"))
-
-			options := []struct {
-				name string
-				desc string
-			}{
-				{"worktree (Recommended)", "Each task gets its own git worktree"},
-				{"main", "All tasks work on the current branch"},
-			}
-
-			for i, opt := range options {
-				cursor := "  "
-				style := normalStyle
-				if i == m.cursor {
-					cursor = "▸ "
-					style = selectedStyle
-				}
-				sb.WriteString(cursor + style.Render(opt.name) + "\n")
-				sb.WriteString("    " + descStyle.Render(opt.desc) + "\n")
-			}
-		} else {
-			// Skip work mode for non-git repos
-			m.step = 1
-			return m.View()
-		}
-
-	case 1:
-		sb.WriteString("When Task Completes:\n")
-		sb.WriteString(descStyle.Render("What happens when a task is completed\n\n"))
+	if m.isGitRepo {
+		sb.WriteString("Work Mode:\n")
+		sb.WriteString(descStyle.Render("Choose how tasks work with git\n\n"))
 
 		options := []struct {
 			name string
 			desc string
 		}{
-			{"confirm (Recommended)", "Commit only (no push/PR/merge)"},
-		}
-
-		// In worktree mode, add merge and PR options
-		if m.workMode == config.WorkModeWorktree {
-			options = append(options,
-				struct{ name, desc string }{"auto-pr", "Auto commit + push + create pull request"},
-				struct{ name, desc string }{"auto-merge", "Auto commit + push + merge + cleanup"},
-			)
+			{"worktree (Recommended)", "Each task gets its own git worktree"},
+			{"main", "All tasks work on the current branch"},
 		}
 
 		for i, opt := range options {
 			cursor := "  "
 			style := normalStyle
 			if i == m.cursor {
-				cursor = "▸ "
+				cursor = "> "
 				style = selectedStyle
 			}
 			sb.WriteString(cursor + style.Render(opt.name) + "\n")
 			sb.WriteString("    " + descStyle.Render(opt.desc) + "\n")
 		}
+	} else {
+		// Non-git repo: just confirm and exit
+		sb.WriteString("This is not a git repository.\n")
+		sb.WriteString(descStyle.Render("Tasks will work in the project directory directly.\n\n"))
+		sb.WriteString("Press Enter to continue...")
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(descStyle.Render("↑/↓: Navigate  Enter: Select  q: Cancel"))
+	sb.WriteString(descStyle.Render("Up/Down: Navigate  Enter: Select  q: Cancel"))
 
 	return tea.NewView(sb.String())
 }
 
 // maxCursor returns the maximum cursor position for the current step.
 func (m *SetupWizard) maxCursor() int {
-	switch m.step {
-	case 0:
+	if m.isGitRepo {
 		return 1 // worktree, main
-	case 1:
-		if m.workMode == config.WorkModeWorktree {
-			return 2 // confirm, auto-pr, auto-merge
-		}
-		return 0 // confirm only (main mode)
 	}
 	return 0
 }
 
 // selectOption handles option selection.
 func (m *SetupWizard) selectOption() (tea.Model, tea.Cmd) {
-	switch m.step {
-	case 0:
-		// Work mode
+	if m.isGitRepo {
 		switch m.cursor {
 		case 0:
 			m.workMode = config.WorkModeWorktree
 		case 1:
 			m.workMode = config.WorkModeMain
 		}
-		m.step = 1
-		m.cursor = 0
-
-	case 1:
-		// On complete
-		switch m.cursor {
-		case 0:
-			m.onComplete = config.OnCompleteConfirm
-		case 1:
-			m.onComplete = config.OnCompleteAutoPR
-		case 2:
-			m.onComplete = config.OnCompleteAutoMerge
-		}
-		m.done = true
-		return m, tea.Quit
 	}
-
-	return m, nil
+	m.done = true
+	return m, tea.Quit
 }
 
 // Result returns the setup result.
 func (m *SetupWizard) Result() SetupResult {
 	return SetupResult{
-		WorkMode:   m.workMode,
-		OnComplete: m.onComplete,
-		Cancelled:  m.cancelled,
+		WorkMode:  m.workMode,
+		Cancelled: m.cancelled,
 	}
 }
 

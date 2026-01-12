@@ -331,8 +331,6 @@ func buildUserPrompt(appCtx *app.App, t *task.Task, taskName, workDir string) st
 	}
 	userPrompt.WriteString(fmt.Sprintf("**Project**: %s\n\n", appCtx.ProjectDir))
 
-	// Add ON_COMPLETE setting
-	userPrompt.WriteString(fmt.Sprintf("**ON_COMPLETE**: %s\n", appCtx.Config.OnComplete))
 	userPrompt.WriteString("**Finish**: User triggers completion with Ctrl+F. Do not call end-task automatically.\n\n")
 
 	// Add Plan Mode instructions (always shown since we start in plan mode)
@@ -343,23 +341,6 @@ func buildUserPrompt(appCtx *app.App, t *task.Task, taskName, workDir string) st
 	userPrompt.WriteString("   - Implementation steps\n")
 	userPrompt.WriteString("   - **✅ How to validate success** (state whether automated verification is possible)\n")
 	userPrompt.WriteString("3. Start implementation after the plan is ready.\n\n")
-
-	// Add critical instruction for auto-merge mode
-	if appCtx.Config.OnComplete == config.OnCompleteAutoMerge {
-		userPrompt.WriteString("## ⚠️ AUTO-MERGE MODE (conditional)\n\n")
-		userPrompt.WriteString("**Run auto-merge only after verification succeeds.**\n\n")
-		userPrompt.WriteString("✅ **Auto-merge allowed when:**\n")
-		userPrompt.WriteString("- The Plan marks the change as automatically verifiable\n")
-		userPrompt.WriteString("- Build/tests/lint all pass\n\n")
-		userPrompt.WriteString("❌ **Do NOT auto-merge when:**\n")
-		userPrompt.WriteString("- Automated verification is not possible (UI/docs/config changes, etc.)\n")
-		userPrompt.WriteString("- Tests are missing or not relevant\n")
-		userPrompt.WriteString("- Verification fails\n\n")
-		userPrompt.WriteString("**If verification succeeds:**\n")
-		userPrompt.WriteString("→ Tell the user it's ready and ask them to press Ctrl+F to finish.\n\n")
-		userPrompt.WriteString("**If verification is impossible or fails:**\n")
-		userPrompt.WriteString("→ Explain the blocker and stop; PAW will set the window status automatically.\n\n")
-	}
 
 	userPrompt.WriteString("---\n\n")
 	userPrompt.WriteString(t.Content)
@@ -389,7 +370,6 @@ export TASK_NAME='%s'
 export PAW_DIR='%s'
 export PROJECT_DIR='%s'
 %sexport WINDOW_ID='%s'
-export ON_COMPLETE='%s'
 export PAW_HOME='%s'
 export PAW_BIN='%s'
 export SESSION_NAME='%s'
@@ -398,7 +378,7 @@ export IS_DEMO='1'
 # Continue the previous Claude session (--continue auto-selects last session)
 exec claude --continue --dangerously-skip-permissions%s
 `, taskName, appCtx.PawDir, appCtx.ProjectDir, worktreeDirExport, windowID,
-			appCtx.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName, modelFlag)
+			filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName, modelFlag)
 	}
 
 	// New session: start fresh with system prompt
@@ -409,7 +389,6 @@ export TASK_NAME='%s'
 export PAW_DIR='%s'
 export PROJECT_DIR='%s'
 %sexport WINDOW_ID='%s'
-export ON_COMPLETE='%s'
 export PAW_HOME='%s'
 export PAW_BIN='%s'
 export SESSION_NAME='%s'
@@ -422,7 +401,7 @@ exec claude --dangerously-skip-permissions%s --system-prompt "$(base64 -d <<'__P
 __PROMPT_END__
 )"
 `, taskName, appCtx.PawDir, appCtx.ProjectDir, worktreeDirExport, windowID,
-		appCtx.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName,
+		filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName,
 		modelFlag, encodedPrompt)
 }
 

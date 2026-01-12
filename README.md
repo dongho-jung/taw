@@ -151,12 +151,6 @@ paw setup  # Rerun the setup wizard
 # - main: All tasks work on the current branch
 work_mode: worktree
 
-# On complete action: confirm, auto-merge, or auto-pr
-# - confirm: Commit only (no push/PR/merge)
-# - auto-merge: Auto commit + push + merge + cleanup + close window
-# - auto-pr: Auto commit + push + create pull request
-on_complete: confirm
-
 # Non-git workspace: shared or copy
 non_git_workspace: shared
 
@@ -188,9 +182,6 @@ log_max_backups: 3
 |---------|--------|-------------|
 | `work_mode` | `worktree` | Create a git worktree per task (isolated, recommended) |
 |             | `main` | Work directly on the current branch (simple) |
-| `on_complete` | `confirm` | Commit only (no push/PR/merge) |
-|               | `auto-merge` | Auto commit + push + merge + clean up + close window (worktree mode only) |
-|               | `auto-pr` | Auto commit + push + create PR (worktree mode only) |
 | `non_git_workspace` | `shared` | Use the project directory directly (default) |
 |                   | `copy` | Create a per-task workspace copy (isolation) |
 | `verify_command` | (command) | Shell command(s) to verify before finish/merge (e.g., `npm test`) |
@@ -241,8 +232,7 @@ Install tmux/gh via Homebrew: `brew install tmux gh`. Install the Claude Code CL
 |--------|----------|
 | New task | `⌃N` |
 | Search task history (new task window) | `⌃R` |
-| Cancel task (double-press) | `⌃K` |
-| Finish task (double-press) | `⌃F` |
+| Finish task (shows action picker) | `⌃F` |
 | Command palette | `⌃P` |
 | Quit paw | `⌃Q` |
 

@@ -9,8 +9,7 @@ import (
 // buildKeybindings creates tmux keybindings for PAW.
 // Keyboard shortcuts:
 //   - Ctrl+N: New task
-//   - Ctrl+K: Send Ctrl+C (double-press to cancel task)
-//   - Ctrl+F: Finish task
+//   - Ctrl+F: Finish task (shows action picker)
 //   - Ctrl+P: Command palette
 //   - Ctrl+Q: Quit paw
 //   - Ctrl+O: Toggle logs
@@ -25,7 +24,6 @@ import (
 func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 	// Command shortcuts
 	cmdNewTask := fmt.Sprintf("run-shell '%s internal toggle-new %s'", pawBin, sessionName)
-	cmdCtrlC := fmt.Sprintf("run-shell '%s internal ctrl-c %s'", pawBin, sessionName)
 	cmdDoneTask := fmt.Sprintf("run-shell '%s internal done-task %s'", pawBin, sessionName)
 	cmdQuit := "detach-client"
 	cmdToggleLogs := fmt.Sprintf("run-shell '%s internal toggle-log %s'", pawBin, sessionName)
@@ -56,7 +54,6 @@ func buildKeybindings(pawBin, sessionName string) []tmux.BindOpts {
 
 		// Task commands (Ctrl-based)
 		{Key: "C-n", Command: cmdNewTask, NoPrefix: true},
-		{Key: "C-k", Command: cmdCtrlC, NoPrefix: true},
 		{Key: "C-f", Command: cmdDoneTask, NoPrefix: true},
 		{Key: "C-p", Command: cmdToggleCmdPalette, NoPrefix: true},
 		{Key: "C-q", Command: cmdQuit, NoPrefix: true},

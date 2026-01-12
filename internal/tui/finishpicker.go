@@ -1,0 +1,270 @@
+package tui
+
+import (
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss/v2"
+
+	"github.com/dongho-jung/paw/internal/logging"
+)
+
+// FinishAction represents the selected finish action.
+type FinishAction string
+
+const (
+	FinishActionCancel FinishAction = "cancel"
+	FinishActionMerge  FinishAction = "merge"
+	FinishActionPR     FinishAction = "pr"
+	FinishActionKeep   FinishAction = "keep"
+	FinishActionDrop   FinishAction = "drop"
+)
+
+// FinishOption represents an option in the finish picker.
+type FinishOption struct {
+	Action      FinishAction
+	Name        string
+	Description string
+	Warning     bool // If true, requires confirmation
+}
+
+// FinishPicker is a TUI for selecting how to finish a task.
+type FinishPicker struct {
+	options      []FinishOption
+	cursor       int
+	selected     FinishAction
+	confirming   bool // True when showing confirmation for drop action
+	isDark       bool
+	colors       ThemeColors
+}
+
+// gitOptions returns the options for git mode.
+func gitOptions() []FinishOption {
+	return []FinishOption{
+		{Action: FinishActionMerge, Name: "Merge", Description: "Merge branch to main and clean up"},
+		{Action: FinishActionPR, Name: "PR", Description: "Push branch and create a pull request"},
+		{Action: FinishActionDrop, Name: "Drop", Description: "Discard all changes and clean up", Warning: true},
+	}
+}
+
+// nonGitOptions returns the options for non-git mode.
+func nonGitOptions() []FinishOption {
+	return []FinishOption{
+		{Action: FinishActionKeep, Name: "Keep", Description: "Keep changes in place"},
+		{Action: FinishActionDrop, Name: "Drop", Description: "Discard all changes", Warning: true},
+	}
+}
+
+// NewFinishPicker creates a new finish picker.
+func NewFinishPicker(isGitRepo bool) *FinishPicker {
+	logging.Debug("-> NewFinishPicker(isGitRepo=%v)", isGitRepo)
+	defer logging.Debug("<- NewFinishPicker")
+
+	// Detect dark mode BEFORE bubbletea starts
+	isDark := DetectDarkMode()
+
+	var options []FinishOption
+	if isGitRepo {
+		options = gitOptions()
+	} else {
+		options = nonGitOptions()
+	}
+
+	return &FinishPicker{
+		options:  options,
+		cursor:   0,
+		selected: FinishActionCancel,
+		isDark:   isDark,
+		colors:   NewThemeColors(isDark),
+	}
+}
+
+// Init initializes the finish picker.
+func (m *FinishPicker) Init() tea.Cmd {
+	return tea.RequestBackgroundColor
+}
+
+// Update handles messages.
+func (m *FinishPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		m.isDark = msg.IsDark()
+		m.colors = NewThemeColors(m.isDark)
+		setCachedDarkMode(m.isDark)
+		return m, nil
+
+	case tea.KeyMsg:
+		// Handle confirmation mode
+		if m.confirming {
+			switch msg.String() {
+			case "y", "Y", "enter":
+				m.selected = FinishActionDrop
+				return m, tea.Quit
+			case "n", "N", "esc", "ctrl+c", "ctrl+f":
+				m.confirming = false
+				return m, nil
+			}
+			return m, nil
+		}
+
+		// Normal mode
+		switch msg.String() {
+		case "ctrl+c", "esc", "ctrl+f", "q":
+			m.selected = FinishActionCancel
+			return m, tea.Quit
+
+		case "enter", " ":
+			opt := m.options[m.cursor]
+			if opt.Warning {
+				// Show confirmation for warning actions
+				m.confirming = true
+				return m, nil
+			}
+			m.selected = opt.Action
+			return m, tea.Quit
+
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+			return m, nil
+
+		case "down", "j":
+			if m.cursor < len(m.options)-1 {
+				m.cursor++
+			}
+			return m, nil
+
+		// Quick selection keys
+		case "m", "M":
+			for i, opt := range m.options {
+				if opt.Action == FinishActionMerge {
+					m.cursor = i
+					m.selected = opt.Action
+					return m, tea.Quit
+				}
+			}
+		case "p", "P":
+			for i, opt := range m.options {
+				if opt.Action == FinishActionPR {
+					m.cursor = i
+					m.selected = opt.Action
+					return m, tea.Quit
+				}
+			}
+		case "d", "D":
+			for i, opt := range m.options {
+				if opt.Action == FinishActionDrop {
+					m.cursor = i
+					m.confirming = true
+					return m, nil
+				}
+			}
+		}
+	}
+
+	return m, nil
+}
+
+// View renders the finish picker.
+func (m *FinishPicker) View() tea.View {
+	c := m.colors
+
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(c.Accent)
+
+	itemStyle := lipgloss.NewStyle().
+		Foreground(c.TextNormal).
+		PaddingLeft(2)
+
+	selectedStyle := lipgloss.NewStyle().
+		Foreground(c.Accent).
+		Bold(true).
+		PaddingLeft(0)
+
+	descStyle := lipgloss.NewStyle().
+		Foreground(c.TextDim).
+		PaddingLeft(4)
+
+	selectedDescStyle := lipgloss.NewStyle().
+		Foreground(c.Accent).
+		PaddingLeft(2)
+
+	warningStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("203")). // Red
+		Bold(true)
+
+	helpStyle := lipgloss.NewStyle().
+		Foreground(c.TextDim).
+		MarginTop(1)
+
+	var sb strings.Builder
+
+	// Confirmation mode
+	if m.confirming {
+		sb.WriteString(warningStyle.Render("Are you sure you want to drop all changes?"))
+		sb.WriteString("\n\n")
+		sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("This will discard all uncommitted work."))
+		sb.WriteString("\n\n")
+		sb.WriteString(helpStyle.Render("y: Yes, drop  n/Esc: No, go back"))
+		return tea.NewView(sb.String())
+	}
+
+	// Title
+	sb.WriteString(titleStyle.Render("Finish Task"))
+	sb.WriteString("\n\n")
+
+	// Options
+	for i, opt := range m.options {
+		name := opt.Name
+		if opt.Warning {
+			name = name + " (!)"
+		}
+
+		if i == m.cursor {
+			sb.WriteString(selectedStyle.Render("> " + name))
+			sb.WriteString("\n")
+			sb.WriteString(selectedDescStyle.Render(opt.Description))
+		} else {
+			sb.WriteString(itemStyle.Render(name))
+			sb.WriteString("\n")
+			sb.WriteString(descStyle.Render(opt.Description))
+		}
+		sb.WriteString("\n")
+	}
+
+	// Help
+	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter: Select  ⌃F/Esc: Cancel"))
+
+	return tea.NewView(sb.String())
+}
+
+// Result returns the selected action.
+func (m *FinishPicker) Result() FinishAction {
+	return m.selected
+}
+
+// RunFinishPicker runs the finish picker and returns the selected action.
+func RunFinishPicker(isGitRepo bool) (FinishAction, error) {
+	logging.Debug("-> RunFinishPicker(isGitRepo=%v)", isGitRepo)
+	defer logging.Debug("<- RunFinishPicker")
+
+	// Reset theme cache to ensure fresh detection on each TUI start
+	ResetDarkModeCache()
+
+	m := NewFinishPicker(isGitRepo)
+	logging.Debug("RunFinishPicker: starting tea.Program")
+	p := tea.NewProgram(m)
+
+	finalModel, err := p.Run()
+	if err != nil {
+		logging.Debug("RunFinishPicker: tea.Program.Run failed: %v", err)
+		return FinishActionCancel, err
+	}
+
+	fp := finalModel.(*FinishPicker)
+	action := fp.Result()
+	logging.Debug("RunFinishPicker: completed, action=%s", action)
+	return action, nil
+}

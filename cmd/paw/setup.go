@@ -132,39 +132,6 @@ func runSetupWizard(appCtx *app.App) error {
 		}
 	}
 
-	// When task completes
-	fmt.Println("\nWhen Task Completes:")
-	fmt.Println("  1. confirm (Recommended) - Commit only (no push/PR/merge)")
-
-	// Show merge/PR options only in worktree mode
-	if cfg.WorkMode == config.WorkModeWorktree {
-		fmt.Println("  2. auto-pr - Auto commit + push + create pull request")
-		fmt.Println("  3. auto-merge - Auto commit + push + merge + cleanup")
-		fmt.Print("\nSelect [1-3, default: 1]: ")
-	} else {
-		fmt.Print("\nSelect [1, default: 1]: ")
-	}
-
-	var choice string
-	_, _ = fmt.Scanln(&choice)
-
-	switch choice {
-	case "2":
-		if cfg.WorkMode == config.WorkModeWorktree {
-			cfg.OnComplete = config.OnCompleteAutoPR
-		} else {
-			cfg.OnComplete = config.OnCompleteConfirm // Invalid in main mode, default to confirm
-		}
-	case "3":
-		if cfg.WorkMode == config.WorkModeWorktree {
-			cfg.OnComplete = config.OnCompleteAutoMerge
-		} else {
-			cfg.OnComplete = config.OnCompleteConfirm // Invalid in main mode, default to confirm
-		}
-	default:
-		cfg.OnComplete = config.OnCompleteConfirm
-	}
-
 	// Save configuration
 	if err := cfg.Save(appCtx.PawDir); err != nil {
 		return fmt.Errorf("failed to save configuration: %w", err)
@@ -172,7 +139,6 @@ func runSetupWizard(appCtx *app.App) error {
 
 	fmt.Println("\n✅ Configuration saved!")
 	fmt.Printf("   Work mode: %s\n", cfg.WorkMode)
-	fmt.Printf("   On complete: %s\n", cfg.OnComplete)
 	fmt.Printf("   Workspace: %s\n", appCtx.PawDir)
 
 	return nil

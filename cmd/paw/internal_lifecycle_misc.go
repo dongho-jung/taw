@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -19,7 +18,7 @@ import (
 
 var doneTaskCmd = &cobra.Command{
 	Use:   "done-task [session]",
-	Short: "Complete the current task (double-press to confirm)",
+	Short: "Show finish action picker for current task",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionName := args[0]
@@ -55,36 +54,18 @@ var doneTaskCmd = &cobra.Command{
 			return nil
 		}
 
-		// Get pending done timestamp from tmux option
-		pendingTimeStr, _ := tm.GetOption("@paw_done_pending")
-		now := time.Now().Unix()
+		// Show finish picker popup
+		pawBin, _ := os.Executable()
+		finishCmd := fmt.Sprintf("%s internal finish-picker-tui %s %s", pawBin, sessionName, windowID)
 
-		// Check if there's a pending done within 2 seconds
-		if pendingTimeStr != "" {
-			pendingTime, err := parseUnixTime(pendingTimeStr)
-			if err == nil {
-				if now-pendingTime <= constants.DoublePressIntervalSec {
-					// Double-press detected within 2 seconds, finish the task
-					_ = tm.SetOption("@paw_done_pending", "", true) // Clear pending state
-
-					// Delegate to end-task-ui
-					pawBin, _ := os.Executable()
-					endCmd := exec.Command(pawBin, "internal", "end-task-ui", sessionName, windowID)
-					return endCmd.Run()
-				}
-				// Time window expired - clear pending state and ignore this press
-				_ = tm.SetOption("@paw_done_pending", "", true)
-				return nil
-			}
-		}
-
-		// First press: show warning
-		_ = tm.SetOption("@paw_done_pending", fmt.Sprintf("%d", now), true)
-
-		logging.Trace("doneTaskCmd: playing SoundCancelPending (first press, waiting for second)")
-		notify.PlaySound(notify.SoundCancelPending)
-
-		_ = tm.DisplayMessage("⌃F again to finish task", 2000)
+		// Display popup - if user presses Ctrl+F again, popup closes automatically
+		_ = tm.DisplayPopup(tmux.PopupOpts{
+			Width:  constants.PopupWidthFinishPicker,
+			Height: constants.PopupHeightFinishPicker,
+			Title:  " Finish Task ",
+			Close:  true,
+			Style:  "fg=terminal,bg=terminal",
+		}, finishCmd)
 
 		return nil
 	},
@@ -174,7 +155,6 @@ export TASK_NAME='%s'
 export PAW_DIR='%s'
 export PROJECT_DIR='%s'
 %sexport WINDOW_ID='%s'
-export ON_COMPLETE='%s'
 export PAW_HOME='%s'
 export PAW_BIN='%s'
 export SESSION_NAME='%s'
@@ -182,7 +162,7 @@ export SESSION_NAME='%s'
 # Continue the previous Claude session (--continue auto-selects last session)
 exec claude --continue --dangerously-skip-permissions
 `, taskName, appCtx.PawDir, appCtx.ProjectDir, worktreeDirExport, windowID,
-			appCtx.Config.OnComplete, filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName)
+			filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName)
 
 		startAgentScriptPath := filepath.Join(t.AgentDir, "start-agent")
 		if err := os.WriteFile(startAgentScriptPath, []byte(startAgentContent), 0755); err != nil {

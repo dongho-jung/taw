@@ -190,7 +190,7 @@ func runMain(cmd *cobra.Command, args []string) error {
 	logging.Debug("Session: %s", application.SessionName)
 	logging.Debug("Git repo: %v", application.IsGitRepo)
 	if application.Config != nil {
-		logging.Debug("Config: WorkMode=%s, OnComplete=%s", application.Config.WorkMode, application.Config.OnComplete)
+		logging.Debug("Config: WorkMode=%s", application.Config.WorkMode)
 	}
 	return startNewSession(application, tm)
 }

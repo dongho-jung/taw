@@ -220,7 +220,6 @@ func (a *App) GetEnvVars(taskName, worktreeDir, windowID string) []string {
 	)
 
 	if a.Config != nil {
-		env = append(env, "ON_COMPLETE="+string(a.Config.OnComplete))
 		env = append(env,
 			"PAW_LOG_FORMAT="+a.Config.LogFormat,
 			"PAW_LOG_MAX_SIZE_MB="+fmt.Sprintf("%d", a.Config.LogMaxSizeMB),

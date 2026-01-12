@@ -3,10 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -20,90 +18,6 @@ import (
 	"github.com/dongho-jung/paw/internal/task"
 	"github.com/dongho-jung/paw/internal/tmux"
 )
-
-var ctrlCCmd = &cobra.Command{
-	Use:   "ctrl-c [session]",
-	Short: "Handle Ctrl+C (double-press to cancel task)",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		sessionName := args[0]
-
-		app, err := getAppFromSession(sessionName)
-		if err != nil {
-			return err
-		}
-
-		// Setup logging
-		_, cleanup := setupLoggerFromApp(app, "ctrl-c", "")
-		defer cleanup()
-
-		logging.Debug("-> ctrlCCmd(session=%s)", sessionName)
-		defer logging.Debug("<- ctrlCCmd")
-
-		tm := tmux.New(sessionName)
-
-		// Get current window name to check if this is a task window
-		windowName, _ := tm.Display("#{window_name}")
-		windowName = strings.TrimSpace(windowName)
-
-		// If not a task window, just send Ctrl+C to the pane
-		if !constants.IsTaskWindow(windowName) {
-			return tm.SendKeys("", "C-c")
-		}
-
-		// Get pending cancel timestamp from tmux option
-		pendingTimeStr, _ := tm.GetOption("@paw_cancel_pending")
-		now := time.Now().Unix()
-
-		// Check if there's a pending cancel within 2 seconds
-		if pendingTimeStr != "" {
-			pendingTime, err := parseUnixTime(pendingTimeStr)
-			if err == nil {
-				if now-pendingTime <= constants.DoublePressIntervalSec {
-					// Double-press detected within 2 seconds, cancel the task
-					_ = tm.SetOption("@paw_cancel_pending", "", true) // Clear pending state
-
-					// Get current window ID
-					windowID, err := tm.Display("#{window_id}")
-					if err != nil {
-						return fmt.Errorf("failed to get window ID: %w", err)
-					}
-					windowID = strings.TrimSpace(windowID)
-
-					// Delegate to cancel-task-ui (shows progress in top pane)
-					pawBin, _ := os.Executable()
-					cancelCmd := exec.Command(pawBin, "internal", "cancel-task-ui", sessionName, windowID)
-					return cancelCmd.Run()
-				}
-				// Time window expired - clear pending state and ignore this press
-				// User must press again to start a new double-press sequence
-				_ = tm.SetOption("@paw_cancel_pending", "", true)
-				return nil
-			}
-		}
-
-		// First press: just show warning, don't send Ctrl+C to pane
-		// (sending Ctrl+C would cause Claude to exit immediately)
-
-		// Store current timestamp
-		_ = tm.SetOption("@paw_cancel_pending", fmt.Sprintf("%d", now), true)
-
-		// Play sound to indicate pending cancel state
-		logging.Trace("ctrlCCmd: playing SoundCancelPending (first press, waiting for second)")
-		notify.PlaySound(notify.SoundCancelPending)
-
-		// Show message to user
-		_ = tm.DisplayMessage("⌃K again to cancel task", 2000)
-
-		return nil
-	},
-}
-
-func parseUnixTime(s string) (int64, error) {
-	var t int64
-	_, err := fmt.Sscanf(s, "%d", &t)
-	return t, err
-}
 
 var renameWindowCmd = &cobra.Command{
 	Use:   "rename-window [window-id] [name]",

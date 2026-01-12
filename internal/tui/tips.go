@@ -17,8 +17,7 @@ var tips = []string{
 	// Keyboard shortcuts - Task commands
 	"Press ⌃N to create a new task",
 	"Press ⌃R to search task history",
-	"Press ⌃F to finish a completed task",
-	"Press ⌃K to cancel a running task",
+	"Press ⌃F to finish task (merge/pr/keep/drop)",
 	"Press Alt+Enter or F5 to submit task",
 	"Press Esc twice quickly to cancel input",
 

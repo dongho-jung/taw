@@ -17,7 +17,6 @@ import (
 // Only used in project-level config.
 type InheritConfig struct {
 	WorkMode      bool `yaml:"work_mode"`
-	OnComplete    bool `yaml:"on_complete"`
 	Theme         bool `yaml:"theme"`
 	LogFormat     bool `yaml:"log_format"`
 	LogMaxSizeMB  bool `yaml:"log_max_size_mb"`
@@ -30,7 +29,6 @@ type InheritConfig struct {
 func DefaultInheritConfig() *InheritConfig {
 	return &InheritConfig{
 		WorkMode:      true,
-		OnComplete:    true,
 		Theme:         true,
 		LogFormat:     true,
 		LogMaxSizeMB:  true,
@@ -144,30 +142,20 @@ const (
 	WorkModeMain     WorkMode = "main"     // All tasks work on current branch
 )
 
-// OnComplete defines what happens when a task completes.
-type OnComplete string
-
-const (
-	OnCompleteConfirm   OnComplete = "confirm"    // Commit only (no push/PR/merge)
-	OnCompleteAutoMerge OnComplete = "auto-merge" // Auto commit + merge + cleanup
-	OnCompleteAutoPR    OnComplete = "auto-pr"    // Auto commit + create PR
-)
-
 // Config represents the PAW project configuration.
 type Config struct {
-	WorkMode        WorkMode   `yaml:"work_mode"`
-	OnComplete      OnComplete `yaml:"on_complete"`
-	Theme           string     `yaml:"theme"` // Theme preset: auto, dark, dark-blue, light, light-blue, etc.
-	PawInProject    bool       `yaml:"paw_in_project"` // If true, store .paw in project dir; if false, use global workspace
-	PreWorktreeHook string     `yaml:"pre_worktree_hook"`
-	PreTaskHook     string     `yaml:"pre_task_hook"`
-	PostTaskHook    string     `yaml:"post_task_hook"`
-	PreMergeHook    string     `yaml:"pre_merge_hook"`
-	PostMergeHook   string     `yaml:"post_merge_hook"`
-	LogFormat       string     `yaml:"log_format"`
-	LogMaxSizeMB    int        `yaml:"log_max_size_mb"`
-	LogMaxBackups   int        `yaml:"log_max_backups"`
-	SelfImprove     bool       `yaml:"self_improve"`
+	WorkMode        WorkMode `yaml:"work_mode"`
+	Theme           string   `yaml:"theme"` // Theme preset: auto, dark, dark-blue, light, light-blue, etc.
+	PawInProject    bool     `yaml:"paw_in_project"` // If true, store .paw in project dir; if false, use global workspace
+	PreWorktreeHook string   `yaml:"pre_worktree_hook"`
+	PreTaskHook     string   `yaml:"pre_task_hook"`
+	PostTaskHook    string   `yaml:"post_task_hook"`
+	PreMergeHook    string   `yaml:"pre_merge_hook"`
+	PostMergeHook   string   `yaml:"post_merge_hook"`
+	LogFormat       string   `yaml:"log_format"`
+	LogMaxSizeMB    int      `yaml:"log_max_size_mb"`
+	LogMaxBackups   int      `yaml:"log_max_backups"`
+	SelfImprove     bool     `yaml:"self_improve"`
 
 	// Inherit specifies which fields inherit from global config.
 	// Only used in project-level config files.
@@ -184,28 +172,14 @@ func (c *Config) Normalize() []string {
 	var warnings []string
 
 	c.WorkMode = WorkMode(strings.TrimSpace(string(c.WorkMode)))
-	c.OnComplete = OnComplete(strings.TrimSpace(string(c.OnComplete)))
 
 	if c.WorkMode == "" {
 		c.WorkMode = WorkModeWorktree
-	}
-	if c.OnComplete == "" {
-		c.OnComplete = OnCompleteConfirm
 	}
 
 	if !isValidWorkMode(c.WorkMode) {
 		warnings = append(warnings, fmt.Sprintf("invalid work_mode %q; defaulting to %q", c.WorkMode, WorkModeWorktree))
 		c.WorkMode = WorkModeWorktree
-	}
-
-	if !isValidOnComplete(c.OnComplete) {
-		warnings = append(warnings, fmt.Sprintf("invalid on_complete %q; defaulting to %q", c.OnComplete, OnCompleteConfirm))
-		c.OnComplete = OnCompleteConfirm
-	}
-
-	if c.WorkMode == WorkModeMain && (c.OnComplete == OnCompleteAutoMerge || c.OnComplete == OnCompleteAutoPR) {
-		warnings = append(warnings, fmt.Sprintf("on_complete %q is not supported in main mode; defaulting to %q", c.OnComplete, OnCompleteConfirm))
-		c.OnComplete = OnCompleteConfirm
 	}
 
 	c.LogFormat = strings.TrimSpace(c.LogFormat)
@@ -230,7 +204,6 @@ func (c *Config) Normalize() []string {
 func DefaultConfig() *Config {
 	return &Config{
 		WorkMode:      WorkModeWorktree,
-		OnComplete:    OnCompleteConfirm,
 		LogFormat:     "text",
 		LogMaxSizeMB:  10,
 		LogMaxBackups: 3,
@@ -249,9 +222,6 @@ func (c *Config) MergeWithGlobal(global *Config) {
 
 	if c.Inherit.WorkMode {
 		c.WorkMode = global.WorkMode
-	}
-	if c.Inherit.OnComplete {
-		c.OnComplete = global.OnComplete
 	}
 	if c.Inherit.Theme {
 		c.Theme = global.Theme
@@ -287,10 +257,6 @@ func isValidWorkMode(mode WorkMode) bool {
 	return mode == WorkModeWorktree || mode == WorkModeMain
 }
 
-func isValidOnComplete(value OnComplete) bool {
-	return value == OnCompleteConfirm || value == OnCompleteAutoMerge || value == OnCompleteAutoPR
-}
-
 // Load reads the configuration from the given paw directory.
 func Load(pawDir string) (*Config, error) {
 	logging.Debug("-> config.Load(pawDir=%s)", pawDir)
@@ -315,7 +281,7 @@ func Load(pawDir string) (*Config, error) {
 		return nil, err
 	}
 
-	logging.Debug("config.Load: loaded WorkMode=%s OnComplete=%s", cfg.WorkMode, cfg.OnComplete)
+	logging.Debug("config.Load: loaded WorkMode=%s", cfg.WorkMode)
 	return cfg, nil
 }
 
@@ -333,12 +299,6 @@ func (c *Config) Save(pawDir string) error {
 # - worktree: Each task gets its own git worktree (recommended)
 # - main: All tasks work on the current branch
 work_mode: %s
-
-# When task completes: confirm, auto-merge, or auto-pr
-# - confirm: Commit only (no push/PR/merge)
-# - auto-merge: Auto commit + push + merge + cleanup + close window
-# - auto-pr: Auto commit + push + create pull request
-on_complete: %s
 
 # Workspace location: true or false (default: false)
 # - true: Store .paw directory inside the project (requires .gitignore)
@@ -363,7 +323,7 @@ self_improve: %t
 # post_task_hook: echo "post task"
 # pre_merge_hook: echo "pre merge"
 # post_merge_hook: echo "post merge"
-`, c.WorkMode, c.OnComplete, c.PawInProject, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups, c.SelfImprove)
+`, c.WorkMode, c.PawInProject, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups, c.SelfImprove)
 
 	// Add hooks if set
 	if c.PreWorktreeHook != "" {
@@ -405,13 +365,4 @@ func Exists(pawDir string) bool {
 // ValidWorkModes returns all valid work modes.
 func ValidWorkModes() []WorkMode {
 	return []WorkMode{WorkModeWorktree, WorkModeMain}
-}
-
-// ValidOnCompletes returns all valid on_complete values.
-func ValidOnCompletes() []OnComplete {
-	return []OnComplete{
-		OnCompleteConfirm,
-		OnCompleteAutoMerge,
-		OnCompleteAutoPR,
-	}
 }

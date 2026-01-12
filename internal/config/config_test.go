@@ -11,7 +11,6 @@ import (
 
 func TestParseConfig_SingleLineHook(t *testing.T) {
 	content := `work_mode: worktree
-on_complete: confirm
 pre_worktree_hook: npm install
 `
 	cfg, err := parseConfig(content)
@@ -26,7 +25,6 @@ pre_worktree_hook: npm install
 
 func TestParseConfig_MultiLineHook(t *testing.T) {
 	content := `work_mode: worktree
-on_complete: confirm
 pre_worktree_hook: |
   npm install
   npm run build
@@ -48,7 +46,6 @@ pre_worktree_hook: |
   npm install
 
   npm run build
-on_complete: confirm
 `
 	cfg, err := parseConfig(content)
 	if err != nil {
@@ -58,9 +55,6 @@ on_complete: confirm
 	expected := "npm install\n\nnpm run build"
 	if cfg.PreWorktreeHook != expected {
 		t.Errorf("expected %q, got %q", expected, cfg.PreWorktreeHook)
-	}
-	if cfg.OnComplete != OnCompleteConfirm {
-		t.Errorf("expected on_complete to be 'confirm', got %s", cfg.OnComplete)
 	}
 }
 
@@ -85,7 +79,7 @@ func TestRoundTrip_SingleLineHook(t *testing.T) {
 	formatted := formatHook("pre_worktree_hook", hook)
 
 	// Prepend with required fields
-	content := "work_mode: worktree\non_complete: confirm\n" + formatted
+	content := "work_mode: worktree\n" + formatted
 
 	cfg, err := parseConfig(content)
 	if err != nil {
@@ -102,7 +96,7 @@ func TestRoundTrip_MultiLineHook(t *testing.T) {
 	formatted := formatHook("pre_worktree_hook", hook)
 
 	// Prepend with required fields
-	content := "work_mode: worktree\non_complete: confirm\n" + formatted
+	content := "work_mode: worktree\n" + formatted
 
 	cfg, err := parseConfig(content)
 	if err != nil {
@@ -120,9 +114,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.WorkMode != WorkModeWorktree {
 		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
 	}
-	if cfg.OnComplete != OnCompleteConfirm {
-		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteConfirm)
-	}
 	if cfg.PreWorktreeHook != "" {
 		t.Errorf("PreWorktreeHook = %q, want empty", cfg.PreWorktreeHook)
 	}
@@ -139,33 +130,13 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestConfigNormalize_InvalidValues(t *testing.T) {
 	cfg := &Config{
-		WorkMode:   WorkMode("invalid"),
-		OnComplete: OnComplete("nope"),
+		WorkMode: WorkMode("invalid"),
 	}
 
 	warnings := cfg.Normalize()
 
 	if cfg.WorkMode != WorkModeWorktree {
 		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
-	}
-	if cfg.OnComplete != OnCompleteConfirm {
-		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteConfirm)
-	}
-	if len(warnings) != 2 {
-		t.Errorf("warnings len = %d, want 2", len(warnings))
-	}
-}
-
-func TestConfigNormalize_MainModeAutoMerge(t *testing.T) {
-	cfg := &Config{
-		WorkMode:   WorkModeMain,
-		OnComplete: OnCompleteAutoMerge,
-	}
-
-	warnings := cfg.Normalize()
-
-	if cfg.OnComplete != OnCompleteConfirm {
-		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteConfirm)
 	}
 	if len(warnings) != 1 {
 		t.Errorf("warnings len = %d, want 1", len(warnings))
@@ -174,17 +145,13 @@ func TestConfigNormalize_MainModeAutoMerge(t *testing.T) {
 
 func TestConfigNormalize_TrimsWhitespace(t *testing.T) {
 	cfg := &Config{
-		WorkMode:   WorkMode(" worktree "),
-		OnComplete: OnComplete(" auto-pr "),
+		WorkMode: WorkMode(" worktree "),
 	}
 
 	warnings := cfg.Normalize()
 
 	if cfg.WorkMode != WorkModeWorktree {
 		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
-	}
-	if cfg.OnComplete != OnCompleteAutoPR {
-		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteAutoPR)
 	}
 	if len(warnings) != 0 {
 		t.Errorf("warnings len = %d, want 0", len(warnings))
@@ -203,9 +170,6 @@ func TestLoad_NoConfigFile(t *testing.T) {
 	if cfg.WorkMode != WorkModeWorktree {
 		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
 	}
-	if cfg.OnComplete != OnCompleteConfirm {
-		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteConfirm)
-	}
 }
 
 func TestLoad_WithConfigFile(t *testing.T) {
@@ -213,7 +177,6 @@ func TestLoad_WithConfigFile(t *testing.T) {
 	configPath := filepath.Join(tempDir, constants.ConfigFileName)
 
 	content := `work_mode: main
-on_complete: auto-merge
 pre_worktree_hook: npm install
 `
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
@@ -228,9 +191,6 @@ pre_worktree_hook: npm install
 	if cfg.WorkMode != WorkModeMain {
 		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeMain)
 	}
-	if cfg.OnComplete != OnCompleteAutoMerge {
-		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteAutoMerge)
-	}
 	if cfg.PreWorktreeHook != "npm install" {
 		t.Errorf("PreWorktreeHook = %q, want %q", cfg.PreWorktreeHook, "npm install")
 	}
@@ -240,8 +200,7 @@ func TestSave(t *testing.T) {
 	tempDir := t.TempDir()
 
 	cfg := &Config{
-		WorkMode:     WorkModeWorktree,
-		OnComplete:   OnCompleteAutoPR,
+		WorkMode:        WorkModeWorktree,
 		PreWorktreeHook: "pnpm install",
 	}
 
@@ -257,9 +216,6 @@ func TestSave(t *testing.T) {
 
 	if loaded.WorkMode != cfg.WorkMode {
 		t.Errorf("WorkMode = %q, want %q", loaded.WorkMode, cfg.WorkMode)
-	}
-	if loaded.OnComplete != cfg.OnComplete {
-		t.Errorf("OnComplete = %q, want %q", loaded.OnComplete, cfg.OnComplete)
 	}
 	if loaded.PreWorktreeHook != cfg.PreWorktreeHook {
 		t.Errorf("PreWorktreeHook = %q, want %q", loaded.PreWorktreeHook, cfg.PreWorktreeHook)
@@ -305,31 +261,10 @@ func TestValidWorkModes(t *testing.T) {
 	}
 }
 
-func TestValidOnCompletes(t *testing.T) {
-	completes := ValidOnCompletes()
-
-	if len(completes) != 3 {
-		t.Errorf("Expected 3 on_complete options, got %d", len(completes))
-	}
-
-	expected := map[OnComplete]bool{
-		OnCompleteConfirm:   true,
-		OnCompleteAutoMerge: true,
-		OnCompleteAutoPR:    true,
-	}
-
-	for _, complete := range completes {
-		if !expected[complete] {
-			t.Errorf("Unexpected on_complete: %q", complete)
-		}
-	}
-}
-
 func TestParseConfig_Comments(t *testing.T) {
 	content := `# This is a comment
 work_mode: worktree
 # Another comment
-on_complete: confirm
 `
 	cfg, err := parseConfig(content)
 	if err != nil {
@@ -338,9 +273,6 @@ on_complete: confirm
 
 	if cfg.WorkMode != WorkModeWorktree {
 		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
-	}
-	if cfg.OnComplete != OnCompleteConfirm {
-		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteConfirm)
 	}
 }
 
@@ -348,8 +280,6 @@ func TestParseConfig_EmptyLines(t *testing.T) {
 	content := `
 work_mode: worktree
 
-on_complete: confirm
-
 `
 	cfg, err := parseConfig(content)
 	if err != nil {
@@ -358,33 +288,6 @@ on_complete: confirm
 
 	if cfg.WorkMode != WorkModeWorktree {
 		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
-	}
-	if cfg.OnComplete != OnCompleteConfirm {
-		t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, OnCompleteConfirm)
-	}
-}
-
-func TestParseConfig_AllOnCompleteValues(t *testing.T) {
-	tests := []struct {
-		value    string
-		expected OnComplete
-	}{
-		{"confirm", OnCompleteConfirm},
-		{"auto-merge", OnCompleteAutoMerge},
-		{"auto-pr", OnCompleteAutoPR},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.value, func(t *testing.T) {
-			content := "work_mode: worktree\non_complete: " + tt.value + "\n"
-			cfg, err := parseConfig(content)
-			if err != nil {
-				t.Fatalf("parseConfig failed: %v", err)
-			}
-			if cfg.OnComplete != tt.expected {
-				t.Errorf("OnComplete = %q, want %q", cfg.OnComplete, tt.expected)
-			}
-		})
 	}
 }
 
@@ -519,7 +422,6 @@ func TestSave_PawInProject(t *testing.T) {
 
 	cfg := &Config{
 		WorkMode:     WorkModeWorktree,
-		OnComplete:   OnCompleteConfirm,
 		PawInProject: true,
 	}
 

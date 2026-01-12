@@ -16,7 +16,6 @@ PAW has two configuration levels:
 **Always ask** when modifying settings that could apply at either level:
 - Hooks (pre_worktree_hook, post_task_hook, etc.)
 - work_mode changes
-- on_complete changes
 
 Example AskUserQuestion:
 ```
@@ -86,18 +85,6 @@ pre_worktree_hook: |
 work_mode: worktree
 ```
 
-## On Complete Configuration
-
-| Mode | What happens |
-|------|-------------|
-| `confirm` | Commit only (no push/PR/merge) |
-| `auto-merge` | Auto commit + merge + cleanup |
-| `auto-pr` | Auto commit + create pull request |
-
-```yaml
-on_complete: confirm
-```
-
 ## Viewing Logs
 
 ### Interactive (within PAW session)
@@ -141,11 +128,9 @@ Project settings can inherit from global settings:
 ```yaml
 # In .paw/config
 work_mode: worktree
-on_complete: confirm
 
 inherit:
   work_mode: true     # Use global work_mode instead
-  on_complete: false  # Use project-specific value
 ```
 
 When `inherit.<field>: true`, the project uses the global value for that field.
@@ -169,13 +154,6 @@ pre_merge_hook: npm test
 ### "Show me the PAW logs"
 
 Tell user: "Press `⌃O` to open the log viewer, or run `paw logs` from terminal."
-
-### "Change to auto-merge mode"
-
-```yaml
-# In .paw/config (ask user which level)
-on_complete: auto-merge
-```
 
 ### "How do I see keyboard shortcuts?"
 
@@ -202,7 +180,6 @@ paw history show 1
 | `PAW_DIR` | `.paw` directory path |
 | `PROJECT_DIR` | Project root path |
 | `WORKTREE_DIR` | Worktree path (git mode) |
-| `ON_COMPLETE` | Completion mode (confirm/auto-merge/auto-pr) |
 | `PAW_BIN` | PAW binary path |
 | `SESSION_NAME` | tmux session name |
 
@@ -211,8 +188,7 @@ paw history show 1
 | Shortcut | Action |
 |----------|--------|
 | `⌃N` | New task |
-| `⌃K` | Cancel task (double-press) |
-| `⌃F` | Finish task (double-press) |
+| `⌃F` | Finish task (shows action picker) |
 | `⌃O` | Toggle log viewer |
 | `⌃G` | Toggle git viewer |
 | `⌃/` | Toggle help |

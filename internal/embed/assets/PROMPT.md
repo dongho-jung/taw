@@ -10,7 +10,6 @@ PAW_DIR       - .paw directory path
 PROJECT_DIR   - Original project root
 WORKTREE_DIR  - Your isolated working directory (git worktree)
 WINDOW_ID     - tmux window ID for status updates
-ON_COMPLETE   - Task completion mode: auto-merge | auto-pr | confirm
 PAW_HOME      - PAW installation directory
 PAW_BIN       - PAW binary path (for calling commands)
 SESSION_NAME  - tmux session name
@@ -172,7 +171,7 @@ If the task is simple, skip Phase 1 and start Phase 2 after reading the task.
 ### Phase 3: Verify & Complete
 1. **Run the verification defined in the Plan.**
 2. Based on the result:
-   - ✅ **All automated checks pass** → proceed according to `$ON_COMPLETE`
+   - ✅ **All automated checks pass** → commit, signal done, tell user to press `⌃F` to finish
    - ❌ **Verification fails** → fix and retry (up to 3 times)
    - 💬 **Automated verification not possible** → ask the user to review (PAW sets status automatically)
 3. Log completion
@@ -200,79 +199,29 @@ Change → run tests → fix failures → commit when successful
 - Stage only the files for that commit, show the staged summary, run tests if applicable, then commit.
 - If commit grouping is unclear, ask the user via AskUserQuestion before committing.
 
-### On task completion (depends on ON_COMPLETE)
+### On task completion
 
-**CRITICAL: Check the `$ON_COMPLETE` environment variable and follow its mode!**
-
-```bash
-echo "ON_COMPLETE=$ON_COMPLETE"  # Check first
-```
-
-#### `auto-merge` mode (conditional automation)
-
-**⚠️ CRITICAL: Auto-merge is user-initiated (Ctrl+F) and only allowed after verification succeeds.**
+**Always commit your changes and let the user decide how to finish via the action picker (⌃F).**
 
 ```
-Run verification → success? → report ready → user finishes (Ctrl+F)
-                   ↓ failure or verification impossible
-                Explain blocker → user review
+Work complete → commit changes → signal done → user picks finish action (⌃F)
 ```
 
-**auto-merge requirements (all must hold):**
-1. ✅ Plan marks as "automatically verifiable"
-2. ✅ Build succeeds (when build command exists)
-3. ✅ Tests pass (when tests exist)
-4. ✅ Lint/typecheck passes (when available)
-
-**Do not auto-merge if:**
-- ❌ Plan marks as "not automatically verifiable"
-- ❌ Tests missing or inadequate
-- ❌ UI/UX, config, or docs needing visual review
-- ❌ Any verification step fails
-
-**When verification succeeds:**
-1. Ensure changes are committed.
-2. Log: "Verification complete - ready to finish"
-3. Signal done: `echo "done" > "$PAW_DIR/agents/$TASK_NAME/.status-signal"`
-4. Message the user: "Ready for review. Please press `⌃F` to finish."
-5. **Do not call end-task** or run merge steps directly.
-
-**If verification is impossible or fails:**
-1. Log: "Work complete - user review required (verification unavailable/failed)"
-2. Signal done: `echo "done" > "$PAW_DIR/agents/$TASK_NAME/.status-signal"`
-3. Message the user: "Verification is needed. Please review and press `⌃F` to finish."
-
-**CRITICAL:**
-- In `auto-merge` mode, do **not** create a PR. PAW merges to main when the user finishes.
-- **Never auto-merge without verification.** If uncertain, ask for user review.
-
-#### `auto-pr` mode
-```
-Commit → push → create PR → tell user to finish
-```
-1. Commit all changes.
-2. `git push -u origin $TASK_NAME`
-3. Create PR:
-   ```bash
-   gh pr create --title "type: description" --body "## Summary
-   - changes
-
-   ## Test
-   - [x] Tests passed"
-   ```
-4. Save PR number: `gh pr view --json number -q '.number' > $PAW_DIR/agents/$TASK_NAME/.pr`
-5. Signal done: `echo "done" > "$PAW_DIR/agents/$TASK_NAME/.status-signal"`
-6. Message the user: "PR created. Please press `⌃F` to finish."
-7. Log: "Work complete - created PR #N"
-
-#### `confirm` mode
-```
-Commit → log completion (no push/PR/merge)
-```
-1. Commit all changes.
+**Steps to complete a task:**
+1. Ensure all changes are committed with clear commit messages.
 2. Log: "Work complete - changes committed"
 3. Signal done: `echo "done" > "$PAW_DIR/agents/$TASK_NAME/.status-signal"`
 4. Message the user: "Changes committed. Please press `⌃F` to finish."
+
+**When user presses ⌃F, they will see a finish action picker:**
+- **Merge**: Merge branch to main and clean up (git mode)
+- **PR**: Push branch and create a pull request (git mode)
+- **Keep**: Keep changes in place (non-git mode)
+- **Drop**: Discard all changes and clean up
+
+**CRITICAL:**
+- Do **not** merge, push, or create PRs automatically - the user chooses the action.
+- Your job is to commit changes and signal completion. The user finalizes via ⌃F.
 
 ### Automatic handling on errors
 - **Build error**: Analyze the message → attempt a fix.

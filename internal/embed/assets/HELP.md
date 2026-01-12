@@ -19,8 +19,7 @@ Claude Code-based autonomous agent work environment
 ### Task Commands
   ⌃N          New task
   ⌃R          Search task history (in new task window)
-  ⌃K          Cancel task (double-press)
-  ⌃F          Finish task (double-press, complete and cleanup)
+  ⌃F          Finish task (shows action picker: merge/pr/keep/drop)
   ⌃P          Command palette (fuzzy search commands)
   ⌃Q          Quit paw
 
@@ -118,7 +117,6 @@ Configure per-task settings before submission:
   PROJECT_DIR   Project root path
   WORKTREE_DIR  Worktree path (git mode) or workspace copy (non-git copy mode)
   WINDOW_ID     tmux window ID
-  ON_COMPLETE   Completion mode (confirm/auto-merge/auto-pr)
   PAW_HOME      PAW installation directory
   PAW_BIN       PAW binary path
   SESSION_NAME  tmux session name

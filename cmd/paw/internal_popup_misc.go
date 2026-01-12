@@ -352,3 +352,67 @@ var settingsTUICmd = &cobra.Command{
 		return nil
 	},
 }
+
+var finishPickerTUICmd = &cobra.Command{
+	Use:    "finish-picker-tui [session] [window-id]",
+	Short:  "Run finish picker TUI (called from popup)",
+	Args:   cobra.ExactArgs(2),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		windowID := args[1]
+
+		appCtx, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		_, cleanup := setupLoggerFromApp(appCtx, "finish-picker-tui", "")
+		defer cleanup()
+
+		logging.Debug("-> finishPickerTUICmd(session=%s, windowID=%s)", sessionName, windowID)
+		defer logging.Debug("<- finishPickerTUICmd")
+
+		// Run the finish picker
+		action, err := tui.RunFinishPicker(appCtx.IsGitRepo)
+		if err != nil {
+			logging.Debug("finishPickerTUICmd: RunFinishPicker failed: %v", err)
+			return err
+		}
+
+		logging.Debug("finishPickerTUICmd: selected action=%s", action)
+
+		if action == tui.FinishActionCancel {
+			logging.Debug("finishPickerTUICmd: cancelled by user")
+			return nil
+		}
+
+		// Execute the selected action
+		pawBin, err := os.Executable()
+		if err != nil {
+			pawBin = "paw"
+		}
+
+		// Map TUI action to end-task action flag
+		var endAction string
+		switch action {
+		case tui.FinishActionMerge:
+			endAction = "merge"
+		case tui.FinishActionPR:
+			endAction = "pr"
+		case tui.FinishActionKeep:
+			endAction = "keep"
+		case tui.FinishActionDrop:
+			endAction = "drop"
+		default:
+			logging.Debug("finishPickerTUICmd: unknown action=%s", action)
+			return nil
+		}
+
+		// Call end-task-ui with the action flag
+		logging.Debug("finishPickerTUICmd: calling end-task-ui with action=%s", endAction)
+		endCmd := exec.Command(pawBin, "internal", "end-task-ui", sessionName, windowID, "--action", endAction)
+		return endCmd.Run()
+	},
+}

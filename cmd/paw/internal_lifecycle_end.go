@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/dongho-jung/paw/internal/app"
-	"github.com/dongho-jung/paw/internal/config"
 	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/logging"
@@ -22,6 +21,7 @@ import (
 
 var paneCaptureFile string
 var endTaskUserInitiated bool
+var endTaskAction string // merge, pr, keep (default), drop
 
 var endTaskCmd = &cobra.Command{
 	Use:   "end-task [session] [window-id]",
@@ -66,129 +66,138 @@ var endTaskCmd = &cobra.Command{
 
 		// Print task header for user feedback
 		fmt.Printf("\n  Finishing task: %s\n\n", targetTask.Name)
-		logging.Debug("Configuration: ON_COMPLETE=%s, WorkMode=%s", appCtx.Config.OnComplete, appCtx.Config.WorkMode)
 
 		gitClient := git.New()
 		workDir := mgr.GetWorkingDirectory(targetTask)
 		logging.Trace("Working directory: %s", workDir)
+		logging.Debug("Configuration: WorkMode=%s, Action=%s", appCtx.Config.WorkMode, endTaskAction)
 
-		// Commit changes if git mode
-		if appCtx.IsGitRepo {
+		// Handle drop action - discard changes and cleanup
+		skipGitOps := (endTaskAction == "drop")
+		if skipGitOps {
+			fmt.Println("  Dropping task (discarding changes)...")
+			logging.Log("drop action: discarding changes for task %s", targetTask.Name)
+		}
+
+		// Commit changes if git mode (skip for drop action)
+		if appCtx.IsGitRepo && !skipGitOps {
 			commitChangesIfNeeded(gitClient, workDir)
 
-			// Push changes (only for auto-pr mode; auto-merge handles merge locally without push)
-			shouldPush := appCtx.Config != nil && appCtx.Config.OnComplete == config.OnCompleteAutoPR
-			branchName := ""
-			skipReason := ""
-			if shouldPush {
-				fallbackBranch := ""
-				if appCtx.IsWorktreeMode() {
-					fallbackBranch = targetTask.Name
-				}
-				var ok bool
-				branchName, ok = resolvePushBranch(gitClient, workDir, fallbackBranch)
-				if !ok {
-					shouldPush = false
-					skipReason = "unable to determine branch"
-				}
-			} else {
-				skipReason = "confirm mode"
-			}
-
-			if shouldPush {
-				pushSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s to remote", branchName))
-				pushSpinner.Start()
-
-				pushTimer := logging.StartTimer("git push")
-				if err := gitClient.Push(workDir, "origin", branchName, true); err != nil {
-					pushTimer.StopWithResult(false, err.Error())
-					pushSpinner.Stop(false, err.Error())
-				} else {
-					pushTimer.StopWithResult(true, fmt.Sprintf("branch=%s", branchName))
-					pushSpinner.Stop(true, branchName)
-				}
-			} else if skipReason != "" {
-				fmt.Printf("  ○ Skipping push (%s)\n", skipReason)
-			}
-
-			// Handle auto-merge mode
-			if appCtx.Config != nil && appCtx.Config.OnComplete == config.OnCompleteAutoMerge {
+			// Handle action-based behavior
+			switch endTaskAction {
+			case "pr":
+				// Push and create PR
 				if !appCtx.IsWorktreeMode() {
-					logging.Warn("auto-merge requested in non-worktree mode; skipping merge")
+					logging.Warn("PR creation requested in non-worktree mode; skipping")
+					fmt.Println("  ⚠️  PR creation is only available in worktree mode")
+				} else {
+					fallbackBranch := targetTask.Name
+					branchName, ok := resolvePushBranch(gitClient, workDir, fallbackBranch)
+					if ok {
+						pushSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s to remote", branchName))
+						pushSpinner.Start()
+
+						pushTimer := logging.StartTimer("git push")
+						if err := gitClient.Push(workDir, "origin", branchName, true); err != nil {
+							pushTimer.StopWithResult(false, err.Error())
+							pushSpinner.Stop(false, err.Error())
+						} else {
+							pushTimer.StopWithResult(true, fmt.Sprintf("branch=%s", branchName))
+							pushSpinner.Stop(true, branchName)
+						}
+					}
+				}
+
+			case "merge":
+				// Auto-merge
+				if !appCtx.IsWorktreeMode() {
+					logging.Warn("merge requested in non-worktree mode; skipping merge")
 					fmt.Println()
-					fmt.Println("  ⚠️  Auto-merge is only available in worktree mode")
+					fmt.Println("  ⚠️  Merge is only available in worktree mode")
 				} else {
 					mergeSuccess := runAutoMerge(appCtx, targetTask, windowID, workDir, gitClient, tm)
 					if !mergeSuccess {
 						return nil // Exit without cleanup - keep worktree and branch
 					}
 				}
+
+			default:
+				// "keep" or empty - just commit (already done above)
+				fmt.Println("  ○ Changes committed")
 			}
 		}
 		fmt.Println()
 
-		if appCtx.Config != nil && appCtx.Config.PostTaskHook != "" {
-			hookEnv := appCtx.GetEnvVars(targetTask.Name, workDir, windowID)
-			if _, err := service.RunHook(
-				"post-task",
-				appCtx.Config.PostTaskHook,
-				workDir,
-				hookEnv,
-				targetTask.GetHookOutputPath("post-task"),
-				targetTask.GetHookMetaPath("post-task"),
-				constants.DefaultHookTimeout,
-			); err != nil {
-				logging.Warn("Post-task hook failed: %v", err)
+		// Skip post-task processing for drop action
+		if !skipGitOps {
+			if appCtx.Config != nil && appCtx.Config.PostTaskHook != "" {
+				hookEnv := appCtx.GetEnvVars(targetTask.Name, workDir, windowID)
+				if _, err := service.RunHook(
+					"post-task",
+					appCtx.Config.PostTaskHook,
+					workDir,
+					hookEnv,
+					targetTask.GetHookOutputPath("post-task"),
+					targetTask.GetHookMetaPath("post-task"),
+					constants.DefaultHookTimeout,
+				); err != nil {
+					logging.Warn("Post-task hook failed: %v", err)
+				}
 			}
-		}
 
-		// Save to history using service
-		historyService := service.NewHistoryService(appCtx.GetHistoryDir())
+			// Save to history using service
+			historyService := service.NewHistoryService(appCtx.GetHistoryDir())
 
-		// Get pane content: either from pre-captured file or capture now
-		var paneContent string
-		var captureErr error
-		if paneCaptureFile != "" {
-			// Use pre-captured content (from end-task-ui)
-			content, err := os.ReadFile(paneCaptureFile)
-			if err != nil {
-				logging.Warn("Failed to read pane capture file: %v", err)
-				// Try to capture directly as fallback
+			// Get pane content: either from pre-captured file or capture now
+			var paneContent string
+			var captureErr error
+			if paneCaptureFile != "" {
+				// Use pre-captured content (from end-task-ui)
+				content, err := os.ReadFile(paneCaptureFile)
+				if err != nil {
+					logging.Warn("Failed to read pane capture file: %v", err)
+					// Try to capture directly as fallback
+					paneContent, captureErr = tm.CapturePane(windowID+".0", constants.PaneCaptureLines)
+				} else {
+					paneContent = string(content)
+					logging.Debug("Using pre-captured pane content from: %s", paneCaptureFile)
+				}
+				// Clean up temp file
+				_ = os.Remove(paneCaptureFile)
+			} else {
+				// Capture pane content directly
 				paneContent, captureErr = tm.CapturePane(windowID+".0", constants.PaneCaptureLines)
-			} else {
-				paneContent = string(content)
-				logging.Debug("Using pre-captured pane content from: %s", paneCaptureFile)
 			}
-			// Clean up temp file
-			_ = os.Remove(paneCaptureFile)
+
+			if captureErr != nil {
+				logging.Warn("Failed to capture pane content: %v", captureErr)
+			}
+
+			// Save history
+			taskContent, _ := targetTask.LoadContent()
+			taskOpts := loadTaskOptions(targetTask.AgentDir)
+			verifyMeta, hookMetas, hookOutputs := collectHistoryArtifacts(targetTask)
+			meta := buildHistoryMetadata(appCtx, targetTask, taskOpts, gitClient, workDir, verifyMeta, hookMetas)
+			if err := historyService.SaveCompletedWithDetails(targetTask.Name, taskContent, paneContent, meta, hookOutputs); err != nil {
+				logging.Warn("Failed to save history: %v", err)
+			}
+
+			// Run self-improve if enabled
+			if appCtx.Config != nil && appCtx.Config.SelfImprove && appCtx.IsGitRepo {
+				selfImproveSpinner := tui.NewSimpleSpinner("Running self-improve analysis")
+				selfImproveSpinner.Start()
+
+				if err := runSelfImprove(appCtx.ProjectDir, targetTask.Name, taskContent, paneContent, gitClient); err != nil {
+					selfImproveSpinner.Stop(false, err.Error())
+					logging.Warn("Self-improve failed: %v", err)
+				} else {
+					selfImproveSpinner.Stop(true, "")
+				}
+			}
 		} else {
-			// Capture pane content directly
-			paneContent, captureErr = tm.CapturePane(windowID+".0", constants.PaneCaptureLines)
-		}
-
-		if captureErr != nil {
-			logging.Warn("Failed to capture pane content: %v", captureErr)
-		}
-
-		// Save history
-		taskContent, _ := targetTask.LoadContent()
-		taskOpts := loadTaskOptions(targetTask.AgentDir)
-		verifyMeta, hookMetas, hookOutputs := collectHistoryArtifacts(targetTask)
-		meta := buildHistoryMetadata(appCtx, targetTask, taskOpts, gitClient, workDir, verifyMeta, hookMetas)
-		if err := historyService.SaveCompletedWithDetails(targetTask.Name, taskContent, paneContent, meta, hookOutputs); err != nil {
-			logging.Warn("Failed to save history: %v", err)
-		}
-
-		// Run self-improve if enabled
-		if appCtx.Config != nil && appCtx.Config.SelfImprove && appCtx.IsGitRepo {
-			selfImproveSpinner := tui.NewSimpleSpinner("Running self-improve analysis")
-			selfImproveSpinner.Start()
-
-			if err := runSelfImprove(appCtx.ProjectDir, targetTask.Name, taskContent, paneContent, gitClient); err != nil {
-				selfImproveSpinner.Stop(false, err.Error())
-				logging.Warn("Self-improve failed: %v", err)
-			} else {
-				selfImproveSpinner.Stop(true, "")
+			// Clean up temp file for drop action too
+			if paneCaptureFile != "" {
+				_ = os.Remove(paneCaptureFile)
 			}
 		}
 

@@ -79,8 +79,6 @@ func parseConfig(content string) (*Config, error) {
 		switch key {
 		case "work_mode":
 			cfg.WorkMode = WorkMode(value)
-		case "on_complete":
-			cfg.OnComplete = OnComplete(value)
 		case "pre_worktree_hook":
 			cfg.PreWorktreeHook = value
 		case "pre_task_hook":
@@ -157,8 +155,6 @@ func parseInheritBlock(lines []string, i *int) *InheritConfig {
 		switch key {
 		case "work_mode":
 			inherit.WorkMode = boolVal
-		case "on_complete":
-			inherit.OnComplete = boolVal
 		case "theme":
 			inherit.Theme = boolVal
 		case "log_format":
@@ -232,7 +228,6 @@ func formatInheritBlock(inherit *InheritConfig) string {
 	sb.WriteString("# Set to true to use global value, false to use project-specific value\n")
 	sb.WriteString("inherit:\n")
 	sb.WriteString(fmt.Sprintf("  work_mode: %t\n", inherit.WorkMode))
-	sb.WriteString(fmt.Sprintf("  on_complete: %t\n", inherit.OnComplete))
 	sb.WriteString(fmt.Sprintf("  theme: %t\n", inherit.Theme))
 	sb.WriteString(fmt.Sprintf("  log_format: %t\n", inherit.LogFormat))
 	sb.WriteString(fmt.Sprintf("  log_max_size_mb: %t\n", inherit.LogMaxSizeMB))

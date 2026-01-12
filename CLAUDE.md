@@ -209,7 +209,7 @@ PAW supports both global and project-level settings:
 
 In the Settings UI (⌃P → Settings), press `⌥Tab` to toggle between Global and Project views.
 
-Project settings can **inherit** from global settings. For fields that support inheritance (Work Mode, On Complete, Self Improve):
+Project settings can **inherit** from global settings. For fields that support inheritance (Work Mode, Self Improve):
 - Select "inherit" as an option using ←/→ keys
 - When "inherit" is selected, the global value is shown in parentheses (e.g., `< inherit > (worktree)`)
 - Other fields (Theme, Non-Git Workspace, Verify settings) do not support inheritance
@@ -217,14 +217,12 @@ Project settings can **inherit** from global settings. For fields that support i
 Example project config with inherit:
 ```yaml
 work_mode: worktree
-on_complete: confirm
 theme: auto
 self_improve: false
 
 # Inherit settings from global config
 inherit:
   work_mode: true     # Use global work_mode
-  on_complete: false  # Use project-specific value
   theme: true         # Use global theme
   self_improve: true  # Use global self_improve
 ```
@@ -307,7 +305,6 @@ PAW uses desktop notifications and sounds to alert users:
 | Task created             | Glass       | Yes                  | `🤖 Task started: {name}` |
 | Task completed           | Hero        | Yes                  | `✅ Task completed: {name}` |
 | User input needed        | Funk        | Yes                  | `💬 {name} needs input` |
-| Cancel pending (⌃K)      | Tink        | -                    | -                 |
 | Error (merge failed etc) | Basso       | Yes                  | `⚠️ Merge failed: {name} - manual resolution needed` |
 
 ### Terminal-based notifications (cross-platform)

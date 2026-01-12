@@ -198,7 +198,6 @@ const (
 const (
 	DefaultMainBranch = "main"
 	DefaultWorkMode   = "worktree"
-	DefaultOnComplete = "confirm"
 )
 
 // Directory and file names
@@ -421,4 +420,8 @@ const (
 	// Medium size for project picker
 	PopupWidthProjectPicker  = "60"
 	PopupHeightProjectPicker = "50%"
+
+	// Small size for finish picker (3-4 options + title + help)
+	PopupWidthFinishPicker  = "50"
+	PopupHeightFinishPicker = "14"
 )

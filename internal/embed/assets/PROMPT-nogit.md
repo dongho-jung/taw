@@ -10,7 +10,6 @@ PAW_DIR       - .paw directory path
 PROJECT_DIR   - Project root (your working directory)
 WORKTREE_DIR  - Workspace path (set when non-git copy mode is enabled)
 WINDOW_ID     - tmux window ID for status updates
-ON_COMPLETE   - Task completion mode (less relevant for non-git)
 PAW_HOME      - PAW installation directory
 PAW_BIN       - PAW binary path (for calling commands)
 SESSION_NAME  - tmux session name

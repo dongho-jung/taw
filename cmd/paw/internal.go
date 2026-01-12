@@ -55,9 +55,9 @@ func init() {
 	internalCmd.AddCommand(toggleSettingsCmd)
 	internalCmd.AddCommand(settingsTUICmd)
 	internalCmd.AddCommand(restorePanesCmd)
+	internalCmd.AddCommand(finishPickerTUICmd)
 
 	// Utility commands
-	internalCmd.AddCommand(ctrlCCmd)
 	internalCmd.AddCommand(renameWindowCmd)
 	internalCmd.AddCommand(stopHookCmd)
 	internalCmd.AddCommand(userPromptSubmitHookCmd)
@@ -67,4 +67,5 @@ func init() {
 	// Add flags to end-task command
 	endTaskCmd.Flags().StringVar(&paneCaptureFile, "pane-capture-file", "", "Path to pre-captured pane content file")
 	endTaskCmd.Flags().BoolVar(&endTaskUserInitiated, "user-initiated", false, "Require explicit user action to finish")
+	endTaskCmd.Flags().StringVar(&endTaskAction, "action", "keep", "Finish action: keep, merge, pr, drop")
 }

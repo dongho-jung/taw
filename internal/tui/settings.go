@@ -34,13 +34,12 @@ type SettingsField int
 // General tab fields
 const (
 	SettingsFieldWorkMode SettingsField = iota
-	SettingsFieldOnComplete
 	SettingsFieldTheme
 	SettingsFieldPawInProject
 	SettingsFieldSelfImprove
 )
 
-const generalFieldCount = 5
+const generalFieldCount = 4
 
 // SettingsUI provides an interactive settings configuration form.
 type SettingsUI struct {
@@ -65,11 +64,10 @@ type SettingsUI struct {
 
 	// Field indices for dropdown-style fields
 	// For fields with inherit option, index 0 = "inherit"
-	workModeIdx      int // 0=inherit, 1=worktree, 2=main (project scope) or 0=worktree, 1=main (global scope)
-	onCompleteIdx    int // 0=inherit, 1=confirm, 2=auto-merge, 3=auto-pr (project scope)
-	themeIdx         int // 0=auto, 1...N=presets (no inherit option)
-	pawInProjectIdx  int // 0=global workspace, 1=in project (global scope only, no inherit)
-	selfImproveIdx   int // 0=inherit, 1=on, 2=off (project scope) or 0=on, 1=off (global scope)
+	workModeIdx     int // 0=inherit, 1=worktree, 2=main (project scope) or 0=worktree, 1=main (global scope)
+	themeIdx        int // 0=auto, 1...N=presets (no inherit option)
+	pawInProjectIdx int // 0=global workspace, 1=in project (global scope only, no inherit)
+	selfImproveIdx  int // 0=inherit, 1=on, 2=off (project scope) or 0=on, 1=off (global scope)
 }
 
 // SettingsResult contains the result of the settings UI.
@@ -147,22 +145,6 @@ func (m *SettingsUI) initFieldIndices() {
 		for i, mode := range config.ValidWorkModes() {
 			if mode == cfg.WorkMode {
 				m.workModeIdx = i + offset
-				break
-			}
-		}
-	}
-
-	// OnComplete: For project scope, index 0 = inherit
-	if m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.OnComplete {
-		m.onCompleteIdx = 0 // inherit
-	} else {
-		offset := 0
-		if m.scope == SettingsScopeProject {
-			offset = 1
-		}
-		for i, c := range config.ValidOnCompletes() {
-			if c == cfg.OnComplete {
-				m.onCompleteIdx = i + offset
 				break
 			}
 		}
@@ -296,10 +278,6 @@ func (m *SettingsUI) handleLeft() {
 		if m.workModeIdx > 0 {
 			m.workModeIdx--
 		}
-	case SettingsFieldOnComplete:
-		if m.onCompleteIdx > 0 {
-			m.onCompleteIdx--
-		}
 	case SettingsFieldTheme:
 		if m.themeIdx > 0 {
 			m.themeIdx--
@@ -325,14 +303,6 @@ func (m *SettingsUI) handleRight() {
 		}
 		if m.workModeIdx < maxIdx {
 			m.workModeIdx++
-		}
-	case SettingsFieldOnComplete:
-		maxIdx := len(config.ValidOnCompletes()) - 1
-		if m.scope == SettingsScopeProject {
-			maxIdx++ // +1 for "inherit" option
-		}
-		if m.onCompleteIdx < maxIdx {
-			m.onCompleteIdx++
 		}
 	case SettingsFieldTheme:
 		themeOptions := getThemeOptions()
@@ -378,26 +348,6 @@ func (m *SettingsUI) applyChanges() {
 		// Global scope - no inherit option
 		if m.workModeIdx < len(modes) {
 			m.config.WorkMode = modes[m.workModeIdx]
-		}
-	}
-
-	// Apply OnComplete
-	completes := config.ValidOnCompletes()
-	if m.scope == SettingsScopeProject {
-		if m.onCompleteIdx == 0 {
-			// inherit selected
-			m.inheritConfig.OnComplete = true
-			m.config.OnComplete = m.globalConfig.OnComplete
-		} else {
-			m.inheritConfig.OnComplete = false
-			if m.onCompleteIdx-1 < len(completes) {
-				m.config.OnComplete = completes[m.onCompleteIdx-1]
-			}
-		}
-	} else {
-		// Global scope - no inherit option
-		if m.onCompleteIdx < len(completes) {
-			m.config.OnComplete = completes[m.onCompleteIdx]
 		}
 	}
 
@@ -509,14 +459,14 @@ func (m *SettingsUI) View() tea.View {
 	if m.scope == SettingsScopeGlobal {
 		scopeText = "[Global]"
 	}
-	sb.WriteString(titleStyle.Render("⚙ Settings " + scopeText))
+	sb.WriteString(titleStyle.Render("Settings " + scopeText))
 	sb.WriteString("\n\n")
 
 	separatorWidth := m.width - 4 // account for margins
 	if separatorWidth < 40 {
 		separatorWidth = 40
 	}
-	sb.WriteString(dimStyle.Render(strings.Repeat("─", separatorWidth)))
+	sb.WriteString(dimStyle.Render(strings.Repeat("-", separatorWidth)))
 	sb.WriteString("\n\n")
 
 	// Content
@@ -524,7 +474,7 @@ func (m *SettingsUI) View() tea.View {
 
 	// Help text
 	sb.WriteString("\n")
-	sb.WriteString(helpStyle.Render("⌥Tab: Global/Project  |  ↑/↓: Navigate  |  ←/→: Change  |  ⌃S: Save  |  Esc: Cancel"))
+	sb.WriteString(helpStyle.Render("Alt+Tab: Global/Project  |  Up/Down: Navigate  |  Left/Right: Change  |  Ctrl+S: Save  |  Esc: Cancel"))
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
@@ -568,34 +518,6 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 		} else {
 			if m.workModeIdx < len(modes) {
 				currentValue = string(modes[m.workModeIdx])
-			}
-		}
-		sb.WriteString(label + renderSelector(currentValue, focused, hint))
-		sb.WriteString("\n")
-	}
-
-	// On Complete (with inherit option in project scope)
-	{
-		label := labelStyle.Render("On Complete:")
-		if m.field == SettingsFieldOnComplete {
-			label = selectedLabelStyle.Render("On Complete:")
-		}
-		focused := m.field == SettingsFieldOnComplete
-
-		completes := config.ValidOnCompletes()
-		var currentValue string
-		var hint string
-
-		if m.scope == SettingsScopeProject {
-			if m.onCompleteIdx == 0 {
-				currentValue = "inherit"
-				hint = "(" + string(m.globalConfig.OnComplete) + ")"
-			} else if m.onCompleteIdx-1 < len(completes) {
-				currentValue = string(completes[m.onCompleteIdx-1])
-			}
-		} else {
-			if m.onCompleteIdx < len(completes) {
-				currentValue = string(completes[m.onCompleteIdx])
 			}
 		}
 		sb.WriteString(label + renderSelector(currentValue, focused, hint))
