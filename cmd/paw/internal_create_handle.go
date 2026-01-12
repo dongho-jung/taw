@@ -388,6 +388,7 @@ export ON_COMPLETE='%s'
 export PAW_HOME='%s'
 export PAW_BIN='%s'
 export SESSION_NAME='%s'
+export IS_DEMO='1'
 
 # Continue the previous Claude session (--continue auto-selects last session)
 exec claude --continue --dangerously-skip-permissions%s
@@ -407,6 +408,7 @@ export ON_COMPLETE='%s'
 export PAW_HOME='%s'
 export PAW_BIN='%s'
 export SESSION_NAME='%s'
+export IS_DEMO='1'
 
 # System prompt is base64 encoded to avoid shell escaping issues
 # Using heredoc with single-quoted delimiter prevents any shell interpretation
