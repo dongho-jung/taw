@@ -445,3 +445,94 @@ func TestSave_PawInProject(t *testing.T) {
 		})
 	}
 }
+
+func TestEnsureConfigInDir_CreatesConfigIfMissing(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, constants.ConfigFileName)
+
+	// Config should not exist initially
+	if _, err := os.Stat(configPath); err == nil {
+		t.Fatal("Config file should not exist initially")
+	}
+
+	// Run ensureConfigInDir
+	if err := ensureConfigInDir(tempDir); err != nil {
+		t.Fatalf("ensureConfigInDir() error = %v", err)
+	}
+
+	// Config should now exist
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Fatal("Config file should exist after ensureConfigInDir")
+	}
+
+	// Verify it contains default values
+	cfg, err := Load(tempDir)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.PawInProject != PawInProjectAuto {
+		t.Errorf("PawInProject = %v, want %v", cfg.PawInProject, PawInProjectAuto)
+	}
+	if cfg.LogFormat != "text" {
+		t.Errorf("LogFormat = %q, want %q", cfg.LogFormat, "text")
+	}
+}
+
+func TestEnsureConfigInDir_DoesNotOverwriteExisting(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, constants.ConfigFileName)
+
+	// Create a custom config first
+	customCfg := &Config{
+		PawInProject:    PawInProjectLocal,
+		PreWorktreeHook: "custom-hook",
+	}
+	if err := customCfg.Save(tempDir); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	// Verify custom config exists
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Fatal("Custom config should exist")
+	}
+
+	// Run ensureConfigInDir - should not overwrite
+	if err := ensureConfigInDir(tempDir); err != nil {
+		t.Fatalf("ensureConfigInDir() error = %v", err)
+	}
+
+	// Verify custom values are preserved
+	cfg, err := Load(tempDir)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.PawInProject != PawInProjectLocal {
+		t.Errorf("PawInProject = %v, want %v (custom value)", cfg.PawInProject, PawInProjectLocal)
+	}
+	if cfg.PreWorktreeHook != "custom-hook" {
+		t.Errorf("PreWorktreeHook = %q, want %q (custom value)", cfg.PreWorktreeHook, "custom-hook")
+	}
+}
+
+func TestEnsureConfigInDir_CreatesDirectoryIfMissing(t *testing.T) {
+	tempDir := t.TempDir()
+	nestedDir := filepath.Join(tempDir, "nested", "config", "dir")
+
+	// Nested directory should not exist
+	if _, err := os.Stat(nestedDir); err == nil {
+		t.Fatal("Nested directory should not exist initially")
+	}
+
+	// Run ensureConfigInDir - should create directories
+	if err := ensureConfigInDir(nestedDir); err != nil {
+		t.Fatalf("ensureConfigInDir() error = %v", err)
+	}
+
+	// Directory and config should now exist
+	configPath := filepath.Join(nestedDir, constants.ConfigFileName)
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Fatal("Config file should exist after ensureConfigInDir")
+	}
+}

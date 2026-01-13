@@ -1,0 +1,11 @@
+[26-01-13 14:47:19.1] [L2] [paw] [attachToSession] PAW version changed, updating bin symlink...
+[26-01-13 14:47:19.1] [L2] [paw] [attachToSession] Bin symlink updated to current version
+[26-01-13 14:47:19.1] [L2] [paw] [respawnMainWindow] Respawning main window @0 with new binary
+[26-01-13 14:47:19.1] [L2] [paw] [respawnMainWindow] Main window respawned successfully
+[26-01-13 14:47:19.1] [L2] [paw] [attachToSession] Creating missing .claude directory for stop-hook support...
+[26-01-13 14:47:19.1] [L2] [paw] [attachToSession] Claude files created successfully
+[26-01-13 14:47:30.8] [L2] [paw] [respawnMainWindow] Respawning main window @0 with new binary
+[26-01-13 14:47:30.8] [L2] [paw] [respawnMainWindow] Main window respawned successfully
+[26-01-13 14:48:15.1] [L2] [paw] [respawnMainWindow] Respawning main window @0 with new binary
+[26-01-13 14:48:15.1] [L2] [paw] [respawnMainWindow] Main window respawned successfully
+[26-01-13 14:48:48.6] [L2] [spawn-task] [init.func5] Task created: create-default-config

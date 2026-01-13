@@ -130,6 +130,7 @@ func ValidPawInProjectModes() []PawInProject {
 }
 
 // LoadGlobal reads the global configuration from $HOME/.config/paw/config.
+// If the config file doesn't exist, it creates one with default values.
 func LoadGlobal() (*Config, error) {
 	logging.Debug("-> config.LoadGlobal()")
 	defer logging.Debug("<- config.LoadGlobal")
@@ -138,6 +139,12 @@ func LoadGlobal() (*Config, error) {
 	if globalDir == "" {
 		logging.Debug("config.LoadGlobal: could not determine home directory")
 		return DefaultConfig(), nil
+	}
+
+	// Ensure config file exists (creates with defaults if missing)
+	if err := EnsureGlobalConfig(); err != nil {
+		logging.Debug("config.LoadGlobal: failed to ensure config: %v", err)
+		// Continue with defaults even if we can't create the file
 	}
 
 	return Load(globalDir)
@@ -150,6 +157,43 @@ func EnsureGlobalDir() error {
 		return fmt.Errorf("could not determine home directory")
 	}
 	return os.MkdirAll(globalDir, 0755)
+}
+
+// EnsureGlobalConfig ensures the global config file exists with default values.
+// If the config file doesn't exist, it creates one with sensible defaults.
+// Returns nil if the config already exists or was successfully created.
+func EnsureGlobalConfig() error {
+	globalDir := GlobalPawDir()
+	if globalDir == "" {
+		return fmt.Errorf("could not determine home directory")
+	}
+	return ensureConfigInDir(globalDir)
+}
+
+// ensureConfigInDir ensures a config file exists in the given directory.
+// This is the internal implementation used by EnsureGlobalConfig.
+func ensureConfigInDir(dir string) error {
+	// Ensure directory exists
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	configPath := filepath.Join(dir, constants.ConfigFileName)
+
+	// Check if config already exists
+	if _, err := os.Stat(configPath); err == nil {
+		// Config exists, nothing to do
+		return nil
+	}
+
+	// Create default config
+	cfg := DefaultConfig()
+	if err := cfg.Save(dir); err != nil {
+		return fmt.Errorf("failed to create default config: %w", err)
+	}
+
+	logging.Debug("config.ensureConfigInDir: created default config at %s", configPath)
+	return nil
 }
 
 // PawInProject defines where the workspace is stored.
