@@ -129,21 +129,6 @@ paw setup  # Rerun the setup wizard
 # Workspace location: auto, global, or local (default: auto)
 paw_in_project: auto
 
-# Non-git workspace: shared or copy
-non_git_workspace: shared
-
-# Verification (optional)
-# verify_command: npm test
-verify_timeout_sec: 600
-verify_required: false
-
-# Hooks (optional) (supports multi-line command with ': |')
-# pre_worktree_hook: echo "pre worktree"
-# pre_task_hook: echo "pre task"
-# post_task_hook: echo "post task"
-# pre_merge_hook: echo "pre merge"
-# post_merge_hook: echo "post merge"
-
 # Log format: text or jsonl
 log_format: text
 
@@ -151,6 +136,15 @@ log_format: text
 log_max_size_mb: 10
 log_max_backups: 3
 
+# Self-improve: on or off (default: off)
+self_improve: false
+
+# Hooks (optional) (supports multi-line command with ': |')
+# pre_worktree_hook: echo "pre worktree"
+# pre_task_hook: echo "pre task"
+# post_task_hook: echo "post task"
+# pre_merge_hook: echo "pre merge"
+# post_merge_hook: echo "post merge"
 ```
 </details>
 
@@ -161,11 +155,9 @@ log_max_backups: 3
 | `paw_in_project` | `auto` | Git repo -> global, non-git -> local (default) |
 |                  | `global` | Store workspace in $HOME/.local/share/paw/workspaces/ |
 |                  | `local` | Store .paw directory inside the project |
-| `non_git_workspace` | `shared` | Use the project directory directly (default) |
-|                   | `copy` | Create a per-task workspace copy (isolation) |
-| `verify_command` | (command) | Shell command(s) to verify before finish/merge (e.g., `npm test`) |
-| `verify_timeout_sec` | (seconds) | Verification timeout (default: 600) |
-| `verify_required` | `true/false` | Block auto-merge if verification fails |
+| `theme` | `auto` | Auto-detect light/dark from terminal (default) |
+|         | preset | Theme preset (dark, light, dark-blue, light-blue, etc.) |
+| `self_improve` | `true/false` | Auto-learn from completed tasks (default: false) |
 | `pre_worktree_hook` | (command) | Runs after worktree/workspace creation (e.g., `npm install`) |
 | `pre_task_hook` | (command) | Runs before starting the agent |
 | `post_task_hook` | (command) | Runs after finishing a task |
@@ -174,8 +166,6 @@ log_max_backups: 3
 | `log_format` | `text/jsonl` | Log output format |
 | `log_max_size_mb` | (MB) | Log rotation size (default: 10) |
 | `log_max_backups` | (count) | Log rotation backups (default: 3) |
-
-When `non_git_workspace` is set to `copy`, PAW creates an isolated workspace under `.paw/agents/<task>/worktree`. Changes are not automatically merged back into the project; use hooks or manual copy when needed.
 
 <details>
 <summary>Other configuration</summary>
@@ -275,7 +265,7 @@ Use `paw logs --since 2h --task my-task` for CLI filtering.
 Open via Command Palette (`⌃P` → "Settings") to configure PAW settings.
 
 The Settings UI supports both **Global** and **Project** scopes:
-- **Global settings** (`$HOME/.paw/config`): Default settings for all projects
+- **Global settings** (`$HOME/.config/paw/config`): Default settings for all projects
 - **Project settings** (`.paw/config`): Project-specific overrides
 
 Press `⌥Tab` to switch between Global and Project views.

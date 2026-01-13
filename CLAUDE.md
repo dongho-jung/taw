@@ -88,11 +88,14 @@ paw/                           # This repository
 │   ├── session.go             # Session management (attach, create)
 │   ├── setup.go               # Setup wizard and initialization
 │   ├── tmux_config.go         # Tmux configuration generation
+│   ├── tmux_theme.go          # Tmux theme/color management
 │   ├── check.go               # Dependency check command (paw check)
 │   ├── check_project.go       # Project-level checks
 │   ├── attach.go              # Attach command (paw attach)
 │   ├── history.go             # History command (paw history)
 │   ├── logs.go                # Logs command (paw logs)
+│   ├── kill.go                # Kill session command (paw kill)
+│   ├── location.go            # Location command (paw location)
 │   ├── internal.go            # Internal command registration
 │   ├── internal_create*.go    # Task creation (toggleNew, newTask, spawnTask, handleTask)
 │   ├── internal_lifecycle*.go # Task lifecycle (endTask, cancelTask, merge, helpers)
@@ -112,7 +115,8 @@ paw/                           # This repository
 │   ├── constants/             # Constants and magic numbers
 │   ├── embed/                 # Embedded assets
 │   │   └── assets/            # Embedded files (compiled into binary)
-│   │       ├── HELP.md        # Help text
+│   │       ├── HELP.md        # Help text for users
+│   │       ├── HELP-FOR-PAW.md # Help text for PAW agent instructions
 │   │       ├── PROMPT.md      # System prompt (git mode)
 │   │       ├── PROMPT-nogit.md # System prompt (non-git mode)
 │   │       ├── tmux.conf      # Base tmux configuration
@@ -132,10 +136,23 @@ paw/                           # This repository
 │       ├── taskinput*.go      # Task input UI (main, helpers, mouse, options)
 │       ├── taskopts.go        # Task options panel
 │       ├── gitviewer.go       # Git viewer (status, log, graph modes)
+│       ├── diffviewer.go      # Diff viewer for PR/merge operations
 │       ├── helpviewer.go      # Help viewer
 │       ├── logviewer.go       # Log viewer with filtering
 │       ├── cmdpalette.go      # Command palette (⌃P)
 │       ├── settings.go        # Settings UI (global/project config editor)
+│       ├── finishpicker.go    # Finish action picker (merge/pr/keep/drop)
+│       ├── endtask.go         # End task confirmation UI
+│       ├── kanban.go          # Kanban board view for tasks
+│       ├── projectpicker.go   # Project session picker (⌃J)
+│       ├── branchmenu.go      # Branch selection menu
+│       ├── inputhistory.go    # Task input history (⌃R search)
+│       ├── recover.go         # Task recovery UI
+│       ├── setup.go           # Setup wizard UI
+│       ├── spinner.go         # Loading spinner component
+│       ├── theme.go           # Theme/color definitions
+│       ├── tips.go            # UI tips and hints
+│       ├── scrollbar.go       # Scrollbar component
 │       └── textarea/          # Custom textarea component (fork of bubbles)
 ├── Makefile                   # Build script
 └── go.mod                     # Go module file
@@ -375,7 +392,26 @@ Standard icon support (for terminals that support OSC 99):
 
 ### Keep docs in sync
 
-- Reflect any changes you make in docs such as README or CLAUDE.md.
+Update documentation for ALL affected files (not just one):
+
+| Change Type | Files to Update |
+|-------------|-----------------|
+| New file added | CLAUDE.md (directory structure section) |
+| Config option added/removed | README.md (config table + example) AND CLAUDE.md |
+| CLI command changed | README.md AND HELP.md |
+| Keyboard shortcut changed | README.md AND HELP.md |
+| Feature added/removed | README.md (feature description) |
+
+**Common mistakes to avoid:**
+- ❌ Updating CLAUDE.md but forgetting README.md (or vice versa)
+- ❌ Adding new files without updating directory structure
+- ❌ Removing features from code but leaving them in docs
+
+### Always use AskUserQuestion
+
+- **When asking the user a question, always use the AskUserQuestion tool.**
+- Do not ask questions in plain text without the tool—the user may not see it or be able to respond properly.
+- AskUserQuestion ensures proper notification and response handling in PAW.
 
 ### English only
 

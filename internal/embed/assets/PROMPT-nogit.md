@@ -46,6 +46,10 @@ Before coding, classify the task:
 
 ### AskUserQuestion usage (required for complex tasks)
 
+**🚨 CRITICAL: Always use the AskUserQuestion tool when asking questions.**
+- Do NOT ask questions in plain text—the user may not see them or be able to respond.
+- AskUserQuestion ensures proper notification and response handling in PAW.
+
 Always include a Plan confirmation question for complex tasks, even if no other choices exist.
 If the Plan includes options, include them in the same AskUserQuestion call.
 
@@ -147,13 +151,20 @@ After making code changes, check if any documentation needs updating:
 - **Config examples**: Sample configurations, environment variables
 
 ### When to update
-- ✅ New feature → add to README, update usage examples
-- ✅ API change → update CLAUDE.md structure, inline docs
-- ✅ New option/flag → update README usage section
-- ✅ Directory structure change → update CLAUDE.md structure
-- ✅ Build/test command change → update CLAUDE.md
-- ❌ Internal refactor with no external change → no doc update needed
-- ❌ Bug fix with no behavior change → no doc update needed
+Update ALL affected files (not just one):
+
+| Change Type | Files to Update |
+|-------------|-----------------|
+| New file added | CLAUDE.md (directory structure section) |
+| Config option added/removed | README.md (config table + example) AND CLAUDE.md |
+| CLI command changed | README.md AND HELP.md |
+| Keyboard shortcut changed | README.md AND HELP.md |
+| Feature added/removed | README.md (feature description) |
+
+**Common mistakes to avoid:**
+- ❌ Updating CLAUDE.md but forgetting README.md (or vice versa)
+- ❌ Adding new files without updating directory structure
+- ❌ Removing features from code but leaving them in docs
 
 ### How to sync
 1. After completing a feature/change, review affected docs
