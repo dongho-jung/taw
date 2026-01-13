@@ -33,13 +33,12 @@ type SettingsField int
 
 // General tab fields
 const (
-	SettingsFieldWorkMode SettingsField = iota
-	SettingsFieldTheme
+	SettingsFieldTheme SettingsField = iota
 	SettingsFieldPawInProject
 	SettingsFieldSelfImprove
 )
 
-const generalFieldCount = 4
+const generalFieldCount = 3
 
 // SettingsUI provides an interactive settings configuration form.
 type SettingsUI struct {
@@ -64,7 +63,6 @@ type SettingsUI struct {
 
 	// Field indices for dropdown-style fields
 	// For fields with inherit option, index 0 = "inherit"
-	workModeIdx     int // 0=inherit, 1=worktree, 2=main (project scope) or 0=worktree, 1=main (global scope)
 	themeIdx        int // 0=auto, 1...N=presets (no inherit option)
 	pawInProjectIdx int // 0=auto, 1=global, 2=local (global scope only, no inherit)
 	selfImproveIdx  int // 0=inherit, 1=on, 2=off (project scope) or 0=on, 1=off (global scope)
@@ -131,24 +129,6 @@ func NewSettingsUI(globalCfg, projectCfg *config.Config, isGitRepo bool) *Settin
 // initFieldIndices initializes dropdown indices based on current config.
 func (m *SettingsUI) initFieldIndices() {
 	cfg := m.config
-
-	// WorkMode: For project scope, index 0 = inherit
-	// Check if inherited from global
-	if m.scope == SettingsScopeProject && m.inheritConfig != nil && m.inheritConfig.WorkMode {
-		m.workModeIdx = 0 // inherit
-	} else {
-		// Find actual value index (offset by 1 in project scope)
-		offset := 0
-		if m.scope == SettingsScopeProject {
-			offset = 1
-		}
-		for i, mode := range config.ValidWorkModes() {
-			if mode == cfg.WorkMode {
-				m.workModeIdx = i + offset
-				break
-			}
-		}
-	}
 
 	// Theme: no inherit option (0=auto, 1+=presets)
 	m.themeIdx = 0 // default to auto
@@ -277,10 +257,6 @@ func (m *SettingsUI) currentFieldCount() SettingsField {
 
 func (m *SettingsUI) handleLeft() {
 	switch m.field {
-	case SettingsFieldWorkMode:
-		if m.workModeIdx > 0 {
-			m.workModeIdx--
-		}
 	case SettingsFieldTheme:
 		if m.themeIdx > 0 {
 			m.themeIdx--
@@ -299,14 +275,6 @@ func (m *SettingsUI) handleLeft() {
 
 func (m *SettingsUI) handleRight() {
 	switch m.field {
-	case SettingsFieldWorkMode:
-		maxIdx := len(config.ValidWorkModes()) - 1
-		if m.scope == SettingsScopeProject {
-			maxIdx++ // +1 for "inherit" option
-		}
-		if m.workModeIdx < maxIdx {
-			m.workModeIdx++
-		}
 	case SettingsFieldTheme:
 		themeOptions := getThemeOptions()
 		if m.themeIdx < len(themeOptions)-1 {
@@ -333,26 +301,6 @@ func (m *SettingsUI) applyChanges() {
 	// Ensure inherit config exists for project scope
 	if m.scope == SettingsScopeProject && m.inheritConfig == nil {
 		m.inheritConfig = config.DefaultInheritConfig()
-	}
-
-	// Apply WorkMode
-	modes := config.ValidWorkModes()
-	if m.scope == SettingsScopeProject {
-		if m.workModeIdx == 0 {
-			// inherit selected
-			m.inheritConfig.WorkMode = true
-			m.config.WorkMode = m.globalConfig.WorkMode
-		} else {
-			m.inheritConfig.WorkMode = false
-			if m.workModeIdx-1 < len(modes) {
-				m.config.WorkMode = modes[m.workModeIdx-1]
-			}
-		}
-	} else {
-		// Global scope - no inherit option
-		if m.workModeIdx < len(modes) {
-			m.config.WorkMode = modes[m.workModeIdx]
-		}
 	}
 
 	// Apply Theme (no inherit option)
@@ -501,34 +449,6 @@ func (m *SettingsUI) renderGeneralTab(sb *strings.Builder, labelStyle, selectedL
 			display += dimStyle.Render(" " + hint)
 		}
 		return display
-	}
-
-	// Work Mode (with inherit option in project scope)
-	{
-		label := labelStyle.Render("Work Mode:")
-		if m.field == SettingsFieldWorkMode {
-			label = selectedLabelStyle.Render("Work Mode:")
-		}
-		focused := m.field == SettingsFieldWorkMode
-
-		modes := config.ValidWorkModes()
-		var currentValue string
-		var hint string
-
-		if m.scope == SettingsScopeProject {
-			if m.workModeIdx == 0 {
-				currentValue = "inherit"
-				hint = "(" + string(m.globalConfig.WorkMode) + ")"
-			} else if m.workModeIdx-1 < len(modes) {
-				currentValue = string(modes[m.workModeIdx-1])
-			}
-		} else {
-			if m.workModeIdx < len(modes) {
-				currentValue = string(modes[m.workModeIdx])
-			}
-		}
-		sb.WriteString(label + renderSelector(currentValue, focused, hint))
-		sb.WriteString("\n")
 	}
 
 	// Theme (no inherit option)

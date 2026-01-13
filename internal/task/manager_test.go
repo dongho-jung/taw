@@ -37,10 +37,8 @@ func TestFindMergedTasks_ExternallyCleanedUp(t *testing.T) {
 		t.Fatalf("Failed to create task file: %v", err)
 	}
 
-	// Create config with worktree mode
-	cfg := &config.Config{
-		WorkMode: config.WorkModeWorktree,
-	}
+	// Create config
+	cfg := &config.Config{}
 
 	// Create manager (git repo = true, but we'll use a mock git client)
 	mgr := NewManager(agentsDir, tempDir, filepath.Join(tempDir, ".paw"), true, cfg)

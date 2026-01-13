@@ -175,7 +175,7 @@ func projectChecks(appCtx *app.App) []checkResult {
 }
 
 func worktreeChecks(appCtx *app.App) []checkResult {
-	if !appCtx.IsGitRepo || appCtx.Config == nil || appCtx.Config.WorkMode != config.WorkModeWorktree {
+	if !appCtx.IsGitRepo || appCtx.Config == nil {
 		return nil
 	}
 

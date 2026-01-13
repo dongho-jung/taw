@@ -167,9 +167,9 @@ func (a *App) SetGitRepo(isGit bool) {
 }
 
 // IsWorktreeMode returns true if the app is configured to use git worktrees.
-// This checks that we're in a git repo, config is loaded, and worktree mode is enabled.
+// PAW always uses worktree mode for git repositories.
 func (a *App) IsWorktreeMode() bool {
-	return a.IsGitRepo && a.Config != nil && a.Config.WorkMode == config.WorkModeWorktree
+	return a.IsGitRepo
 }
 
 // IsGlobalWorkspace returns true if the workspace is stored in the global location

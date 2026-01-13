@@ -214,20 +214,18 @@ PAW supports both global and project-level settings:
 
 In the Settings UI (⌃P → Settings), press `⌥Tab` to toggle between Global and Project views.
 
-Project settings can **inherit** from global settings. For fields that support inheritance (Work Mode, Self Improve):
+Project settings can **inherit** from global settings. For fields that support inheritance (Self Improve):
 - Select "inherit" as an option using ←/→ keys
-- When "inherit" is selected, the global value is shown in parentheses (e.g., `< inherit > (worktree)`)
+- When "inherit" is selected, the global value is shown in parentheses (e.g., `< inherit > (off)`)
 - Other fields (Theme, Non-Git Workspace, Verify settings) do not support inheritance
 
 Example project config with inherit:
 ```yaml
-work_mode: worktree
 theme: auto
 self_improve: false
 
 # Inherit settings from global config
 inherit:
-  work_mode: true     # Use global work_mode
   theme: true         # Use global theme
   self_improve: true  # Use global self_improve
 ```

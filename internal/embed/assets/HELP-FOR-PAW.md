@@ -15,7 +15,6 @@ PAW has two configuration levels:
 
 **Always ask** when modifying settings that could apply at either level:
 - Hooks (pre_worktree_hook, post_task_hook, etc.)
-- work_mode changes
 
 Example AskUserQuestion:
 ```
@@ -74,16 +73,9 @@ pre_worktree_hook: |
   npm run build
 ```
 
-## Work Mode Configuration
+## Work Mode
 
-| Mode | Description |
-|------|-------------|
-| `worktree` | Each task gets its own git worktree (recommended for git repos) |
-| `main` | All tasks work on the current branch |
-
-```yaml
-work_mode: worktree
-```
+PAW automatically uses worktree mode for git repositories. Each task gets its own git worktree, providing isolation between tasks.
 
 ## Viewing Logs
 
@@ -127,10 +119,10 @@ Project settings can inherit from global settings:
 
 ```yaml
 # In .paw/config
-work_mode: worktree
+self_improve: false
 
 inherit:
-  work_mode: true     # Use global work_mode instead
+  self_improve: true     # Use global self_improve instead
 ```
 
 When `inherit.<field>: true`, the project uses the global value for that field.

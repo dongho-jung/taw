@@ -225,31 +225,12 @@ func runSetupWizard(appCtx *app.App) error {
 
 	fmt.Println("\n🚀 PAW Setup Wizard")
 
-	// Work mode (only for git repos)
-	if appCtx.IsGitRepo {
-		fmt.Println("Work Mode:")
-		fmt.Println("  1. worktree (Recommended) - Each task gets its own git worktree")
-		fmt.Println("  2. main - All tasks work on current branch")
-		fmt.Print("\nSelect [1-2, default: 1]: ")
-
-		var choice string
-		_, _ = fmt.Scanln(&choice)
-
-		switch choice {
-		case "2":
-			cfg.WorkMode = config.WorkModeMain
-		default:
-			cfg.WorkMode = config.WorkModeWorktree
-		}
-	}
-
 	// Save configuration
 	if err := cfg.Save(appCtx.PawDir); err != nil {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
 	fmt.Println("\n✅ Configuration saved!")
-	fmt.Printf("   Work mode: %s\n", cfg.WorkMode)
 	fmt.Printf("   Workspace: %s\n", appCtx.PawDir)
 
 	return nil

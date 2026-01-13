@@ -70,7 +70,7 @@ var endTaskCmd = &cobra.Command{
 		gitClient := git.New()
 		workDir := mgr.GetWorkingDirectory(targetTask)
 		logging.Trace("Working directory: %s", workDir)
-		logging.Debug("Configuration: WorkMode=%s, Action=%s", appCtx.Config.WorkMode, endTaskAction)
+		logging.Debug("Configuration: Action=%s", endTaskAction)
 
 		// Handle drop action - discard changes and cleanup
 		skipGitOps := (endTaskAction == "drop")

@@ -51,9 +51,9 @@ func (m *Manager) SetTmuxClient(client tmux.Client) {
 }
 
 // shouldUseWorktree returns true if the manager is configured to use git worktrees.
-// This checks that we're in a git repo, config is loaded, and worktree mode is enabled.
+// PAW always uses worktree mode for git repositories.
 func (m *Manager) shouldUseWorktree() bool {
-	return m.isGitRepo && m.config != nil && m.config.WorkMode == config.WorkModeWorktree
+	return m.isGitRepo
 }
 
 // CreateTask creates a new task with the given content.

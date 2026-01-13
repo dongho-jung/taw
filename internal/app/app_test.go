@@ -383,37 +383,16 @@ func TestAppIsWorktreeMode(t *testing.T) {
 	tests := []struct {
 		name      string
 		isGitRepo bool
-		config    *config.Config
 		want      bool
 	}{
 		{
-			name:      "worktree mode enabled",
+			name:      "git repo uses worktree mode",
 			isGitRepo: true,
-			config:    &config.Config{WorkMode: config.WorkModeWorktree},
 			want:      true,
-		},
-		{
-			name:      "main mode",
-			isGitRepo: true,
-			config:    &config.Config{WorkMode: config.WorkModeMain},
-			want:      false,
 		},
 		{
 			name:      "not a git repo",
 			isGitRepo: false,
-			config:    &config.Config{WorkMode: config.WorkModeWorktree},
-			want:      false,
-		},
-		{
-			name:      "nil config",
-			isGitRepo: true,
-			config:    nil,
-			want:      false,
-		},
-		{
-			name:      "not git repo with nil config",
-			isGitRepo: false,
-			config:    nil,
 			want:      false,
 		},
 	}
@@ -422,7 +401,6 @@ func TestAppIsWorktreeMode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			app := &App{
 				IsGitRepo: tt.isGitRepo,
-				Config:    tt.config,
 			}
 
 			if got := app.IsWorktreeMode(); got != tt.want {

@@ -111,9 +111,6 @@ func TestRoundTrip_MultiLineHook(t *testing.T) {
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	if cfg.WorkMode != WorkModeWorktree {
-		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
-	}
 	if cfg.PreWorktreeHook != "" {
 		t.Errorf("PreWorktreeHook = %q, want empty", cfg.PreWorktreeHook)
 	}
@@ -128,33 +125,18 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
-func TestConfigNormalize_InvalidValues(t *testing.T) {
+func TestConfigNormalize_InvalidLogFormat(t *testing.T) {
 	cfg := &Config{
-		WorkMode: WorkMode("invalid"),
+		LogFormat: "invalid",
 	}
 
 	warnings := cfg.Normalize()
 
-	if cfg.WorkMode != WorkModeWorktree {
-		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
+	if cfg.LogFormat != "text" {
+		t.Errorf("LogFormat = %q, want %q", cfg.LogFormat, "text")
 	}
 	if len(warnings) != 1 {
 		t.Errorf("warnings len = %d, want 1", len(warnings))
-	}
-}
-
-func TestConfigNormalize_TrimsWhitespace(t *testing.T) {
-	cfg := &Config{
-		WorkMode: WorkMode(" worktree "),
-	}
-
-	warnings := cfg.Normalize()
-
-	if cfg.WorkMode != WorkModeWorktree {
-		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
-	}
-	if len(warnings) != 0 {
-		t.Errorf("warnings len = %d, want 0", len(warnings))
 	}
 }
 
@@ -167,8 +149,8 @@ func TestLoad_NoConfigFile(t *testing.T) {
 	}
 
 	// Should return default config
-	if cfg.WorkMode != WorkModeWorktree {
-		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
+	if cfg.LogFormat != "text" {
+		t.Errorf("LogFormat = %q, want %q", cfg.LogFormat, "text")
 	}
 }
 
@@ -176,8 +158,7 @@ func TestLoad_WithConfigFile(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, constants.ConfigFileName)
 
-	content := `work_mode: main
-pre_worktree_hook: npm install
+	content := `pre_worktree_hook: npm install
 `
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to write config: %v", err)
@@ -188,9 +169,6 @@ pre_worktree_hook: npm install
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if cfg.WorkMode != WorkModeMain {
-		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeMain)
-	}
 	if cfg.PreWorktreeHook != "npm install" {
 		t.Errorf("PreWorktreeHook = %q, want %q", cfg.PreWorktreeHook, "npm install")
 	}
@@ -200,7 +178,6 @@ func TestSave(t *testing.T) {
 	tempDir := t.TempDir()
 
 	cfg := &Config{
-		WorkMode:        WorkModeWorktree,
 		PreWorktreeHook: "pnpm install",
 	}
 
@@ -214,9 +191,6 @@ func TestSave(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if loaded.WorkMode != cfg.WorkMode {
-		t.Errorf("WorkMode = %q, want %q", loaded.WorkMode, cfg.WorkMode)
-	}
 	if loaded.PreWorktreeHook != cfg.PreWorktreeHook {
 		t.Errorf("PreWorktreeHook = %q, want %q", loaded.PreWorktreeHook, cfg.PreWorktreeHook)
 	}
@@ -242,28 +216,9 @@ func TestExists(t *testing.T) {
 	}
 }
 
-func TestValidWorkModes(t *testing.T) {
-	modes := ValidWorkModes()
-
-	if len(modes) != 2 {
-		t.Errorf("Expected 2 work modes, got %d", len(modes))
-	}
-
-	expected := map[WorkMode]bool{
-		WorkModeWorktree: true,
-		WorkModeMain:     true,
-	}
-
-	for _, mode := range modes {
-		if !expected[mode] {
-			t.Errorf("Unexpected work mode: %q", mode)
-		}
-	}
-}
-
 func TestParseConfig_Comments(t *testing.T) {
 	content := `# This is a comment
-work_mode: worktree
+pre_worktree_hook: npm install
 # Another comment
 `
 	cfg, err := parseConfig(content)
@@ -271,14 +226,14 @@ work_mode: worktree
 		t.Fatalf("parseConfig failed: %v", err)
 	}
 
-	if cfg.WorkMode != WorkModeWorktree {
-		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
+	if cfg.PreWorktreeHook != "npm install" {
+		t.Errorf("PreWorktreeHook = %q, want %q", cfg.PreWorktreeHook, "npm install")
 	}
 }
 
 func TestParseConfig_EmptyLines(t *testing.T) {
 	content := `
-work_mode: worktree
+pre_worktree_hook: npm install
 
 `
 	cfg, err := parseConfig(content)
@@ -286,8 +241,8 @@ work_mode: worktree
 		t.Fatalf("parseConfig failed: %v", err)
 	}
 
-	if cfg.WorkMode != WorkModeWorktree {
-		t.Errorf("WorkMode = %q, want %q", cfg.WorkMode, WorkModeWorktree)
+	if cfg.PreWorktreeHook != "npm install" {
+		t.Errorf("PreWorktreeHook = %q, want %q", cfg.PreWorktreeHook, "npm install")
 	}
 }
 
@@ -299,32 +254,32 @@ func TestParseConfig_PawInProject(t *testing.T) {
 	}{
 		{
 			name:     "paw_in_project auto",
-			content:  "work_mode: worktree\npaw_in_project: auto\n",
+			content:  "paw_in_project: auto\n",
 			expected: PawInProjectAuto,
 		},
 		{
 			name:     "paw_in_project global",
-			content:  "work_mode: worktree\npaw_in_project: global\n",
+			content:  "paw_in_project: global\n",
 			expected: PawInProjectGlobal,
 		},
 		{
 			name:     "paw_in_project local",
-			content:  "work_mode: worktree\npaw_in_project: local\n",
+			content:  "paw_in_project: local\n",
 			expected: PawInProjectLocal,
 		},
 		{
 			name:     "paw_in_project true (legacy)",
-			content:  "work_mode: worktree\npaw_in_project: true\n",
+			content:  "paw_in_project: true\n",
 			expected: PawInProjectLocal, // legacy true = local
 		},
 		{
 			name:     "paw_in_project false (legacy)",
-			content:  "work_mode: worktree\npaw_in_project: false\n",
+			content:  "paw_in_project: false\n",
 			expected: PawInProjectGlobal, // legacy false = global
 		},
 		{
 			name:     "paw_in_project not set",
-			content:  "work_mode: worktree\n",
+			content:  "",
 			expected: PawInProjectAuto, // default is auto
 		},
 	}
@@ -458,8 +413,8 @@ func TestGetWorkspaceDir_AutoNonGit(t *testing.T) {
 
 func TestSave_PawInProject(t *testing.T) {
 	tests := []struct {
-		name     string
-		mode     PawInProject
+		name string
+		mode PawInProject
 	}{
 		{"auto", PawInProjectAuto},
 		{"global", PawInProjectGlobal},
@@ -471,7 +426,6 @@ func TestSave_PawInProject(t *testing.T) {
 			tempDir := t.TempDir()
 
 			cfg := &Config{
-				WorkMode:     WorkModeWorktree,
 				PawInProject: tt.mode,
 			}
 
