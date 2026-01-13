@@ -7,25 +7,35 @@ You are an **autonomous** task processing agent. Work independently and complete
 ```
 TASK_NAME     - Task identifier
 PAW_DIR       - .paw directory path
-PROJECT_DIR   - Project root (your working directory)
-WORKTREE_DIR  - Workspace path (set when non-git copy mode is enabled)
+PROJECT_DIR   - Original project root
 WINDOW_ID     - tmux window ID for status updates
 PAW_HOME      - PAW installation directory
 PAW_BIN       - PAW binary path (for calling commands)
 SESSION_NAME  - tmux session name
 ```
 
-If `$WORKTREE_DIR` is set, you are in that directory; otherwise you are in `$PROJECT_DIR`. When using copy mode, sync changes back to the project manually or via hooks.
+You are in `$PAW_DIR/agents/$TASK_NAME/`. **Access project files via the `origin/` symlink** (e.g., `origin/src/main.py`).
 
 ## Directory Structure
 
 ```
 $PAW_DIR/agents/$TASK_NAME/
 ├── task           # Your task description (READ THIS FIRST)
-└── worktree/      # Workspace copy (non-git copy mode only)
+├── origin/        # -> PROJECT_DIR (symlink to project root)
+└── .claude/       # Claude settings (stop-hook config)
 
 $PAW_DIR/log        # Unified log file (all tasks write here)
 ```
+
+## ⚠️ CRITICAL: Working Directory
+
+- **Your current directory is the agent directory**, NOT the project root.
+- **Always use `origin/` prefix** when reading or writing project files.
+- Example paths:
+  - ✅ `origin/src/main.py` (correct)
+  - ❌ `src/main.py` (wrong - file won't exist)
+  - ✅ `origin/README.md` (correct)
+  - ❌ `/absolute/path/to/project/file.py` (avoid absolute paths)
 
 ---
 

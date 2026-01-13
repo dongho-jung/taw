@@ -121,10 +121,20 @@ var handleTaskCmd = &cobra.Command{
 			logging.Warn("Failed to setup symlinks: %v", err)
 		}
 
-		// Setup .claude symlink in worktree for stop-hook support
-		// This must be done after worktree setup so the directory exists
-		if err := t.SetupClaudeSymlink(appCtx.PawDir); err != nil {
-			logging.Warn("Failed to setup claude symlink: %v", err)
+		// Setup .claude symlink for stop-hook support
+		// For worktree mode: symlink in worktree directory
+		// For non-worktree mode: symlink in agent directory (Claude runs there)
+		if appCtx.IsWorktreeMode() {
+			// Worktree mode: symlink in worktree (must be done after worktree setup)
+			if err := t.SetupClaudeSymlink(appCtx.PawDir); err != nil {
+				logging.Warn("Failed to setup claude symlink in worktree: %v", err)
+			}
+		} else {
+			// Non-worktree mode: symlink in agent directory
+			// Claude runs in agent dir and accesses project via origin/ symlink
+			if err := t.SetupClaudeSymlinkInDir(appCtx.PawDir, t.AgentDir); err != nil {
+				logging.Warn("Failed to setup claude symlink in agent dir: %v", err)
+			}
 		}
 
 		// Create tmux window
@@ -334,8 +344,12 @@ func buildUserPrompt(appCtx *app.App, t *task.Task, taskName, workDir string) st
 	userPrompt.WriteString(fmt.Sprintf("# Task: %s\n\n", taskName))
 	if appCtx.IsWorktreeMode() {
 		userPrompt.WriteString(fmt.Sprintf("**Worktree**: %s\n", workDir))
+		userPrompt.WriteString(fmt.Sprintf("**Project**: %s\n\n", appCtx.ProjectDir))
+	} else {
+		// Non-git mode: Claude runs in agent dir, accesses project via origin/
+		userPrompt.WriteString(fmt.Sprintf("**Working Dir**: %s\n", workDir))
+		userPrompt.WriteString(fmt.Sprintf("**Project**: %s (access via `origin/`)\n\n", appCtx.ProjectDir))
 	}
-	userPrompt.WriteString(fmt.Sprintf("**Project**: %s\n\n", appCtx.ProjectDir))
 
 	userPrompt.WriteString("**Finish**: User triggers completion with Ctrl+F. Do not call end-task automatically.\n\n")
 

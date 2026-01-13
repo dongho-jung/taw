@@ -386,23 +386,36 @@ func (t *Task) SetupSymlinks(projectDir string) error {
 	return nil
 }
 
-// SetupClaudeSymlink creates a .claude symlink in the worktree directory
-// pointing to the PAW directory's .claude folder. This is necessary because
-// Claude Code looks for settings.local.json (which contains stop-hook config)
-// in the current working directory.
+// SetupClaudeSymlink creates a .claude symlink pointing to the PAW directory's
+// .claude folder. This is necessary because Claude Code looks for
+// settings.local.json (which contains stop-hook config) in the current
+// working directory.
+//
+// For worktree mode: creates symlink in the worktree directory
+// For non-worktree mode: creates symlink in the project directory
 func (t *Task) SetupClaudeSymlink(pawDir string) error {
-	worktreeDir := t.GetWorktreeDir()
-	if worktreeDir == "" {
-		return nil // No worktree, nothing to do
+	return t.SetupClaudeSymlinkInDir(pawDir, "")
+}
+
+// SetupClaudeSymlinkInDir creates a .claude symlink in the specified target
+// directory. If targetDir is empty, it defaults to the worktree directory.
+// This is used by SetupClaudeSymlink for worktree mode, and can be called
+// directly with the project directory for non-worktree mode.
+func (t *Task) SetupClaudeSymlinkInDir(pawDir, targetDir string) error {
+	if targetDir == "" {
+		targetDir = t.GetWorktreeDir()
+		if targetDir == "" {
+			return nil // No worktree, nothing to do
+		}
 	}
 
-	// Check if worktree directory exists
-	if _, err := os.Stat(worktreeDir); os.IsNotExist(err) {
-		return nil // Worktree doesn't exist yet, will be called later
+	// Check if target directory exists
+	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
+		return nil // Target doesn't exist yet, will be called later
 	}
 
 	claudeSource := filepath.Join(pawDir, constants.ClaudeLink)
-	claudeTarget := filepath.Join(worktreeDir, constants.ClaudeLink)
+	claudeTarget := filepath.Join(targetDir, constants.ClaudeLink)
 
 	// Check if source .claude directory exists
 	if _, err := os.Stat(claudeSource); os.IsNotExist(err) {
@@ -418,7 +431,7 @@ func (t *Task) SetupClaudeSymlink(pawDir string) error {
 	}
 
 	// Create relative symlink
-	relPath, err := filepath.Rel(worktreeDir, claudeSource)
+	relPath, err := filepath.Rel(targetDir, claudeSource)
 	if err != nil {
 		relPath = claudeSource // Fallback to absolute path
 	}

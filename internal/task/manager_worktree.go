@@ -207,9 +207,12 @@ func (m *Manager) executePreWorktreeHook(worktreeDir string) {
 }
 
 // GetWorkingDirectory returns the working directory for a task.
+// For worktree mode: returns the worktree directory (git worktree)
+// For non-worktree mode: returns the agent directory (Claude works in origin/)
 func (m *Manager) GetWorkingDirectory(task *Task) string {
 	if m.shouldUseWorktree() {
 		return task.GetWorktreeDir()
 	}
-	return m.projectDir
+	// Non-worktree mode: Claude runs in agent dir, accesses project via origin/ symlink
+	return task.AgentDir
 }
