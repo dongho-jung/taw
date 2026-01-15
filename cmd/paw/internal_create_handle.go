@@ -439,12 +439,7 @@ func startNewTaskSession(tm tmux.Client, claudeClient claude.Client, agentPane s
 	time.Sleep(200 * time.Millisecond)
 
 	// Send task instruction - tell Claude to read from file
-	var taskInstruction string
-	if taskOpts.Ultrathink {
-		taskInstruction = fmt.Sprintf("ultrathink Read and execute the task from '%s'", t.GetUserPromptPath())
-	} else {
-		taskInstruction = fmt.Sprintf("Read and execute the task from '%s'", t.GetUserPromptPath())
-	}
+	taskInstruction := buildTaskInstruction(t.GetUserPromptPath(), taskOpts.Ultrathink)
 	logging.Trace("Sending task instruction: length=%d, ultrathink=%v", len(taskInstruction), taskOpts.Ultrathink)
 	if err := claudeClient.SendInputWithRetry(tm, agentPane, taskInstruction, 5); err != nil {
 		logging.Warn("Failed to send task instruction: %v", err)
