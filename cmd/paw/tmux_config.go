@@ -68,6 +68,10 @@ func setupTmuxConfig(appCtx *app.App, tm tmux.Client) error {
 	// Enable mouse mode
 	_ = tm.SetOption("mouse", "on", true)
 
+	// Enable focus events so applications receive focus/blur notifications
+	// This is required for auto-focusing the input textarea when switching windows
+	_ = tm.SetOption("focus-events", "on", true)
+
 	// Conditional mouse drag handling: TUI windows vs normal windows
 	// - In main window (⭐️main) pane 0: Forward drag events to bubbletea TUI for cell-level selection
 	// - In other panes (shell pane via Ctrl+B) or task windows: Use normal tmux copy-mode
