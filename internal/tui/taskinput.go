@@ -360,6 +360,12 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyTheme(isDark)
 		return m, nil
 
+	case tea.FocusMsg:
+		// When terminal gains focus (user switches to this window),
+		// automatically focus the task input textarea
+		m.switchFocusTo(FocusPanelLeft)
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
