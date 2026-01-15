@@ -14,28 +14,27 @@ PAW_BIN       - PAW binary path (for calling commands)
 SESSION_NAME  - tmux session name
 ```
 
-You are in `$PAW_DIR/agents/$TASK_NAME/`. **Access project files via the `origin/` symlink** (e.g., `origin/src/main.py`).
+You are in `$PROJECT_DIR`. Task metadata lives under `$PAW_DIR/agents/$TASK_NAME/`.
 
 ## Directory Structure
 
 ```
+$PROJECT_DIR/
+├── ...            # Project files
+└── .claude/       # Claude settings (PAW hooks)
+
 $PAW_DIR/agents/$TASK_NAME/
 ├── task           # Your task description (READ THIS FIRST)
-├── origin/        # -> PROJECT_DIR (symlink to project root)
-└── .claude/       # Claude settings (stop-hook config)
+└── origin/        # -> PROJECT_DIR (symlink to project root)
 
-$PAW_DIR/log        # Unified log file (all tasks write here)
+$PAW_DIR/log       # Unified log file (all tasks write here)
 ```
 
 ## ⚠️ CRITICAL: Working Directory
 
-- **Your current directory is the agent directory**, NOT the project root.
-- **Always use `origin/` prefix** when reading or writing project files.
-- Example paths:
-  - ✅ `origin/src/main.py` (correct)
-  - ❌ `src/main.py` (wrong - file won't exist)
-  - ✅ `origin/README.md` (correct)
-  - ❌ `/absolute/path/to/project/file.py` (avoid absolute paths)
+- **Your current directory is the project root** (`$PROJECT_DIR`).
+- Task files live under `$PAW_DIR/agents/$TASK_NAME/`.
+- The `origin/` symlink in the agent directory points to the project root if needed.
 
 ---
 
@@ -220,24 +219,13 @@ Work complete
 
 ---
 
-## Project Memory (.paw/memory)
+## Project Memory (claude-mem)
 
-Use `.paw/memory` as a shared, durable knowledge base across tasks.
+PAW uses claude-mem for shared, durable memory across tasks/workspaces.
 
-- Update it when you learn reusable info (tests, build/lint commands, setup steps, gotchas).
-- **Update in place** (no append-only logs). Keep entries concise and deduplicated.
-- If missing, create it using a simple YAML map with `tests`, `commands`, and `notes`.
-
-Example format:
-```
-version: 1
-tests:
-  default: "go test ./..."
-commands:
-  build: "make build"
-notes:
-  verification: "UI changes need manual review in browser."
-```
+- Memory is stored automatically; do not edit `.paw/memory` (deprecated).
+- Use mem-search or the MCP tools (`search`, `timeline`, `get_observations`) when you need prior context.
+- Use `<private>` tags to exclude sensitive info from memory.
 
 ---
 

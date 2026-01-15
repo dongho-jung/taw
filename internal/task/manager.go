@@ -56,6 +56,27 @@ func (m *Manager) shouldUseWorktree() bool {
 	return m.isGitRepo
 }
 
+func (m *Manager) preferredWorktreeDir(task *Task) string {
+	projectBase := filepath.Base(m.projectDir)
+	if projectBase == "" || projectBase == "." || projectBase == string(filepath.Separator) {
+		projectBase = "worktree"
+	}
+	// Use project base name to keep claude-mem project keys consistent across tasks.
+	return filepath.Join(task.AgentDir, projectBase)
+}
+
+func (m *Manager) resolveWorktreeDir(task *Task) string {
+	preferred := m.preferredWorktreeDir(task)
+	legacy := filepath.Join(task.AgentDir, "worktree")
+	if _, err := os.Stat(preferred); err == nil {
+		return preferred
+	}
+	if _, err := os.Stat(legacy); err == nil {
+		return legacy
+	}
+	return preferred
+}
+
 // CreateTask creates a new task with the given content.
 // It generates a task name using Claude and creates the task directory atomically.
 func (m *Manager) CreateTask(content string) (*Task, error) {
@@ -87,6 +108,9 @@ func (m *Manager) CreateTask(content string) (*Task, error) {
 	logging.Debug("Task directory created: %s", agentDir)
 
 	task := New(name, agentDir)
+	if m.shouldUseWorktree() {
+		task.WorktreeDir = m.preferredWorktreeDir(task)
+	}
 
 	// Save task content
 	if err := task.SaveContent(content); err != nil {
@@ -144,7 +168,7 @@ func (m *Manager) GetTask(name string) (*Task, error) {
 
 	// Set worktree directory
 	if m.shouldUseWorktree() {
-		task.WorktreeDir = task.GetWorktreeDir()
+		task.WorktreeDir = m.resolveWorktreeDir(task)
 	}
 
 	return task, nil
@@ -177,4 +201,3 @@ func (m *Manager) ListTasks() ([]*Task, error) {
 
 	return tasks, nil
 }
-

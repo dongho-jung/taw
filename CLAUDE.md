@@ -86,7 +86,6 @@ paw/                           # This repository
 ├── cmd/paw/                   # Go main package
 │   ├── main.go                # Entry point and root command
 │   ├── session.go             # Session management (attach, create)
-│   ├── setup.go               # Setup wizard and initialization
 │   ├── tmux_config.go         # Tmux configuration generation
 │   ├── tmux_theme.go          # Tmux theme/color management
 │   ├── check.go               # Dependency check command (paw check)
@@ -142,7 +141,6 @@ paw/                           # This repository
 │       ├── helpviewer.go      # Help viewer
 │       ├── logviewer.go       # Log viewer with filtering
 │       ├── cmdpalette.go      # Command palette (⌃P)
-│       ├── settings.go        # Settings UI (global/project config editor)
 │       ├── finishpicker.go    # Finish action picker (merge/pr/keep/drop)
 │       ├── endtask.go         # End task confirmation UI
 │       ├── kanban.go          # Kanban board view for tasks
@@ -150,7 +148,6 @@ paw/                           # This repository
 │       ├── branchmenu.go      # Branch selection menu
 │       ├── inputhistory.go    # Task input history (⌃R search)
 │       ├── recover.go         # Task recovery UI
-│       ├── setup.go           # Setup wizard UI
 │       ├── spinner.go         # Loading spinner component
 │       ├── theme.go           # Theme/color definitions
 │       ├── tips.go            # UI tips and hints
@@ -161,9 +158,8 @@ paw/                           # This repository
 
 {any-project}/                 # User project (git repo or plain directory)
 └── .paw/                      # Created by paw
-    ├── config                 # Project config (YAML, created during setup)
+    ├── config                 # Project config (YAML, created on first run)
     ├── log                    # Consolidated logs (all scripts write here)
-    ├── memory                 # Project memory (YAML, shared across tasks)
     ├── input-history          # Task input history (JSON, for Ctrl+R search)
     ├── PROMPT.md              # Project prompt (user-customizable)
     ├── bin                    # Symlink to current paw binary (updated on attach)
@@ -177,7 +173,7 @@ paw/                           # This repository
         ├── task               # Task contents
         ├── end-task           # Per-task end-task script (called for auto-merge)
         ├── origin             # -> Project root (symlink)
-        ├── worktree/          # Git worktree (auto-created in git mode)
+        ├── {project-name}/    # Git worktree (auto-created in git mode)
         ├── .tab-lock/         # Tab creation lock (atomic mkdir prevents races)
         │   └── window_id      # Tmux window ID (used in cleanup)
         ├── .session-started   # Session marker (for resume on reopen)
@@ -186,118 +182,36 @@ paw/                           # This repository
         ├── .options.json      # Task options (model, ultrathink, depends_on, pre_worktree_hook)
         └── .pr                # PR number (when created)
 
-$HOME/.config/paw/                 # Global PAW config (shared across all projects)
-└── config                         # Global config (default settings for all projects)
-
-$HOME/.local/share/paw/            # Global PAW data (when paw_in_project is global or auto+git)
+$HOME/.local/share/paw/            # Global PAW data (auto mode for git projects)
 └── workspaces/                    # Workspaces for all projects
     └── {project-name}-{hash}/     # Per-project workspace (same structure as .paw above)
 ```
 
+PAW uses claude-mem for shared memory across tasks/workspaces. Memory is stored
+globally in `~/.claude-mem` and scoped by project name (no `.paw/memory` file).
+
 ### Workspace Location
 
-PAW can store workspaces either globally or locally. This behavior is controlled by the `paw_in_project` global setting.
+PAW uses auto mode for workspaces:
+- **Git repositories**: global workspace under `~/.local/share/paw/workspaces/{project-id}/`
+- **Non-git directories**: local `.paw/` inside the project
 
-**Global config (`$HOME/.config/paw/config`):**
-```yaml
-# Workspace location (default: auto)
-# - auto: Git repo -> global, non-git -> local (recommended)
-# - global: Store in ~/.local/share/paw/workspaces/{project-id}/
-# - local: Store in project/.paw/ (requires .gitignore modification)
-paw_in_project: auto
-```
+A local `.paw/` directory always takes priority if it already exists.
 
-**Priority rules:**
-1. If a local `.paw/` directory already exists in the project, it takes priority (for backward compatibility)
-2. Otherwise, the `paw_in_project` global setting determines the location
+To force a local workspace for a git repo, run `paw --local`.
 
-**Auto mode (default):**
-- **Git repositories**: Uses global workspace (no `.gitignore` modification needed)
-- **Non-git directories**: Uses local workspace (convenient for standalone projects)
+### Theme
 
-**Benefits of global workspace (paw_in_project: global):**
-- No need to modify project `.gitignore`
-- Cleaner project directory
-- Workspaces persist even if project is deleted and re-cloned
+PAW always auto-detects your terminal's light/dark background and applies the
+corresponding tmux colors.
 
-**When to use local workspace (paw_in_project: local):**
-- When you want PAW data to be project-specific
-- When you need `.paw/config` and `.paw/memory` tracked in version control
-
-### Global vs Project Settings
-
-PAW supports both global and project-level settings:
-
-- **Global settings** (`$HOME/.config/paw/config`): Default settings applied to all projects
-- **Project settings** (`.paw/config`): Project-specific overrides
-
-In the Settings UI (⌃P → Settings), press `⌥Tab` to toggle between Global and Project views.
-
-Project settings can **inherit** from global settings. For fields that support inheritance (Self Improve):
-- Select "inherit" as an option using ←/→ keys
-- When "inherit" is selected, the global value is shown in parentheses (e.g., `< inherit > (off)`)
-- Other fields (Theme, Non-Git Workspace, Verify settings) do not support inheritance
-
-Example project config with inherit:
-```yaml
-theme: auto
-self_improve: false
-
-# Inherit settings from global config
-inherit:
-  theme: true         # Use global theme
-  self_improve: true  # Use global self_improve
-```
-
-### Self-Improve Feature
-
-When `self_improve` is enabled (default: off), PAW analyzes completed tasks to identify:
-- **Mistakes made**: Things the agent got wrong or had to retry
-- **Knowledge gaps**: Information the agent didn't know and had to discover
-- **Best practices**: Patterns that worked well and should be documented
-
-At task finish, PAW:
-1. Uses Claude Opus with ultrathink to analyze the session history
-2. Generates learnings and appends them to `CLAUDE.md` in the project root
-3. Commits the changes to the default branch (main/master)
-
-This allows the agent to continuously improve its understanding of the project over time.
-
-To enable in `.paw/config`:
-```yaml
-self_improve: true
-```
-
-### Theme Settings
-
-PAW supports 12 theme presets for tmux status bar, window tabs, and pane borders. The theme automatically adapts to your terminal's light/dark mode, or you can set a specific preset.
-
-**Available presets:**
-
-| Dark Themes | Light Themes |
-|-------------|--------------|
-| `dark` (default dark) | `light` (default light) |
-| `dark-blue` | `light-blue` |
-| `dark-green` | `light-green` |
-| `dark-purple` | `light-purple` |
-| `dark-warm` | `light-warm` |
-| `dark-mono` | `light-mono` |
-
-**Configuration:**
-```yaml
-# Auto-detect based on terminal (default)
-theme: auto
-
-# Or set a specific preset
-theme: light-blue
-```
-
-**Theme detection methods (in order):**
+**Detection methods (in order):**
 1. `COLORFGBG` environment variable (if set by terminal)
 2. OSC 11 query to terminal (background color detection)
 3. Fallback to dark mode
 
-When attaching to an existing session from a different terminal, PAW re-detects the theme and updates tmux colors automatically.
+When attaching to an existing session from a different terminal, PAW re-detects
+the theme and updates tmux colors automatically.
 
 ## Logging levels
 

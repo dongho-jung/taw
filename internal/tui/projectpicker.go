@@ -25,16 +25,18 @@ type ProjectPickerItem struct {
 
 // ProjectPicker is a fuzzy-searchable project picker.
 type ProjectPicker struct {
-	input    textinput.Model
-	projects []ProjectPickerItem // All projects
-	filtered []int               // Indices into projects for filtered results
-	cursor   int
-	action   ProjectPickerAction
-	selected *ProjectPickerItem
-	isDark   bool
-	colors   ThemeColors
-	width    int
-	height   int
+	input            textinput.Model
+	inputOffset      int
+	inputOffsetRight int
+	projects         []ProjectPickerItem // All projects
+	filtered         []int               // Indices into projects for filtered results
+	cursor           int
+	action           ProjectPickerAction
+	selected         *ProjectPickerItem
+	isDark           bool
+	colors           ThemeColors
+	width            int
+	height           int
 }
 
 // NewProjectPicker creates a new project picker.
@@ -43,10 +45,12 @@ func NewProjectPicker(projects []ProjectPickerItem) *ProjectPicker {
 	isDark := DetectDarkMode()
 
 	ti := textinput.New()
+	ti.Prompt = ""
 	ti.Placeholder = "Type to search projects..."
 	ti.Focus()
 	ti.CharLimit = 100
 	ti.SetWidth(50)
+	ti.VirtualCursor = false
 
 	// Initialize filtered to all indices
 	filtered := make([]int, len(projects))
@@ -138,8 +142,13 @@ func (m *ProjectPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update filtered list based on input
 	m.updateFiltered()
+	m.syncInputOffset()
 
 	return m, cmd
+}
+
+func (m *ProjectPicker) syncInputOffset() {
+	syncTextInputOffset([]rune(m.input.Value()), m.input.Position(), m.input.Width(), &m.inputOffset, &m.inputOffsetRight)
 }
 
 // updateFiltered filters projects based on input.
@@ -176,55 +185,9 @@ func (m *ProjectPicker) updateFiltered() {
 	}
 }
 
-// renderInputWithCursor renders the text input value with a cursor at the correct position.
-// This handles CJK characters correctly by using rune-based cursor positioning.
-func (m *ProjectPicker) renderInputWithCursor() string {
-	value := m.input.Value()
-	pos := m.input.Position()
-	runes := []rune(value)
-
-	// If no value, show placeholder with cursor
-	if len(runes) == 0 {
-		cursorStyle := lipgloss.NewStyle().Reverse(true)
-		placeholder := m.input.Placeholder
-		if len(placeholder) > 0 {
-			// Show cursor on first character of placeholder
-			return cursorStyle.Render(string(placeholder[0])) + placeholder[1:]
-		}
-		return cursorStyle.Render(" ")
-	}
-
-	// Clamp position to valid range
-	if pos > len(runes) {
-		pos = len(runes)
-	}
-	if pos < 0 {
-		pos = 0
-	}
-
-	cursorStyle := lipgloss.NewStyle().Reverse(true)
-
-	// Build the string with cursor
-	var sb strings.Builder
-
-	// Text before cursor
-	if pos > 0 {
-		sb.WriteString(string(runes[:pos]))
-	}
-
-	// Cursor character (or space if at end)
-	if pos < len(runes) {
-		sb.WriteString(cursorStyle.Render(string(runes[pos])))
-	} else {
-		sb.WriteString(cursorStyle.Render(" "))
-	}
-
-	// Text after cursor
-	if pos+1 < len(runes) {
-		sb.WriteString(string(runes[pos+1:]))
-	}
-
-	return sb.String()
+// renderInput prepares the text input line and cursor position.
+func (m *ProjectPicker) renderInput() textInputRender {
+	return renderTextInput(m.input.Value(), m.input.Position(), m.input.Width(), m.input.Placeholder, m.inputOffset, m.inputOffsetRight)
 }
 
 // View renders the project picker.
@@ -254,14 +217,20 @@ func (m *ProjectPicker) View() tea.View {
 		MarginTop(1)
 
 	var sb strings.Builder
+	line := 0
 
 	// Title
 	sb.WriteString(titleStyle.Render("Switch Project"))
 	sb.WriteString("\n\n")
+	line += 2
 
 	// Input - use custom rendering for proper Korean/CJK cursor positioning
-	sb.WriteString(inputStyle.Render(m.renderInputWithCursor()))
+	inputRender := m.renderInput()
+	inputBox := inputStyle.Render(inputRender.Text)
+	inputBoxTopY := line
+	sb.WriteString(inputBox)
 	sb.WriteString("\n\n")
+	line += lipgloss.Height(inputBox) + 2
 
 	// Calculate available height for list
 	// Reserve: title(1) + gap(1) + input(3) + gap(1) + help(2)
@@ -309,7 +278,15 @@ func (m *ProjectPicker) View() tea.View {
 	sb.WriteString("\n")
 	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter/Space: Switch  Esc/⌃J: Cancel"))
 
-	return tea.NewView(sb.String())
+	v := tea.NewView(sb.String())
+	if m.input.Focused() {
+		cursor := tea.NewCursor(2+inputRender.CursorX, inputBoxTopY+1)
+		cursor.Blink = m.input.Styles.Cursor.Blink
+		cursor.Color = m.input.Styles.Cursor.Color
+		cursor.Shape = m.input.Styles.Cursor.Shape
+		v.Cursor = cursor
+	}
+	return v
 }
 
 // formatNumber formats a number for display (simple implementation).

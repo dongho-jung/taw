@@ -20,16 +20,18 @@ const (
 
 // InputHistoryPicker is a fuzzy-searchable input history picker.
 type InputHistoryPicker struct {
-	input    textinput.Model
-	history  []string // All history entries
-	filtered []int    // Indices into history for filtered results
-	cursor   int
-	action   InputHistoryAction
-	selected string
-	isDark   bool
-	colors   ThemeColors
-	width    int
-	height   int
+	input            textinput.Model
+	inputOffset      int
+	inputOffsetRight int
+	history          []string // All history entries
+	filtered         []int    // Indices into history for filtered results
+	cursor           int
+	action           InputHistoryAction
+	selected         string
+	isDark           bool
+	colors           ThemeColors
+	width            int
+	height           int
 }
 
 // NewInputHistoryPicker creates a new input history picker.
@@ -38,10 +40,12 @@ func NewInputHistoryPicker(history []string) *InputHistoryPicker {
 	isDark := DetectDarkMode()
 
 	ti := textinput.New()
+	ti.Prompt = ""
 	ti.Placeholder = "Type to search history..."
 	ti.Focus()
 	ti.CharLimit = 200
 	ti.SetWidth(60)
+	ti.VirtualCursor = false
 
 	// Initialize filtered to all indices
 	filtered := make([]int, len(history))
@@ -147,8 +151,13 @@ func (m *InputHistoryPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update filtered list based on input
 	m.updateFiltered()
+	m.syncInputOffset()
 
 	return m, cmd
+}
+
+func (m *InputHistoryPicker) syncInputOffset() {
+	syncTextInputOffset([]rune(m.input.Value()), m.input.Position(), m.input.Width(), &m.inputOffset, &m.inputOffsetRight)
 }
 
 // updateFiltered filters history based on input.
@@ -215,14 +224,20 @@ func (m *InputHistoryPicker) View() tea.View {
 		Bold(true)
 
 	var sb strings.Builder
+	line := 0
 
 	// Title
 	sb.WriteString(titleStyle.Render("Task History"))
 	sb.WriteString("\n\n")
+	line += 2
 
 	// Input - use custom rendering for proper Korean/CJK cursor positioning
-	sb.WriteString(inputStyle.Render(m.renderInputWithCursor()))
+	inputRender := m.renderInput()
+	inputBox := inputStyle.Render(inputRender.Text)
+	inputBoxTopY := line
+	sb.WriteString(inputBox)
 	sb.WriteString("\n\n")
+	line += lipgloss.Height(inputBox) + 2
 
 	// Calculate available height for list
 	// Reserve: title(1) + gap(1) + input(3) + gap(1) + help(2) + preview area
@@ -306,58 +321,18 @@ func (m *InputHistoryPicker) View() tea.View {
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
+	if m.input.Focused() {
+		cursor := tea.NewCursor(2+inputRender.CursorX, inputBoxTopY+1)
+		cursor.Blink = m.input.Styles.Cursor.Blink
+		cursor.Color = m.input.Styles.Cursor.Color
+		cursor.Shape = m.input.Styles.Cursor.Shape
+		v.Cursor = cursor
+	}
 	return v
 }
 
-// renderInputWithCursor renders the text input value with a cursor at the correct position.
-// This handles CJK characters correctly by using runewidth for cursor positioning.
-func (m *InputHistoryPicker) renderInputWithCursor() string {
-	value := m.input.Value()
-	pos := m.input.Position()
-	runes := []rune(value)
-
-	// If no value, show placeholder with cursor
-	if len(runes) == 0 {
-		cursorStyle := lipgloss.NewStyle().Reverse(true)
-		placeholder := m.input.Placeholder
-		if len(placeholder) > 0 {
-			// Show cursor on first character of placeholder
-			return cursorStyle.Render(string(placeholder[0])) + placeholder[1:]
-		}
-		return cursorStyle.Render(" ")
-	}
-
-	// Clamp position to valid range
-	if pos > len(runes) {
-		pos = len(runes)
-	}
-	if pos < 0 {
-		pos = 0
-	}
-
-	cursorStyle := lipgloss.NewStyle().Reverse(true)
-
-	// Build the string with cursor
-	var sb strings.Builder
-
-	// Text before cursor
-	if pos > 0 {
-		sb.WriteString(string(runes[:pos]))
-	}
-
-	// Cursor character (or space if at end)
-	if pos < len(runes) {
-		sb.WriteString(cursorStyle.Render(string(runes[pos])))
-	} else {
-		sb.WriteString(cursorStyle.Render(" "))
-	}
-
-	// Text after cursor
-	if pos+1 < len(runes) {
-		sb.WriteString(string(runes[pos+1:]))
-	}
-
-	return sb.String()
+func (m *InputHistoryPicker) renderInput() textInputRender {
+	return renderTextInput(m.input.Value(), m.input.Position(), m.input.Width(), m.input.Placeholder, m.inputOffset, m.inputOffsetRight)
 }
 
 // truncateWithEllipsis truncates a string to maxLen display width and adds ellipsis if needed.

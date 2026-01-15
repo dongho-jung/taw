@@ -19,6 +19,7 @@ Claude Code-based autonomous agent work environment
 ### Task Commands
   ⌃N          New task
   ⌃R          Search task history (in new task window)
+  ⌃T          Template picker (in new task window)
   ⌃F          Finish task (shows action picker: merge/pr/keep/drop)
   ⌃P          Command palette (fuzzy search commands)
   ⌃Q          Quit paw
@@ -34,16 +35,23 @@ Claude Code-based autonomous agent work environment
   .paw/
   ├── config                 Project configuration file
   ├── PROMPT.md              Project-specific agent instructions
-  ├── memory                 Shared project memory (YAML)
   ├── log                    Unified log file
   ├── input-history          Task input history (for ⌃R search)
+  ├── input-templates        Task templates (for ⌃T picker)
   ├── window-map.json        Window token to task mapping
   ├── history/               Completed task history
   │   └── YYMMDD_HHMMSS_name Task content + work capture
   └── agents/{task-name}/
       ├── task               Task content
       ├── origin/            Project root (symlink)
-      └── worktree/          git worktree (auto-created)
+      └── {project-name}/    git worktree (auto-created)
+
+## Memory (claude-mem)
+
+Shared memory is handled by claude-mem and stored in `~/.claude-mem`.
+Install inside Claude Code:
+  /plugin marketplace add thedotmack/claude-mem
+  /plugin install claude-mem
 
 ## Window Status Icons
 
@@ -115,7 +123,7 @@ Configure per-task settings before submission:
   TASK_NAME     Task identifier (branch name)
   PAW_DIR       .paw directory path
   PROJECT_DIR   Project root path
-  WORKTREE_DIR  Worktree path (git mode) or workspace copy (non-git copy mode)
+  WORKTREE_DIR  Worktree path (git mode only)
   WINDOW_ID     tmux window ID
   PAW_HOME      PAW installation directory
   PAW_BIN       PAW binary path
@@ -131,23 +139,7 @@ Fuzzy-searchable command palette for quick access to commands.
   Esc/⌃P      Close palette
 
 ### Available Commands
-  Settings       Configure PAW project settings
   Restore Panes  Restore missing panes in current task window
-
-## Settings UI (⌃P → Settings)
-
-Configure PAW settings with Global/Project scope support.
-
-### Navigation
-  ⌥Tab       Switch between Global and Project scope
-  Tab        Switch tab (General / Notifications)
-  ↑/↓/j/k    Navigate fields
-  ←/→/h/l    Change field value
-  Space      Toggle boolean fields
-  Enter      Edit text fields / Save and close
-  i          Toggle inherit from global (project scope only)
-  ⌃S         Save and close
-  Esc        Cancel
 
 ## Help Viewer (⌃/)
 

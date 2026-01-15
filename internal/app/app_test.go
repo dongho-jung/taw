@@ -113,11 +113,6 @@ func TestAppInitialize(t *testing.T) {
 		}
 	}
 
-	// Check memory file was created
-	memoryPath := filepath.Join(app.PawDir, constants.MemoryFileName)
-	if _, err := os.Stat(memoryPath); err != nil {
-		t.Errorf("Memory file was not created: %v", err)
-	}
 }
 
 func TestAppIsInitialized(t *testing.T) {
@@ -337,45 +332,6 @@ func TestAppGetEnvVarsWithoutWorktree(t *testing.T) {
 		if strings.HasPrefix(env, "WORKTREE_DIR=") {
 			t.Error("WORKTREE_DIR should not be present when worktreeDir is empty")
 		}
-	}
-}
-
-func TestEnsureMemoryFile(t *testing.T) {
-	tempDir := t.TempDir()
-	memoryPath := filepath.Join(tempDir, "memory")
-
-	// First call should create the file
-	if err := ensureMemoryFile(memoryPath); err != nil {
-		t.Fatalf("ensureMemoryFile() error = %v", err)
-	}
-
-	// File should exist
-	data, err := os.ReadFile(memoryPath)
-	if err != nil {
-		t.Fatalf("Memory file not created: %v", err)
-	}
-
-	if !strings.Contains(string(data), "PAW Memory") {
-		t.Errorf("Memory file should contain template content")
-	}
-
-	// Modify the file
-	if err := os.WriteFile(memoryPath, []byte("custom content"), 0644); err != nil {
-		t.Fatalf("Failed to modify memory file: %v", err)
-	}
-
-	// Second call should not overwrite
-	if err := ensureMemoryFile(memoryPath); err != nil {
-		t.Fatalf("ensureMemoryFile() error = %v", err)
-	}
-
-	data, err = os.ReadFile(memoryPath)
-	if err != nil {
-		t.Fatalf("Failed to read memory file: %v", err)
-	}
-
-	if string(data) != "custom content" {
-		t.Errorf("Memory file was overwritten, got: %s", string(data))
 	}
 }
 

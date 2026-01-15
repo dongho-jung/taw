@@ -83,7 +83,7 @@ func projectChecks(appCtx *app.App) []checkResult {
 		name:     "config",
 		ok:       configExists,
 		required: false,
-		message:  boolMessage(configExists, configPath, "missing (run paw setup)"),
+		message:  boolMessage(configExists, configPath, "missing (run paw to initialize)"),
 		fix: func() error {
 			cfg := config.DefaultConfig()
 			return cfg.Save(appCtx.PawDir)

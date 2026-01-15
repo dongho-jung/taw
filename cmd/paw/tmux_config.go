@@ -36,13 +36,8 @@ func setupTmuxConfig(appCtx *app.App, tm tmux.Client) error {
 		pawBin = "paw"
 	}
 
-	// Detect terminal theme and apply theme-aware colors
-	// Use config theme if set, otherwise auto-detect
-	themePreset := ThemePreset(appCtx.Config.Theme)
-	if themePreset == "" {
-		themePreset = ThemeAuto
-	}
-	resolved := resolveThemePreset(themePreset)
+	// Detect terminal theme and apply theme-aware colors (auto only)
+	resolved := resolveThemePreset(ThemeAuto)
 	applyTmuxTheme(tm, resolved)
 
 	// Change prefix to an unused key (M-F12) so C-b is available for toggle-bottom

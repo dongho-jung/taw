@@ -82,7 +82,7 @@ func (m *TaskInput) SetContent(content string) {
 // checkHistorySelection checks for a history selection file from Ctrl+R picker.
 // If found, it replaces the current content with the selected history item and deletes the file.
 func (m *TaskInput) checkHistorySelection() {
-	pawDir := findPawDir()
+	pawDir := m.pawDirPath()
 	if pawDir == "" {
 		return
 	}
@@ -100,6 +100,7 @@ func (m *TaskInput) checkHistorySelection() {
 		m.textarea.SetValue(content)
 		m.textarea.CursorEnd()
 		m.updateTextareaHeight()
+		m.persistTemplateDraft()
 	}
 
 	// Delete the file to prevent re-loading on next update

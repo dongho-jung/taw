@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/dongho-jung/paw/internal/app"
-	"github.com/dongho-jung/paw/internal/config"
 	"github.com/dongho-jung/paw/internal/git"
 )
 
@@ -16,10 +15,10 @@ var locationCmd = &cobra.Command{
 	Short: "Show workspace location for the current project",
 	Long: `Show where PAW stores workspace data for the current project.
 
-By default, PAW stores workspaces in ~/.local/share/paw/workspaces/{project-id}/
-to avoid modifying project .gitignore files.
+By default, PAW stores git project workspaces in ~/.local/share/paw/workspaces/{project-id}/
+to avoid modifying project .gitignore files, and uses .paw/ for non-git projects.
 
-This can be changed with the paw_in_project global setting.`,
+Use 'paw --local' to force a local .paw workspace for git projects.`,
 	RunE: runLocation,
 }
 
@@ -46,13 +45,6 @@ func runLocation(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create app: %w", err)
 	}
 
-	// Load global config to show paw_in_project setting
-	globalCfg, _ := config.LoadGlobal()
-	pawInProject := config.PawInProjectAuto
-	if globalCfg != nil {
-		pawInProject = globalCfg.PawInProject
-	}
-
 	// Print workspace location
 	fmt.Println(application.PawDir)
 
@@ -62,7 +54,10 @@ func runLocation(cmd *cobra.Command, args []string) error {
 	}
 
 	if application.IsGlobalWorkspace() {
-		fmt.Fprintf(os.Stderr, "(global workspace, paw_in_project=%s)\n", pawInProject)
+		fmt.Fprintf(os.Stderr, "(global workspace; auto mode for git projects)\n")
+		if application.IsGitRepo {
+			fmt.Fprintf(os.Stderr, "Tip: run `paw --local` to force a local .paw workspace.\n")
+		}
 	} else {
 		fmt.Fprintf(os.Stderr, "(local workspace in project directory)\n")
 	}

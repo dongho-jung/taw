@@ -28,14 +28,16 @@ const (
 
 // CommandPalette is a fuzzy-searchable command palette.
 type CommandPalette struct {
-	input    textinput.Model
-	commands []Command
-	filtered []Command
-	cursor   int
-	action   CommandPaletteAction
-	selected *Command
-	isDark   bool
-	colors   ThemeColors
+	input            textinput.Model
+	inputOffset      int
+	inputOffsetRight int
+	commands         []Command
+	filtered         []Command
+	cursor           int
+	action           CommandPaletteAction
+	selected         *Command
+	isDark           bool
+	colors           ThemeColors
 }
 
 // NewCommandPalette creates a new command palette.
@@ -47,10 +49,12 @@ func NewCommandPalette(commands []Command) *CommandPalette {
 	isDark := DetectDarkMode()
 
 	ti := textinput.New()
+	ti.Prompt = ""
 	ti.Placeholder = "Type to search..."
 	ti.Focus()
 	ti.CharLimit = 100
 	ti.SetWidth(40)
+	ti.VirtualCursor = false
 
 	return &CommandPalette{
 		input:    ti,
@@ -117,8 +121,13 @@ func (m *CommandPalette) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update filtered list based on input
 	m.updateFiltered()
+	m.syncInputOffset()
 
 	return m, cmd
+}
+
+func (m *CommandPalette) syncInputOffset() {
+	syncTextInputOffset([]rune(m.input.Value()), m.input.Position(), m.input.Width(), &m.inputOffset, &m.inputOffsetRight)
 }
 
 // updateFiltered filters commands based on input.
@@ -151,55 +160,9 @@ func (m *CommandPalette) updateFiltered() {
 	}
 }
 
-// renderInputWithCursor renders the text input value with a cursor at the correct position.
-// This handles CJK characters correctly by using rune-based cursor positioning.
-func (m *CommandPalette) renderInputWithCursor() string {
-	value := m.input.Value()
-	pos := m.input.Position()
-	runes := []rune(value)
-
-	// If no value, show placeholder with cursor
-	if len(runes) == 0 {
-		cursorStyle := lipgloss.NewStyle().Reverse(true)
-		placeholder := m.input.Placeholder
-		if len(placeholder) > 0 {
-			// Show cursor on first character of placeholder
-			return cursorStyle.Render(string(placeholder[0])) + placeholder[1:]
-		}
-		return cursorStyle.Render(" ")
-	}
-
-	// Clamp position to valid range
-	if pos > len(runes) {
-		pos = len(runes)
-	}
-	if pos < 0 {
-		pos = 0
-	}
-
-	cursorStyle := lipgloss.NewStyle().Reverse(true)
-
-	// Build the string with cursor
-	var sb strings.Builder
-
-	// Text before cursor
-	if pos > 0 {
-		sb.WriteString(string(runes[:pos]))
-	}
-
-	// Cursor character (or space if at end)
-	if pos < len(runes) {
-		sb.WriteString(cursorStyle.Render(string(runes[pos])))
-	} else {
-		sb.WriteString(cursorStyle.Render(" "))
-	}
-
-	// Text after cursor
-	if pos+1 < len(runes) {
-		sb.WriteString(string(runes[pos+1:]))
-	}
-
-	return sb.String()
+// renderInput prepares the text input line and cursor position.
+func (m *CommandPalette) renderInput() textInputRender {
+	return renderTextInput(m.input.Value(), m.input.Position(), m.input.Width(), m.input.Placeholder, m.inputOffset, m.inputOffsetRight)
 }
 
 // View renders the command palette.
@@ -238,14 +201,20 @@ func (m *CommandPalette) View() tea.View {
 		MarginTop(1)
 
 	var sb strings.Builder
+	line := 0
 
 	// Title
 	sb.WriteString(titleStyle.Render("Command Palette"))
 	sb.WriteString("\n\n")
+	line += 2
 
 	// Input - use custom rendering for proper Korean/CJK cursor positioning
-	sb.WriteString(inputStyle.Render(m.renderInputWithCursor()))
+	inputRender := m.renderInput()
+	inputBox := inputStyle.Render(inputRender.Text)
+	inputBoxTopY := line
+	sb.WriteString(inputBox)
 	sb.WriteString("\n\n")
+	line += lipgloss.Height(inputBox) + 2
 
 	// Filtered commands
 	if len(m.filtered) == 0 {
@@ -282,7 +251,15 @@ func (m *CommandPalette) View() tea.View {
 	// Help
 	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter: Execute  Esc/⌃P: Close"))
 
-	return tea.NewView(sb.String())
+	v := tea.NewView(sb.String())
+	if m.input.Focused() {
+		cursor := tea.NewCursor(2+inputRender.CursorX, inputBoxTopY+1)
+		cursor.Blink = m.input.Styles.Cursor.Blink
+		cursor.Color = m.input.Styles.Cursor.Color
+		cursor.Shape = m.input.Styles.Cursor.Shape
+		v.Cursor = cursor
+	}
+	return v
 }
 
 // Result returns the selected command and action.

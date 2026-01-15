@@ -435,7 +435,6 @@ func TestFileAndDirNames(t *testing.T) {
 		"HistoryDirName":   HistoryDirName,
 		"ConfigFileName":   ConfigFileName,
 		"LogFileName":      LogFileName,
-		"MemoryFileName":   MemoryFileName,
 		"PromptFileName":   PromptFileName,
 		"TaskFileName":     TaskFileName,
 		"TabLockDirName":   TabLockDirName,

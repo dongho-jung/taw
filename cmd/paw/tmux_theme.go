@@ -19,40 +19,11 @@ const (
 	ThemeAuto ThemePreset = "auto"
 
 	// Dark themes
-	ThemeDark       ThemePreset = "dark"
-	ThemeDarkBlue   ThemePreset = "dark-blue"
-	ThemeDarkGreen  ThemePreset = "dark-green"
-	ThemeDarkPurple ThemePreset = "dark-purple"
-	ThemeDarkWarm   ThemePreset = "dark-warm"
-	ThemeDarkMono   ThemePreset = "dark-mono"
+	ThemeDark ThemePreset = "dark"
 
 	// Light themes
-	ThemeLight       ThemePreset = "light"
-	ThemeLightBlue   ThemePreset = "light-blue"
-	ThemeLightGreen  ThemePreset = "light-green"
-	ThemeLightPurple ThemePreset = "light-purple"
-	ThemeLightWarm   ThemePreset = "light-warm"
-	ThemeLightMono   ThemePreset = "light-mono"
+	ThemeLight ThemePreset = "light"
 )
-
-// ValidThemePresets returns all valid theme preset names.
-func ValidThemePresets() []ThemePreset {
-	return []ThemePreset{
-		ThemeAuto,
-		ThemeDark, ThemeDarkBlue, ThemeDarkGreen, ThemeDarkPurple, ThemeDarkWarm, ThemeDarkMono,
-		ThemeLight, ThemeLightBlue, ThemeLightGreen, ThemeLightPurple, ThemeLightWarm, ThemeLightMono,
-	}
-}
-
-// IsValidThemePreset checks if a theme preset name is valid.
-func IsValidThemePreset(name string) bool {
-	for _, p := range ValidThemePresets() {
-		if string(p) == name {
-			return true
-		}
-	}
-	return false
-}
 
 // tmuxThemeColors holds theme-specific colors for tmux UI elements.
 type tmuxThemeColors struct {
@@ -76,88 +47,7 @@ type tmuxThemeColors struct {
 
 // getThemeColors returns colors for the specified theme preset.
 func getThemeColors(preset ThemePreset) tmuxThemeColors {
-	switch preset {
-	// ==================== DARK THEMES ====================
-	case ThemeDark:
-		return tmuxThemeColors{
-			statusFg:           "colour252", // light gray
-			statusBg:           "colour236", // dark gray
-			windowFg:           "colour252", // light gray
-			windowBg:           "default",
-			windowCurrentFg:    "colour231", // white
-			windowCurrentBg:    "colour24",  // blue
-			paneBorderFg:       "colour238", // dim gray
-			paneActiveBorderFg: "colour39",  // bright cyan
-			popupBorderFg:      "colour244", // medium gray
-		}
-
-	case ThemeDarkBlue:
-		return tmuxThemeColors{
-			statusFg:           "colour153", // light blue
-			statusBg:           "colour17",  // dark navy
-			windowFg:           "colour153", // light blue
-			windowBg:           "default",
-			windowCurrentFg:    "colour231", // white
-			windowCurrentBg:    "colour27",  // bright blue
-			paneBorderFg:       "colour24",  // dark blue
-			paneActiveBorderFg: "colour39",  // bright cyan-blue
-			popupBorderFg:      "colour68",  // steel blue
-		}
-
-	case ThemeDarkGreen:
-		return tmuxThemeColors{
-			statusFg:           "colour157", // light green
-			statusBg:           "colour22",  // dark green
-			windowFg:           "colour157", // light green
-			windowBg:           "default",
-			windowCurrentFg:    "colour231", // white
-			windowCurrentBg:    "colour28",  // green
-			paneBorderFg:       "colour22",  // dark green
-			paneActiveBorderFg: "colour46",  // bright green
-			popupBorderFg:      "colour71",  // sea green
-		}
-
-	case ThemeDarkPurple:
-		return tmuxThemeColors{
-			statusFg:           "colour183", // light purple
-			statusBg:           "colour53",  // dark purple
-			windowFg:           "colour183", // light purple
-			windowBg:           "default",
-			windowCurrentFg:    "colour231", // white
-			windowCurrentBg:    "colour93",  // purple
-			paneBorderFg:       "colour53",  // dark purple
-			paneActiveBorderFg: "colour135", // medium purple
-			popupBorderFg:      "colour97",  // medium purple
-		}
-
-	case ThemeDarkWarm:
-		return tmuxThemeColors{
-			statusFg:           "colour223", // light orange/cream
-			statusBg:           "colour52",  // dark red/brown
-			windowFg:           "colour223", // light orange
-			windowBg:           "default",
-			windowCurrentFg:    "colour231", // white
-			windowCurrentBg:    "colour166", // orange
-			paneBorderFg:       "colour94",  // brown
-			paneActiveBorderFg: "colour208", // bright orange
-			popupBorderFg:      "colour137", // tan
-		}
-
-	case ThemeDarkMono:
-		return tmuxThemeColors{
-			statusFg:           "colour250", // light gray
-			statusBg:           "colour235", // dark gray
-			windowFg:           "colour250", // light gray
-			windowBg:           "default",
-			windowCurrentFg:    "colour255", // white
-			windowCurrentBg:    "colour240", // medium gray
-			paneBorderFg:       "colour238", // dim gray
-			paneActiveBorderFg: "colour252", // light gray
-			popupBorderFg:      "colour244", // medium gray
-		}
-
-	// ==================== LIGHT THEMES ====================
-	case ThemeLight:
+	if preset == ThemeLight {
 		return tmuxThemeColors{
 			statusFg:           "colour236", // dark gray
 			statusBg:           "colour253", // light gray
@@ -169,75 +59,18 @@ func getThemeColors(preset ThemePreset) tmuxThemeColors {
 			paneActiveBorderFg: "colour25",  // dark blue
 			popupBorderFg:      "colour245", // medium gray
 		}
+	}
 
-	case ThemeLightBlue:
-		return tmuxThemeColors{
-			statusFg:           "colour17",  // dark navy
-			statusBg:           "colour153", // light blue
-			windowFg:           "colour17",  // dark navy
-			windowBg:           "default",
-			windowCurrentFg:    "colour231", // white
-			windowCurrentBg:    "colour27",  // blue
-			paneBorderFg:       "colour117", // light blue
-			paneActiveBorderFg: "colour27",  // blue
-			popupBorderFg:      "colour68",  // steel blue
-		}
-
-	case ThemeLightGreen:
-		return tmuxThemeColors{
-			statusFg:           "colour22",  // dark green
-			statusBg:           "colour157", // light green
-			windowFg:           "colour22",  // dark green
-			windowBg:           "default",
-			windowCurrentFg:    "colour231", // white
-			windowCurrentBg:    "colour28",  // green
-			paneBorderFg:       "colour158", // pale green
-			paneActiveBorderFg: "colour28",  // green
-			popupBorderFg:      "colour71",  // sea green
-		}
-
-	case ThemeLightPurple:
-		return tmuxThemeColors{
-			statusFg:           "colour53",  // dark purple
-			statusBg:           "colour183", // light purple
-			windowFg:           "colour53",  // dark purple
-			windowBg:           "default",
-			windowCurrentFg:    "colour231", // white
-			windowCurrentBg:    "colour93",  // purple
-			paneBorderFg:       "colour225", // pale pink
-			paneActiveBorderFg: "colour93",  // purple
-			popupBorderFg:      "colour97",  // medium purple
-		}
-
-	case ThemeLightWarm:
-		return tmuxThemeColors{
-			statusFg:           "colour94",  // brown
-			statusBg:           "colour223", // cream/peach
-			windowFg:           "colour94",  // brown
-			windowBg:           "default",
-			windowCurrentFg:    "colour231", // white
-			windowCurrentBg:    "colour166", // orange
-			paneBorderFg:       "colour223", // cream
-			paneActiveBorderFg: "colour166", // orange
-			popupBorderFg:      "colour137", // tan
-		}
-
-	case ThemeLightMono:
-		return tmuxThemeColors{
-			statusFg:           "colour235", // dark gray
-			statusBg:           "colour254", // near white
-			windowFg:           "colour235", // dark gray
-			windowBg:           "default",
-			windowCurrentFg:    "colour255", // white
-			windowCurrentBg:    "colour240", // medium gray
-			paneBorderFg:       "colour252", // light gray
-			paneActiveBorderFg: "colour238", // dim gray
-			popupBorderFg:      "colour245", // medium gray
-		}
-
-	default:
-		// Fall back to dark theme
-		return getThemeColors(ThemeDark)
+	return tmuxThemeColors{
+		statusFg:           "colour252", // light gray
+		statusBg:           "colour236", // dark gray
+		windowFg:           "colour252", // light gray
+		windowBg:           "default",
+		windowCurrentFg:    "colour231", // white
+		windowCurrentBg:    "colour24",  // blue
+		paneBorderFg:       "colour238", // dim gray
+		paneActiveBorderFg: "colour39",  // bright cyan
+		popupBorderFg:      "colour244", // medium gray
 	}
 }
 
@@ -360,9 +193,9 @@ func resolveThemePreset(preset ThemePreset) ThemePreset {
 // IsDarkTheme returns whether the given preset is a dark theme.
 func IsDarkTheme(preset ThemePreset) bool {
 	switch preset {
-	case ThemeDark, ThemeDarkBlue, ThemeDarkGreen, ThemeDarkPurple, ThemeDarkWarm, ThemeDarkMono:
+	case ThemeDark:
 		return true
-	case ThemeLight, ThemeLightBlue, ThemeLightGreen, ThemeLightPurple, ThemeLightWarm, ThemeLightMono:
+	case ThemeLight:
 		return false
 	case ThemeAuto:
 		return detectTerminalTheme()
