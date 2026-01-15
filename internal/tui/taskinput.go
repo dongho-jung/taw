@@ -233,9 +233,10 @@ func (m *TaskInput) Init() tea.Cmd {
 	return tea.Batch(textarea.Blink, m.tickCmd(), tea.RequestBackgroundColor)
 }
 
-// tickCmd returns a command that triggers a tick after 5 seconds.
+// tickCmd returns a command that triggers a tick after 1 second.
+// The short interval ensures responsive kanban updates for working tasks.
 func (m *TaskInput) tickCmd() tea.Cmd {
-	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
+	return tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }

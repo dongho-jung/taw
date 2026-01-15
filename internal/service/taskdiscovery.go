@@ -160,13 +160,18 @@ func (s *TaskDiscoveryService) discoverFromSocket(socketName string) []*Discover
 			CreatedAt: time.Now(), // We don't have exact creation time
 		}
 
-		// Capture pane content for preview and current action (pane .0)
-		// Use more lines (50) to find the spinner indicator which shows current action
-		agentPane := w.ID + ".0"
-		if capture, err := tm.CapturePane(agentPane, 50); err == nil {
-			task.Preview = trimPreview(capture)
-			task.CurrentAction = extractCurrentAction(capture)
-			task.Duration, task.Tokens = extractDurationAndTokens(capture)
+		// Only capture pane content for Working tasks (performance optimization)
+		// Done and Waiting tasks don't need continuous monitoring since their
+		// action/duration/tokens won't be changing
+		if status == DiscoveredWorking {
+			// Capture pane content for preview and current action (pane .0)
+			// Use more lines (50) to find the spinner indicator which shows current action
+			agentPane := w.ID + ".0"
+			if capture, err := tm.CapturePane(agentPane, 50); err == nil {
+				task.Preview = trimPreview(capture)
+				task.CurrentAction = extractCurrentAction(capture)
+				task.Duration, task.Tokens = extractDurationAndTokens(capture)
+			}
 		}
 
 		tasks = append(tasks, task)

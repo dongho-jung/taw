@@ -108,9 +108,6 @@ func (k *KanbanView) Render() string {
 		Foreground(dimColor).
 		Italic(true)
 
-	metadataStyle := lipgloss.NewStyle().
-		Foreground(dimColor)
-
 	// Calculate column width (3 columns with gaps)
 	// Minimum width per column
 	const minColumnWidth = 15
@@ -166,9 +163,19 @@ func (k *KanbanView) Render() string {
 		content.WriteString("\n")
 
 		// Tasks (limited by height, with scroll offset applied)
-		// Each task shows: project/name (line 1), duration/tokens and action (line 2+)
+		// Each task shows: project/name (line 1), action with duration/tokens (line 2+)
+		// Action lines are calculated dynamically based on available height
 		linesUsed := 2    // header + separator
 		linesSkipped := 0 // Track lines skipped for scroll
+
+		// Calculate available width for display
+		// columnWidth - 6 accounts for padding and borders
+		availableWidth := columnWidth - 6
+
+		// Calculate dynamic action lines per task based on available height
+		contentHeight := maxHeight - 2 // Subtract header + separator
+		actionLinesPerTask := calculateActionLinesPerTask(contentHeight, len(col.tasks))
+
 		for taskIdx, task := range col.tasks {
 			if linesUsed >= maxHeight {
 				break
@@ -181,24 +188,11 @@ func (k *KanbanView) Render() string {
 			// Build metadata string from duration and tokens
 			metadata := buildMetadataString(task.Duration, task.Tokens)
 
-			// Calculate available width for display
-			// columnWidth - 6 accounts for padding and borders
-			availableWidth := columnWidth - 6
-
-			// Determine if metadata fits on the same line as task name
-			// Need space for: fullName + " · " + metadata (3 chars for separator)
-			metadataOnSameLine := false
-			if metadata != "" && len(fullName)+3+len(metadata) <= availableWidth {
-				metadataOnSameLine = true
-			}
-
 			// Calculate how many lines this task will use (for scroll offset)
+			// 1 line for name + dynamic action lines (capped by actionLinesPerTask)
 			taskLines := 1
-			if metadata != "" && !metadataOnSameLine {
-				taskLines++ // metadata on separate line
-			}
-			if task.CurrentAction != "" {
-				taskLines++ // action line
+			if task.CurrentAction != "" || metadata != "" {
+				taskLines += min(actionLinesPerTask, 1) // At least 1 action line if there's content
 			}
 
 			// Apply scroll offset - skip lines until we've scrolled past them
@@ -210,24 +204,9 @@ func (k *KanbanView) Render() string {
 			// Determine if this task is selected
 			isSelected := k.focused && k.focusedCol == colIdx && k.selectedTaskIdx[colIdx] == taskIdx
 
-			// Build the display name with optional metadata on same line
+			// Build the display name (no metadata on name line anymore)
 			displayName := fullName
-			if metadataOnSameLine {
-				// Combine name and metadata on same line
-				combined := fullName + " · " + metadata
-				if len(combined) > availableWidth {
-					// Truncate the name part, keep metadata
-					maxNameLen := availableWidth - 3 - len(metadata) - 1 // -1 for ellipsis
-					if maxNameLen > 3 {
-						displayName = fullName[:maxNameLen] + "…" + " · " + metadata
-					} else {
-						// Not enough space, just truncate everything
-						displayName = combined[:availableWidth-1] + "…"
-					}
-				} else {
-					displayName = combined
-				}
-			} else if len(displayName) > availableWidth {
+			if len(displayName) > availableWidth {
 				displayName = displayName[:availableWidth-1] + "…"
 			}
 
@@ -240,27 +219,28 @@ func (k *KanbanView) Render() string {
 			content.WriteString("\n")
 			linesUsed++
 
-			// Show metadata on separate line if it didn't fit on the same line
-			if metadata != "" && !metadataOnSameLine && linesUsed < maxHeight {
-				metaDisplay := "  " + metadata
-				if len(metaDisplay) > availableWidth {
-					metaDisplay = metaDisplay[:availableWidth-1] + "…"
+			// Show action line(s) with metadata appended to the last line
+			// Format: "  Action · duration · tokens"
+			if linesUsed < maxHeight && (task.CurrentAction != "" || metadata != "") {
+				// Build action line with metadata
+				actionLine := task.CurrentAction
+				if actionLine == "" && metadata != "" {
+					// No action but have metadata - show just metadata
+					actionLine = metadata
+				} else if actionLine != "" && metadata != "" {
+					// Have both action and metadata - combine them
+					actionLine = actionLine + " · " + metadata
 				}
-				content.WriteString(metadataStyle.Render(metaDisplay))
-				content.WriteString("\n")
-				linesUsed++
-			}
 
-			// Show current action if available and space permits
-			if task.CurrentAction != "" && linesUsed < maxHeight {
-				action := task.CurrentAction
-				// Leave room for indent and truncation
-				maxActionLen := columnWidth - 8
-				if maxActionLen > 0 {
-					if len(action) > maxActionLen {
-						action = action[:maxActionLen-1] + "…"
+				// Truncate and display
+				// Leave room for indent (2 chars)
+				maxActionLen := availableWidth - 2
+				if maxActionLen > 0 && actionLine != "" {
+					displayAction := "  " + actionLine
+					if len(displayAction) > availableWidth {
+						displayAction = displayAction[:availableWidth-1] + "…"
 					}
-					content.WriteString("  " + actionStyle.Render(action))
+					content.WriteString(actionStyle.Render(displayAction))
 					content.WriteString("\n")
 					linesUsed++
 				}
@@ -500,15 +480,6 @@ func (k *KanbanView) maxScrollOffset() int {
 
 // maxTaskLinesInAnyColumn returns the max number of lines needed across all columns.
 func (k *KanbanView) maxTaskLinesInAnyColumn() int {
-	// Calculate column width to determine if metadata fits on same line
-	const minColumnWidth = 15
-	const columnGap = 6
-	columnWidth := (k.width - columnGap) / 3
-	if columnWidth < minColumnWidth {
-		columnWidth = minColumnWidth
-	}
-	availableWidth := columnWidth - 6
-
 	columns := [][]*service.DiscoveredTask{k.working, k.waiting, k.done}
 	maxLines := 0
 	for _, tasks := range columns {
@@ -516,15 +487,9 @@ func (k *KanbanView) maxTaskLinesInAnyColumn() int {
 		for _, task := range tasks {
 			lines++ // Task name
 
-			// Check if metadata goes on separate line
-			metadata := buildMetadataString(task.Duration, task.Tokens)
-			fullName := task.Session + "/" + constants.ToCamelCase(task.Name)
-			if metadata != "" && len(fullName)+3+len(metadata) > availableWidth {
-				lines++ // Metadata on separate line
-			}
-
-			if task.CurrentAction != "" {
-				lines++ // Current action
+			// Action line (with metadata appended) - 1 line if either exists
+			if task.CurrentAction != "" || task.Duration != "" || task.Tokens != "" {
+				lines++
 			}
 		}
 		if lines > maxLines {
@@ -894,22 +859,13 @@ func (k *KanbanView) GetTaskAtPosition(col, row int) *service.DiscoveredTask {
 		return nil
 	}
 
-	// Calculate column width to determine if metadata fits on same line
-	const minColumnWidth = 15
-	const columnGap = 6
-	columnWidth := (k.width - columnGap) / 3
-	if columnWidth < minColumnWidth {
-		columnWidth = minColumnWidth
-	}
-	availableWidth := columnWidth - 6
-
 	// Account for header (2 lines: title + separator)
 	// The border adds 1 line at the top, so content starts at row 1 within the rendered kanban
 	// Layout within each column:
 	// Row 0: top border
 	// Row 1: header (emoji + title + count)
 	// Row 2: separator (───)
-	// Row 3+: tasks (each task takes 1-3 lines)
+	// Row 3+: tasks (each task takes 1-2 lines)
 	taskStartRow := 3
 
 	// Adjust for scroll offset
@@ -920,20 +876,14 @@ func (k *KanbanView) GetTaskAtPosition(col, row int) *service.DiscoveredTask {
 	}
 
 	// Find which task is at the adjusted row
-	// Each task takes 1 line (name), optionally +1 for metadata, +1 for action
+	// Each task takes 1 line (name) + 1 line (action with metadata) if either exists
 	currentLine := 0
 	for _, task := range tasks {
 		taskLines := 1 // Task name
 
-		// Check if metadata goes on separate line
-		metadata := buildMetadataString(task.Duration, task.Tokens)
-		fullName := task.Session + "/" + constants.ToCamelCase(task.Name)
-		if metadata != "" && len(fullName)+3+len(metadata) > availableWidth {
-			taskLines++ // Metadata on separate line
-		}
-
-		if task.CurrentAction != "" {
-			taskLines++ // Action line
+		// Action line (with metadata appended) - 1 line if either exists
+		if task.CurrentAction != "" || task.Duration != "" || task.Tokens != "" {
+			taskLines++
 		}
 
 		if adjustedRow >= currentLine && adjustedRow < currentLine+taskLines {
@@ -958,4 +908,28 @@ func buildMetadataString(duration, tokens string) string {
 		return duration
 	}
 	return duration + " · " + tokens
+}
+
+// calculateActionLinesPerTask calculates how many action lines to show per task
+// based on available height and number of tasks in the column.
+// This allows dynamic display of more content when there's plenty of space.
+func calculateActionLinesPerTask(contentHeight, taskCount int) int {
+	if taskCount == 0 {
+		return 1
+	}
+
+	// Each task needs at least 1 line for the name
+	// Remaining lines can be used for action content
+	linesPerTask := contentHeight / taskCount
+	actionLines := linesPerTask - 1 // Subtract 1 for the task name line
+
+	// Clamp to reasonable bounds: minimum 1, maximum 3 action lines
+	if actionLines < 1 {
+		actionLines = 1
+	}
+	if actionLines > 3 {
+		actionLines = 3
+	}
+
+	return actionLines
 }
