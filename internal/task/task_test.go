@@ -281,7 +281,7 @@ func TestTaskGetWindowName(t *testing.T) {
 			name:       "corrupted status displays as waiting",
 			taskName:   "my-task",
 			status:     StatusCorrupted,
-			wantPrefix: constants.EmojiWaiting, // Corrupted now displays as Waiting (Warning removed from UI)
+			wantPrefix: constants.EmojiWaiting, // Corrupted displays as Waiting.
 		},
 		{
 			name:       "long name truncated",

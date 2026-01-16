@@ -80,8 +80,10 @@ var stopHookCmd = &cobra.Command{
 			return nil
 		}
 
+		pawDir := os.Getenv("PAW_DIR")
+
 		// Setup logging if PAW_DIR is available
-		if pawDir := os.Getenv("PAW_DIR"); pawDir != "" {
+		if pawDir != "" {
 			_, cleanup := setupLogger(filepath.Join(pawDir, constants.LogFileName), os.Getenv("PAW_DEBUG") == "1", "stop-hook", taskName)
 			defer cleanup()
 		}
@@ -127,7 +129,6 @@ var stopHookCmd = &cobra.Command{
 
 		// Check status signal file first (highest priority - Claude writes directly)
 		// This is more reliable than terminal parsing since it's a direct file write.
-		pawDir := os.Getenv("PAW_DIR")
 		if pawDir != "" {
 			signalPath := filepath.Join(pawDir, "agents", taskName, constants.StatusSignalFileName)
 			if signalStatus := readAndClearStatusSignal(signalPath); signalStatus != "" {
@@ -137,7 +138,7 @@ var stopHookCmd = &cobra.Command{
 				newName := windowNameForStatus(taskName, signalStatus)
 				stopHookTrace("Renaming window from status signal task=%s windowID=%s to status=%s", taskName, windowID, signalStatus)
 
-				if err := renameWindowCmd.RunE(renameWindowCmd, []string{windowID, newName}); err != nil {
+				if err := renameWindowWithStatus(tm, windowID, newName, pawDir, taskName, "stop-hook", signalStatus); err != nil {
 					logging.Warn("stopHookCmd: failed to rename window: %v", err)
 					stopHookTrace("Rename FAILED task=%s error=%v", taskName, err)
 					return nil
@@ -192,7 +193,7 @@ var stopHookCmd = &cobra.Command{
 		newName := windowNameForStatus(taskName, status)
 		stopHookTrace("Renaming window task=%s windowID=%s to status=%s newName=%s", taskName, windowID, status, newName)
 
-		if err := renameWindowCmd.RunE(renameWindowCmd, []string{windowID, newName}); err != nil {
+		if err := renameWindowWithStatus(tm, windowID, newName, pawDir, taskName, "stop-hook", status); err != nil {
 			logging.Warn("stopHookCmd: failed to rename window: %v", err)
 			stopHookTrace("Rename FAILED task=%s error=%v", taskName, err)
 			return nil
@@ -211,9 +212,6 @@ func classifyStopStatus(taskName, paneContent string) (task.Status, error) {
 	// (PAW_WAITING, AskUserQuestion tool, UI patterns) which are more reliable
 	// than text-based classification that can produce false positives from
 	// conversational phrases like "please test" or "please check".
-	//
-	// NOTE: WARNING status has been removed from UI. Error states now map to WAITING
-	// to indicate user attention is needed.
 
 	// Fast path: Check for obvious idle prompt patterns before calling Claude
 	if isIdlePromptPattern(paneContent) {
@@ -385,29 +383,15 @@ func parseStopHookDecision(output string) (task.Status, bool) {
 	cleaned = strings.Trim(cleaned, "`\"' \t\r\n")
 	upper := strings.ToUpper(cleaned)
 
-	// NOTE: WAITING is mapped to WORKING because the watch-wait watcher
-	// handles WAITING detection more accurately using specific markers.
-	// This prevents false positives from text-based classification.
-	//
-	// NOTE: WARNING is also mapped to WAITING (StatusCorrupted) which now
-	// displays as Waiting in UI (Warning status removed from UI).
 	switch {
 	case strings.HasPrefix(upper, "WORKING"):
 		return task.StatusWorking, true
-	case strings.HasPrefix(upper, "WAITING"):
-		return task.StatusWorking, true // Map to WORKING - let watch-wait handle it
 	case strings.HasPrefix(upper, "DONE"):
 		return task.StatusDone, true
-	case strings.HasPrefix(upper, "WARNING"), strings.HasPrefix(upper, "WARN"):
-		return task.StatusWaiting, true // Map to WAITING - Warning removed from UI
 	case strings.Contains(upper, "WORKING"):
 		return task.StatusWorking, true
-	case strings.Contains(upper, "WAITING"):
-		return task.StatusWorking, true // Map to WORKING - let watch-wait handle it
 	case strings.Contains(upper, "DONE"):
 		return task.StatusDone, true
-	case strings.Contains(upper, "WARNING"):
-		return task.StatusWaiting, true // Map to WAITING - Warning removed from UI
 	default:
 		return "", false
 	}
@@ -417,7 +401,7 @@ func windowNameForStatus(taskName string, status task.Status) string {
 	emoji := constants.EmojiWorking
 	switch status {
 	case task.StatusWaiting, task.StatusCorrupted:
-		// Corrupted status now displays as Waiting (Warning removed from UI)
+		// Corrupted status displays as Waiting.
 		emoji = constants.EmojiWaiting
 	case task.StatusDone:
 		emoji = constants.EmojiDone

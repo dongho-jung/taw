@@ -199,12 +199,8 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 			}
 			if !windowKilled {
 				token := constants.TruncateForWindowName(t.Name)
-				legacy := constants.LegacyTruncateForWindowName(t.Name)
 				if windowID, ok := taskWindowMap[token]; ok {
 					logging.Debug("Killing window %s (by name) for merged task %s", windowID, t.Name)
-					_ = tm.KillWindow(windowID)
-				} else if windowID, ok := taskWindowMap[legacy]; ok {
-					logging.Debug("Killing window %s (legacy name) for merged task %s", windowID, t.Name)
 					_ = tm.KillWindow(windowID)
 				}
 			}

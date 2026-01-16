@@ -75,8 +75,7 @@ func (m *Manager) FindIncompleteTasks(sessionName string) ([]*Task, error) {
 	for _, task := range tasks {
 		// Skip if task already has a window (by task name)
 		tokenName := constants.TruncateForWindowName(task.Name)
-		legacyName := constants.LegacyTruncateForWindowName(task.Name)
-		if activeTaskNames[tokenName] || activeTaskNames[legacyName] {
+		if activeTaskNames[tokenName] {
 			continue
 		}
 
@@ -267,9 +266,7 @@ func (m *Manager) FindStoppedTasks() ([]*StoppedTaskInfo, error) {
 		}
 
 		// Skip done windows (task already completed)
-		// Also skip legacy warning windows for backward compatibility
-		if strings.HasPrefix(w.Name, constants.EmojiDone) ||
-			strings.HasPrefix(w.Name, constants.EmojiWarning) {
+		if strings.HasPrefix(w.Name, constants.EmojiDone) {
 			continue
 		}
 

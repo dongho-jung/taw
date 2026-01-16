@@ -35,9 +35,6 @@ const (
 	DiscoveredWorking DiscoveredStatus = "working"
 	DiscoveredWaiting DiscoveredStatus = "waiting"
 	DiscoveredDone    DiscoveredStatus = "done"
-	// DiscoveredWarning is kept for backward compatibility with old windows.
-	// New windows no longer use Warning status; it maps to Waiting.
-	DiscoveredWarning DiscoveredStatus = "warning"
 )
 
 // TaskDiscoveryService discovers tasks across all PAW sessions.
@@ -63,7 +60,6 @@ func NewTaskDiscoveryService() *TaskDiscoveryService {
 
 // DiscoverAll finds all PAW tasks across all sessions.
 // Returns tasks grouped by status for Kanban display (3 columns: Working, Waiting, Done).
-// Note: Warning status is merged into Waiting (Warning column removed from UI).
 func (s *TaskDiscoveryService) DiscoverAll() (working, waiting, done []*DiscoveredTask) {
 	sockets := s.findPawSockets()
 
@@ -79,13 +75,12 @@ func (s *TaskDiscoveryService) DiscoverAll() (working, waiting, done []*Discover
 		return allTasks[i].CreatedAt.Before(allTasks[j].CreatedAt)
 	})
 
-	// Group by status (Warning merged into Waiting)
+	// Group by status
 	for _, task := range allTasks {
 		switch task.Status {
 		case DiscoveredWorking:
 			working = append(working, task)
-		case DiscoveredWaiting, DiscoveredWarning:
-			// Warning tasks now display in Waiting column
+		case DiscoveredWaiting:
 			waiting = append(waiting, task)
 		case DiscoveredDone:
 			done = append(done, task)
@@ -225,7 +220,6 @@ func buildTokenMap(pawDir string) map[string]string {
 		}
 		name := entry.Name()
 		mapping[constants.TruncateForWindowName(name)] = name
-		mapping[constants.LegacyTruncateForWindowName(name)] = name
 	}
 
 	return mapping
@@ -252,8 +246,6 @@ func parseWindowName(windowName string) (string, DiscoveredStatus) {
 		return strings.TrimPrefix(windowName, constants.EmojiWaiting), DiscoveredWaiting
 	case strings.HasPrefix(windowName, constants.EmojiDone):
 		return strings.TrimPrefix(windowName, constants.EmojiDone), DiscoveredDone
-	case strings.HasPrefix(windowName, constants.EmojiWarning):
-		return strings.TrimPrefix(windowName, constants.EmojiWarning), DiscoveredWarning
 	}
 
 	return "", ""
@@ -323,6 +315,7 @@ func extractCurrentAction(capture string) string {
 // Example formats:
 //   - "✻ Whirring… (ctrl+c to interrupt · 54s · ↓ 2.7k tokens)"
 //   - "⏺ Reading file… (ctrl+c to interrupt · 1m 36s · ↓ 5.9k tokens · thought for 2s)"
+//
 // Returns duration (e.g., "54s", "1m 36s") and tokens (e.g., "↓ 2.7k").
 func extractDurationAndTokens(capture string) (duration, tokens string) {
 	lines := strings.Split(capture, "\n")
