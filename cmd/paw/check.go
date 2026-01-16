@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -206,16 +207,21 @@ func checkClaudeMem() checkResult {
 		return result
 	}
 
-	candidates := []string{
-		filepath.Join(homeDir, ".claude", "plugins", "marketplaces", "thedotmack", "claude-mem"),
-		filepath.Join(homeDir, ".claude", "plugins", "claude-mem"),
-	}
-
-	for _, path := range candidates {
-		if pathExists(path) {
-			result.ok = true
-			result.message = fmt.Sprintf("installed (%s)", path)
-			return result
+	// Check installed_plugins.json for claude-mem
+	installedPluginsPath := filepath.Join(homeDir, ".claude", "plugins", "installed_plugins.json")
+	data, err := os.ReadFile(installedPluginsPath)
+	if err == nil {
+		var pluginsFile struct {
+			Plugins map[string][]struct {
+				Version string `json:"version"`
+			} `json:"plugins"`
+		}
+		if json.Unmarshal(data, &pluginsFile) == nil {
+			if entries, ok := pluginsFile.Plugins["claude-mem@thedotmack"]; ok && len(entries) > 0 {
+				result.ok = true
+				result.message = fmt.Sprintf("installed (v%s)", entries[0].Version)
+				return result
+			}
 		}
 	}
 
