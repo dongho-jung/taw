@@ -5,12 +5,23 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/logging"
 )
+
+func pathsMatch(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	resolvedA, errA := filepath.EvalSymlinks(a)
+	resolvedB, errB := filepath.EvalSymlinks(b)
+	if errA == nil && errB == nil {
+		return filepath.Clean(resolvedA) == filepath.Clean(resolvedB)
+	}
+	return false
+}
 
 // checkWorktreeStatus checks the status of a task's worktree.
 func (m *Manager) checkWorktreeStatus(task *Task) CorruptedReason {
@@ -45,7 +56,7 @@ func (m *Manager) checkWorktreeStatus(task *Task) CorruptedReason {
 
 	registered := false
 	for _, wt := range worktrees {
-		if wt.Path == worktreeDir || strings.HasSuffix(wt.Path, "/"+filepath.Base(worktreeDir)) {
+		if pathsMatch(wt.Path, worktreeDir) {
 			registered = true
 			break
 		}
@@ -208,11 +219,11 @@ func (m *Manager) executePreWorktreeHook(worktreeDir string) {
 
 // GetWorkingDirectory returns the working directory for a task.
 // For worktree mode: returns the worktree directory (git worktree)
-// For non-worktree mode: returns the agent directory (Claude works in origin/)
+// For non-worktree mode: returns the project directory (shared workspace)
 func (m *Manager) GetWorkingDirectory(task *Task) string {
 	if m.shouldUseWorktree() {
 		return task.GetWorktreeDir()
 	}
-	// Non-worktree mode: Claude runs in agent dir, accesses project via origin/ symlink
-	return task.AgentDir
+	// Non-worktree mode: Claude runs in the project directory.
+	return m.projectDir
 }

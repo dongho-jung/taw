@@ -99,6 +99,9 @@ var newTaskCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		_ = os.Setenv("PAW_DIR", appCtx.PawDir)
+		_ = os.Setenv("PROJECT_DIR", appCtx.ProjectDir)
+		_ = os.Setenv("SESSION_NAME", appCtx.SessionName)
 
 		// Setup logging
 		_, cleanup := setupLoggerFromApp(appCtx, "new-task", "")

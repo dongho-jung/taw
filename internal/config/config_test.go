@@ -246,57 +246,6 @@ pre_worktree_hook: npm install
 	}
 }
 
-func TestParseConfig_PawInProject(t *testing.T) {
-	tests := []struct {
-		name     string
-		content  string
-		expected PawInProject
-	}{
-		{
-			name:     "paw_in_project auto",
-			content:  "paw_in_project: auto\n",
-			expected: PawInProjectAuto,
-		},
-		{
-			name:     "paw_in_project global",
-			content:  "paw_in_project: global\n",
-			expected: PawInProjectGlobal,
-		},
-		{
-			name:     "paw_in_project local",
-			content:  "paw_in_project: local\n",
-			expected: PawInProjectLocal,
-		},
-		{
-			name:     "paw_in_project true (legacy)",
-			content:  "paw_in_project: true\n",
-			expected: PawInProjectLocal, // legacy true = local
-		},
-		{
-			name:     "paw_in_project false (legacy)",
-			content:  "paw_in_project: false\n",
-			expected: PawInProjectGlobal, // legacy false = global
-		},
-		{
-			name:     "paw_in_project not set",
-			content:  "",
-			expected: PawInProjectAuto, // default is auto
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := parseConfig(tt.content)
-			if err != nil {
-				t.Fatalf("parseConfig failed: %v", err)
-			}
-			if cfg.PawInProject != tt.expected {
-				t.Errorf("PawInProject = %v, want %v", cfg.PawInProject, tt.expected)
-			}
-		})
-	}
-}
-
 func TestGlobalWorkspacesDir(t *testing.T) {
 	dir := GlobalWorkspacesDir()
 	if dir == "" {
@@ -411,41 +360,6 @@ func TestGetWorkspaceDir_AutoNonGit(t *testing.T) {
 	}
 }
 
-func TestSave_PawInProject(t *testing.T) {
-	tests := []struct {
-		name string
-		mode PawInProject
-	}{
-		{"auto", PawInProjectAuto},
-		{"global", PawInProjectGlobal},
-		{"local", PawInProjectLocal},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tempDir := t.TempDir()
-
-			cfg := &Config{
-				PawInProject: tt.mode,
-			}
-
-			if err := cfg.Save(tempDir); err != nil {
-				t.Fatalf("Save() error = %v", err)
-			}
-
-			// Load and verify
-			loaded, err := Load(tempDir)
-			if err != nil {
-				t.Fatalf("Load() error = %v", err)
-			}
-
-			if loaded.PawInProject != cfg.PawInProject {
-				t.Errorf("PawInProject = %v, want %v", loaded.PawInProject, cfg.PawInProject)
-			}
-		})
-	}
-}
-
 func TestEnsureConfigInDir_CreatesConfigIfMissing(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, constants.ConfigFileName)
@@ -471,9 +385,6 @@ func TestEnsureConfigInDir_CreatesConfigIfMissing(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if cfg.PawInProject != PawInProjectAuto {
-		t.Errorf("PawInProject = %v, want %v", cfg.PawInProject, PawInProjectAuto)
-	}
 	if cfg.LogFormat != "text" {
 		t.Errorf("LogFormat = %q, want %q", cfg.LogFormat, "text")
 	}
@@ -485,7 +396,6 @@ func TestEnsureConfigInDir_DoesNotOverwriteExisting(t *testing.T) {
 
 	// Create a custom config first
 	customCfg := &Config{
-		PawInProject:    PawInProjectLocal,
 		PreWorktreeHook: "custom-hook",
 	}
 	if err := customCfg.Save(tempDir); err != nil {
@@ -508,9 +418,6 @@ func TestEnsureConfigInDir_DoesNotOverwriteExisting(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if cfg.PawInProject != PawInProjectLocal {
-		t.Errorf("PawInProject = %v, want %v (custom value)", cfg.PawInProject, PawInProjectLocal)
-	}
 	if cfg.PreWorktreeHook != "custom-hook" {
 		t.Errorf("PreWorktreeHook = %q, want %q (custom value)", cfg.PreWorktreeHook, "custom-hook")
 	}

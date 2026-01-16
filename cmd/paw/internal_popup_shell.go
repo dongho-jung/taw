@@ -257,12 +257,7 @@ func checkAndRecoverStdinInjection(tm tmux.Client, t *task.Task, windowID, agent
 	}
 
 	// Build and send task instruction
-	var taskInstruction string
-	if taskOpts.Ultrathink {
-		taskInstruction = fmt.Sprintf("ultrathink Read and execute the task from '%s'", userPromptPath)
-	} else {
-		taskInstruction = fmt.Sprintf("Read and execute the task from '%s'", userPromptPath)
-	}
+	taskInstruction := buildTaskInstruction(userPromptPath, taskOpts.Ultrathink)
 
 	logging.Debug("Sending task instruction: ultrathink=%v", taskOpts.Ultrathink)
 

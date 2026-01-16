@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/dongho-jung/paw/internal/app"
+	"github.com/dongho-jung/paw/internal/config"
 	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/tmux"
@@ -38,6 +39,7 @@ It manages tasks in tmux sessions with optional git worktree isolation.`,
 }
 
 var showVersion bool
+var forceLocal bool
 
 func init() {
 	// Set version for TUI display
@@ -50,7 +52,6 @@ func init() {
 	rootCmd.AddCommand(killCmd)
 	rootCmd.AddCommand(killAllCmd)
 	rootCmd.AddCommand(locationCmd)
-	rootCmd.AddCommand(setupCmd)
 	rootCmd.AddCommand(logsCmd)
 	rootCmd.AddCommand(historyCmd)
 	rootCmd.AddCommand(windowMapCmd)
@@ -61,6 +62,7 @@ func init() {
 
 	// Add -v/--version flag to root command
 	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Print version information")
+	rootCmd.Flags().BoolVar(&forceLocal, "local", false, "Force local .paw workspace for git repositories")
 }
 
 // checkVersionFlag checks if -v flag was passed and prints version if so
@@ -106,13 +108,6 @@ This command:
 	RunE: runCleanAll,
 }
 
-var setupCmd = &cobra.Command{
-	Use:   "setup",
-	Short: "Run the setup wizard",
-	Long:  "Configure PAW settings for the current project",
-	RunE:  runSetup,
-}
-
 // runMain is the main entry point - starts or attaches to a tmux session
 func runMain(cmd *cobra.Command, args []string) error {
 	// Check for -v flag first
@@ -144,9 +139,14 @@ func runMain(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	workspaceMode := config.PawInProjectAuto
+	if forceLocal {
+		workspaceMode = config.PawInProjectLocal
+	}
+
 	// Create app context with appropriate project directory
 	// Pass isGitRepo to ensure correct workspace location in auto mode
-	application, err := app.NewWithGitInfo(projectDir, isGitRepo)
+	application, err := app.NewWithGitInfoWithWorkspace(projectDir, isGitRepo, workspaceMode)
 	if err != nil {
 		return fmt.Errorf("failed to create app: %w", err)
 	}
@@ -171,11 +171,10 @@ func runMain(cmd *cobra.Command, args []string) error {
 	// Bootstrap logger (stdout) until config loads
 	logging.SetGlobal(logging.NewStdout(application.Debug))
 
-	// Check if config exists, run setup if not
+	// Ensure config exists (create defaults on first run)
 	if !application.HasConfig() {
-		fmt.Println("No configuration found. Running setup...")
-		if err := runSetupWizard(application); err != nil {
-			return err
+		if err := config.DefaultConfig().Save(application.PawDir); err != nil {
+			return fmt.Errorf("failed to write default config: %w", err)
 		}
 	}
 

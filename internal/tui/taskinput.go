@@ -37,6 +37,9 @@ const optFieldCount = 2
 // cancelDoublePressTimeout is the time window for double-press cancel detection.
 const cancelDoublePressTimeout = 2 * time.Second
 
+// Duration for the transient template jump tip.
+const templateTipDuration = 3 * time.Second
+
 // Textarea height constants
 const (
 	textareaMinHeight     = 5  // Minimum textarea height in lines
@@ -54,6 +57,7 @@ type TaskInput struct {
 	options     *config.TaskOptions
 	activeTasks []string // Active task names for dependency selection
 	isDark      bool     // Cached dark mode detection (must be detected before bubbletea starts)
+	pawDir      string
 
 	// Dynamic textarea height
 	textareaHeight    int // Current textarea height (visible lines)
@@ -91,6 +95,10 @@ type TaskInput struct {
 	currentTip     string
 	lastTipRefresh time.Time
 
+	// Template draft tracking for Ctrl+T
+	lastTemplateDraft string
+	templateTipUntil  time.Time
+
 	// Cross-project jump target (set when user requests to jump to external project)
 	jumpTarget *JumpTarget
 }
@@ -100,6 +108,9 @@ type tickMsg time.Time
 
 // cancelClearMsg is used to clear the cancel pending state after timeout.
 type cancelClearMsg struct{}
+
+// templateTipClearMsg triggers a redraw after the transient template tip expires.
+type templateTipClearMsg struct{}
 
 // JumpTarget contains information for jumping to a task in an external project.
 type JumpTarget struct {
@@ -145,6 +156,7 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 
 	// Enable real cursor for proper IME support (Korean input)
 	ta.VirtualCursor = false
+	ta.HighlightToken = templatePlaceholderToken
 
 	// Custom styling using v2 API - assign directly to Styles field
 	applyTaskInputTextareaTheme(&ta, isDark)
@@ -167,6 +179,7 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 		options:           opts,
 		activeTasks:       activeTasks,
 		isDark:            isDark,
+		pawDir:            findPawDir(),
 		textareaHeight:    textareaDefaultHeight,
 		textareaMaxHeight: 15, // Will be updated on WindowSizeMsg
 		optionsPanelWidth: 43, // Default, will be updated on WindowSizeMsg for alignment
@@ -220,9 +233,10 @@ func (m *TaskInput) Init() tea.Cmd {
 	return tea.Batch(textarea.Blink, m.tickCmd(), tea.RequestBackgroundColor)
 }
 
-// tickCmd returns a command that triggers a tick after 5 seconds.
+// tickCmd returns a command that triggers a tick after 1 second.
+// The short interval ensures responsive kanban updates for working tasks.
 func (m *TaskInput) tickCmd() tea.Cmd {
-	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
+	return tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
@@ -305,6 +319,11 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Check for history selection file (from Ctrl+R picker)
 	// This replaces the current content with the selected history item
 	m.checkHistorySelection()
+	if m.checkTemplateSelection() {
+		cmds = append(cmds, tea.Tick(templateTipDuration, func(t time.Time) tea.Msg {
+			return templateTipClearMsg{}
+		}))
+	}
 
 	switch msg := msg.(type) {
 	case tickMsg:
@@ -324,6 +343,10 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cancelKey = ""
 		return m, nil
 
+	case templateTipClearMsg:
+		// No-op; triggers a redraw after the transient tip window elapses.
+		return m, nil
+
 	case jumpToTaskMsg:
 		if msg.jumpTarget != nil {
 			// Cross-project jump - store the target and exit TUI
@@ -338,6 +361,12 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		isDark := msg.IsDark()
 		setCachedDarkMode(isDark)
 		m.applyTheme(isDark)
+		return m, nil
+
+	case tea.FocusMsg:
+		// When terminal gains focus (user switches to this window),
+		// automatically focus the task input textarea
+		m.switchFocusTo(FocusPanelLeft)
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -443,6 +472,13 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			return m, nil
+
+		case "tab":
+			if m.focusPanel == FocusPanelLeft {
+				if m.jumpToNextTemplatePlaceholder() {
+					return m, nil
+				}
+			}
 
 		// Toggle panel: Alt+Tab (cycle through input box, options, and non-empty kanban columns)
 		// Cycle order: Left → Right → Kanban(non-empty cols only) → Left
@@ -611,11 +647,11 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update textarea height dynamically based on content
 		m.updateTextareaHeight()
+		m.persistTemplateDraft()
 	}
 
 	return m, tea.Batch(cmds...)
 }
-
 
 // View renders the task input.
 func (m *TaskInput) View() tea.View {
@@ -674,7 +710,14 @@ func (m *TaskInput) View() tea.View {
 			Bold(true)
 		tipText = warningStyle.Render("  ⚠️  Terminal too small - content may be truncated")
 	} else {
-		tipText = tipStyle.Render("  Tip: " + m.currentTip)
+		if time.Now().Before(m.templateTipUntil) {
+			templateTipStyle := lipgloss.NewStyle().
+				Foreground(lightDark(lipgloss.Color("24"), lipgloss.Color("214"))).
+				Bold(true)
+			tipText = templateTipStyle.Render("  Tip: Tab to jump to next ___ placeholder")
+		} else {
+			tipText = tipStyle.Render("  Tip: " + m.currentTip)
+		}
 	}
 
 	leftContent := versionText + projectText + tipText
@@ -738,6 +781,7 @@ func (m *TaskInput) View() tea.View {
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
+	v.ReportFocus = true
 	// Use AllMotion for better tmux mouse passthrough compatibility
 	// CellMotion was causing tmux to intercept mouse events and use its own copy-mode
 	// (line-by-line selection at window level instead of cell-based TUI selection)
@@ -752,8 +796,8 @@ func (m *TaskInput) View() tea.View {
 			// Clamp cursor Y to textarea visible bounds as a safety measure
 			// This prevents cursor from appearing outside the box in edge cases
 			// (e.g., during rapid scrolling or when soft-wrapping changes)
-			minY := 2                           // help text (1) + top border (1)
-			maxY := 2 + m.textareaHeight - 1    // last visible content line
+			minY := 2                        // help text (1) + top border (1)
+			maxY := 2 + m.textareaHeight - 1 // last visible content line
 			if cursor.Y < minY {
 				cursor.Y = minY
 			} else if cursor.Y > maxY {
@@ -766,5 +810,3 @@ func (m *TaskInput) View() tea.View {
 
 	return v
 }
-
-

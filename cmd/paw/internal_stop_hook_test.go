@@ -17,12 +17,9 @@ func TestParseStopHookDecision(t *testing.T) {
 	}{
 		{name: "working exact", output: "WORKING", want: task.StatusWorking, ok: true},
 		{name: "working lowercase", output: "working", want: task.StatusWorking, ok: true},
-		{name: "waiting exact maps to working", output: "WAITING", want: task.StatusWorking, ok: true}, // WAITING -> WORKING (watch-wait handles it)
 		{name: "done lowercase", output: "done", want: task.StatusDone, ok: true},
-		{name: "warning exact", output: "WARNING", want: task.StatusWaiting, ok: true}, // WARNING -> WAITING (removed from UI)
-		{name: "warning prefix", output: "warn", want: task.StatusWaiting, ok: true},  // WARNING -> WAITING (removed from UI)
 		{name: "contains working", output: "Status: WORKING", want: task.StatusWorking, ok: true},
-		{name: "contains waiting maps to working", output: "Result: WAITING", want: task.StatusWorking, ok: true}, // WAITING -> WORKING
+		{name: "contains done", output: "Status: DONE", want: task.StatusDone, ok: true},
 		{name: "unknown", output: "maybe", want: "", ok: false},
 	}
 
@@ -252,12 +249,12 @@ func TestHasWaitingMarker(t *testing.T) {
 // 3. Agent outputs PAW_WAITING (should become Waiting, not stay Done)
 func TestWaitingPriorityOverDone(t *testing.T) {
 	tests := []struct {
-		name          string
-		content       string
-		hasWaiting    bool
-		hasDone       bool
-		hasAskUser    bool
-		expectedPrio  string // "waiting" or "done" or "classify"
+		name         string
+		content      string
+		hasWaiting   bool
+		hasDone      bool
+		hasAskUser   bool
+		expectedPrio string // "waiting" or "done" or "classify"
 	}{
 		{
 			name:         "only done marker",
@@ -640,12 +637,12 @@ Let me analyze this...
 			want: false,
 		},
 		{
-			name: "empty content",
+			name:    "empty content",
 			content: "",
 			want:    false,
 		},
 		{
-			name: "single line content",
+			name:    "single line content",
 			content: "Just one line",
 			want:    false,
 		},

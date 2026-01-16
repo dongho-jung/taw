@@ -24,7 +24,7 @@ $PAW_DIR/agents/$TASK_NAME/
 ├── task           # Your task description (READ THIS FIRST)
 ├── log            # Task-specific log file (write progress here)
 ├── origin/        # -> PROJECT_DIR (symlink)
-└── worktree/      # Your working directory
+└── {project-name}-{hash}/  # Your working directory (git worktree)
 ```
 
 ---
@@ -305,24 +305,13 @@ PR #42 created
 
 ---
 
-## Project Memory (.paw/memory)
+## Project Memory (claude-mem)
 
-Use `.paw/memory` as a shared, durable knowledge base across tasks.
+PAW uses claude-mem for shared, durable memory across tasks/workspaces.
 
-- Update it when you learn reusable info (tests, build/lint commands, setup steps, gotchas).
-- **Update in place** (no append-only logs). Keep entries concise and deduplicated.
-- If missing, create it using a simple YAML map with `tests`, `commands`, and `notes`.
-
-Example format:
-```
-version: 1
-tests:
-  default: "go test ./..."
-commands:
-  build: "make build"
-notes:
-  verification: "UI changes need manual review in browser."
-```
+- Memory is stored automatically by claude-mem.
+- Use mem-search or the MCP tools (`search`, `timeline`, `get_observations`) when you need prior context.
+- Use `<private>` tags to exclude sensitive info from memory.
 
 ---
 

@@ -330,6 +330,103 @@ var historyPickerCmd = &cobra.Command{
 	},
 }
 
+var toggleTemplateCmd = &cobra.Command{
+	Use:   "toggle-template [session]",
+	Short: "Toggle template picker popup",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+		tm := tmux.New(sessionName)
+
+		appCtx, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		pawBin, err := os.Executable()
+		if err != nil {
+			pawBin = "paw"
+		}
+
+		templateCmd := fmt.Sprintf("%s internal template-picker %s", pawBin, sessionName)
+
+		_ = tm.DisplayPopup(tmux.PopupOpts{
+			Width:     constants.PopupWidthTemplate,
+			Height:    constants.PopupHeightTemplate,
+			Title:     " Templates (⌃T) ",
+			Close:     true,
+			Style:     "fg=terminal,bg=terminal",
+			Directory: appCtx.ProjectDir,
+		}, templateCmd)
+		return nil
+	},
+}
+
+var templatePickerCmd = &cobra.Command{
+	Use:    "template-picker [session]",
+	Short:  "Run the template picker",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		appCtx, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		_, cleanup := setupLoggerFromApp(appCtx, "template-picker", "")
+		defer cleanup()
+
+		templateSvc := service.NewTemplateService(appCtx.PawDir)
+		templates, err := templateSvc.LoadTemplates()
+		if err != nil {
+			logging.Warn("Failed to load templates: %v", err)
+			fmt.Println("Failed to load templates.")
+			return nil
+		}
+
+		draftPath := filepath.Join(appCtx.PawDir, constants.TemplateDraftFile)
+		draftContent := ""
+		if data, err := os.ReadFile(draftPath); err == nil {
+			draftContent = string(data)
+			logging.Debug("templatePickerCmd: loaded draft (path=%s, bytes=%d)", draftPath, len(data))
+		} else {
+			logging.Debug("templatePickerCmd: no draft (path=%s, err=%v)", draftPath, err)
+		}
+
+		action, selected, updated, dirty, err := tui.RunTemplatePicker(templates, draftContent)
+		if err != nil {
+			logging.Warn("Failed to run template picker: %v", err)
+			return nil
+		}
+		if selected != nil {
+			logging.Debug("templatePickerCmd: result action=%v selected=%s selectedBytes=%d dirty=%v", action, selected.Name, len(selected.Content), dirty)
+		} else {
+			logging.Debug("templatePickerCmd: result action=%v selected=nil dirty=%v", action, dirty)
+		}
+
+		if dirty {
+			if err := templateSvc.SaveTemplates(updated); err != nil {
+				logging.Warn("Failed to save templates: %v", err)
+			} else {
+				logging.Debug("templatePickerCmd: saved templates count=%d", len(updated))
+			}
+		}
+
+		if action == tui.TemplatePickerSelect && selected != nil {
+			selectionPath := filepath.Join(appCtx.PawDir, constants.TemplateSelectionFile)
+			if err := os.WriteFile(selectionPath, []byte(selected.Content), 0644); err != nil {
+				logging.Warn("Failed to write template selection: %v", err)
+			} else {
+				logging.Debug("templatePickerCmd: wrote selection (path=%s, bytes=%d)", selectionPath, len(selected.Content))
+			}
+		}
+
+		return nil
+	},
+}
+
 var toggleProjectPickerCmd = &cobra.Command{
 	Use:   "toggle-project-picker [session]",
 	Short: "Toggle project picker popup to switch between PAW sessions",
@@ -448,4 +545,3 @@ var projectPickerCmd = &cobra.Command{
 		return nil
 	},
 }
-

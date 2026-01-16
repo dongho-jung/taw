@@ -182,18 +182,6 @@ var endTaskCmd = &cobra.Command{
 				logging.Warn("Failed to save history: %v", err)
 			}
 
-			// Run self-improve if enabled
-			if appCtx.Config != nil && appCtx.Config.SelfImprove && appCtx.IsGitRepo {
-				selfImproveSpinner := tui.NewSimpleSpinner("Running self-improve analysis")
-				selfImproveSpinner.Start()
-
-				if err := runSelfImprove(appCtx.ProjectDir, targetTask.Name, taskContent, paneContent, gitClient); err != nil {
-					selfImproveSpinner.Stop(false, err.Error())
-					logging.Warn("Self-improve failed: %v", err)
-				} else {
-					selfImproveSpinner.Stop(true, "")
-				}
-			}
 		} else {
 			// Clean up temp file for drop action too
 			if paneCaptureFile != "" {
@@ -405,7 +393,7 @@ func runAutoMerge(appCtx *app.App, targetTask *task.Task, windowID, workDir stri
 	hasLocalChanges := gitClient.HasChanges(appCtx.ProjectDir)
 	if hasLocalChanges {
 		logging.Debug("Stashing local changes...")
-		if err := gitClient.StashPush(appCtx.ProjectDir, "paw-merge-temp"); err != nil {
+		if err := gitClient.StashPush(appCtx.ProjectDir, constants.MergeStashMessage); err != nil {
 			logging.Warn("Failed to stash changes: %v", err)
 		}
 	}
@@ -416,10 +404,10 @@ func runAutoMerge(appCtx *app.App, targetTask *task.Task, windowID, workDir stri
 	// Perform the actual merge
 	mergeSuccess := performMerge(appCtx, targetTask, windowID, workDir, mainBranch, currentBranch, hasLocalChanges, gitClient, mergeTimer)
 
-	// Restore stashed changes
+	// Restore stashed changes by message (not blind pop)
 	if hasLocalChanges {
 		logging.Debug("Restoring stashed changes...")
-		if err := gitClient.StashPop(appCtx.ProjectDir); err != nil {
+		if err := gitClient.StashPopByMessage(appCtx.ProjectDir, constants.MergeStashMessage); err != nil {
 			logging.Warn("Failed to restore stashed changes: %v", err)
 		}
 	}
@@ -644,9 +632,9 @@ func handleMergeFailure(appCtx *app.App, targetTask *task.Task, windowID string,
 	logging.Warn("Merge failed - keeping task for manual resolution")
 	fmt.Println()
 	fmt.Println("  ✗ Merge failed - manual resolution needed")
-	warningWindowName := windowNameForStatus(targetTask.Name, task.StatusCorrupted)
-	logging.Trace("endTaskCmd: renaming window to warning state name=%s", warningWindowName)
-	if err := renameWindowWithStatus(tm, windowID, warningWindowName, appCtx.PawDir, targetTask.Name, "end-task"); err != nil {
+	corruptedWindowName := windowNameForStatus(targetTask.Name, task.StatusCorrupted)
+	logging.Trace("endTaskCmd: renaming window to corrupted state name=%s", corruptedWindowName)
+	if err := renameWindowWithStatus(tm, windowID, corruptedWindowName, appCtx.PawDir, targetTask.Name, "end-task", task.StatusCorrupted); err != nil {
 		logging.Warn("Failed to rename window: %v", err)
 	}
 	logging.Trace("endTaskCmd: playing SoundError for merge failure task=%s", targetTask.Name)

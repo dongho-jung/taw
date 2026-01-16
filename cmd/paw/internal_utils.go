@@ -62,7 +62,7 @@ var renameWindowCmd = &cobra.Command{
 
 		// Sound and notifications are handled centrally in renameWindowWithStatus
 		// to ensure all status change paths trigger alerts
-		if err := renameWindowWithStatus(tm, windowID, name, pawDir, taskName, "rename-window"); err != nil {
+		if err := renameWindowWithStatus(tm, windowID, name, pawDir, taskName, "rename-window", ""); err != nil {
 			return err
 		}
 
@@ -76,8 +76,6 @@ func statusFromWindowName(name string) task.Status {
 		return task.StatusDone
 	case strings.HasPrefix(name, constants.EmojiWaiting):
 		return task.StatusWaiting
-	case strings.HasPrefix(name, constants.EmojiWarning):
-		return task.StatusCorrupted
 	case strings.HasPrefix(name, constants.EmojiWorking):
 		return task.StatusWorking
 	}
@@ -121,12 +119,15 @@ func setupLoggerFromApp(appCtx *app.App, scriptName, taskName string) (logging.L
 	return setupLogger(appCtx.GetLogPath(), appCtx.Debug, scriptName, taskName)
 }
 
-func renameWindowWithStatus(tm tmux.Client, windowID, name, pawDir, taskName, source string) error {
+func renameWindowWithStatus(tm tmux.Client, windowID, name, pawDir, taskName, source string, statusOverride task.Status) error {
 	if err := tm.RenameWindow(windowID, name); err != nil {
 		return err
 	}
 
-	status := statusFromWindowName(name)
+	status := statusOverride
+	if status == "" {
+		status = statusFromWindowName(name)
+	}
 	if status == "" || pawDir == "" || taskName == "" {
 		return nil
 	}
@@ -152,7 +153,7 @@ func renameWindowWithStatus(tm tmux.Client, windowID, name, pawDir, taskName, so
 	// This centralized notification ensures DONE state always triggers alerts.
 	//
 	// NOTE: WAITING state is handled by watch-wait watcher (wait.go) which provides
-	// action buttons and prompt context. Warning states now also display as WAITING.
+	// action buttons and prompt context. Corrupted states also display as WAITING.
 	if prevStatus != status && status == task.StatusDone {
 		logging.Info("renameWindowWithStatus: sending done notification for task=%s", taskName)
 		notify.PlaySound(notify.SoundTaskCompleted)
@@ -280,13 +281,20 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 	}
 
 	// No local .paw found - try using cwd directly
-	// This handles the case where paw_in_project is false (global workspace)
-	// app.NewWithGitInfo will resolve to the correct global workspace path
+	// This handles the case where the workspace is stored globally (auto mode for git repos)
+	// We need to check if it's a git repo to resolve the correct workspace path
 	logging.Debug("getAppFromSession: no local .paw found, trying cwd=%s", cwd)
 	isGitRepo := gitClient.IsGitRepo(cwd)
-	application, err := app.NewWithGitInfo(cwd, isGitRepo)
+	projectDir := cwd
+	if isGitRepo {
+		if repoRoot, err := gitClient.GetRepoRoot(cwd); err == nil {
+			projectDir = repoRoot
+		}
+	}
+	logging.Debug("getAppFromSession: isGitRepo=%v, projectDir=%s", isGitRepo, projectDir)
+	application, err := app.NewWithGitInfo(projectDir, isGitRepo)
 	if err != nil {
-		logging.Debug("getAppFromSession: app.NewWithGitInfo(cwd) failed: %v", err)
+		logging.Debug("getAppFromSession: app.NewWithGitInfo failed: %v", err)
 		return nil, fmt.Errorf("could not find project directory for session %s", sessionName)
 	}
 
@@ -325,4 +333,12 @@ func getShell() string {
 		shell = "/bin/bash"
 	}
 	return shell
+}
+
+func buildTaskInstruction(userPromptPath string, ultrathink bool) string {
+	base := fmt.Sprintf("Read and execute the task from '%s'", userPromptPath)
+	if ultrathink {
+		base = "ultrathink " + base
+	}
+	return fmt.Sprintf("<private>%s</private>\nPAW task start", base)
 }

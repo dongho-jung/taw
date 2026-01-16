@@ -2,10 +2,13 @@
 package task
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dongho-jung/paw/internal/claude"
 	"github.com/dongho-jung/paw/internal/config"
@@ -56,6 +59,60 @@ func (m *Manager) shouldUseWorktree() bool {
 	return m.isGitRepo
 }
 
+func (m *Manager) preferredWorktreeDir(task *Task) string {
+	return filepath.Join(task.AgentDir, m.projectWorktreeName())
+}
+
+func (m *Manager) resolveWorktreeDir(task *Task) string {
+	return m.preferredWorktreeDir(task)
+}
+
+func (m *Manager) projectWorktreeName() string {
+	base := sanitizeWorktreeBase(filepath.Base(m.projectDir))
+	hashSuffix := m.projectDirHashSuffix()
+	// Use a short hash suffix to keep claude-mem project keys stable and unique.
+	return base + "-" + hashSuffix
+}
+
+func sanitizeWorktreeBase(base string) string {
+	if base == "" || base == "." || base == string(filepath.Separator) {
+		return "worktree"
+	}
+	clean := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r
+		case r >= '0' && r <= '9':
+			return r
+		case r == '-' || r == '_':
+			return r
+		default:
+			return '-'
+		}
+	}, base)
+	if clean == "" {
+		return "worktree"
+	}
+	if len(clean) > 32 {
+		clean = clean[:32]
+	}
+	return clean
+}
+
+func (m *Manager) projectDirHashSuffix() string {
+	path := m.projectDir
+	if resolved, err := filepath.EvalSymlinks(path); err == nil && resolved != "" {
+		path = resolved
+	}
+	if abs, err := filepath.Abs(path); err == nil && abs != "" {
+		path = abs
+	}
+	sum := sha256.Sum256([]byte(path))
+	return hex.EncodeToString(sum[:])[:5]
+}
+
 // CreateTask creates a new task with the given content.
 // It generates a task name using Claude and creates the task directory atomically.
 func (m *Manager) CreateTask(content string) (*Task, error) {
@@ -87,6 +144,9 @@ func (m *Manager) CreateTask(content string) (*Task, error) {
 	logging.Debug("Task directory created: %s", agentDir)
 
 	task := New(name, agentDir)
+	if m.shouldUseWorktree() {
+		task.WorktreeDir = m.preferredWorktreeDir(task)
+	}
 
 	// Save task content
 	if err := task.SaveContent(content); err != nil {
@@ -151,7 +211,7 @@ func (m *Manager) GetTask(name string) (*Task, error) {
 
 	// Set worktree directory
 	if m.shouldUseWorktree() {
-		task.WorktreeDir = task.GetWorktreeDir()
+		task.WorktreeDir = m.resolveWorktreeDir(task)
 	}
 
 	return task, nil
@@ -184,4 +244,3 @@ func (m *Manager) ListTasks() ([]*Task, error) {
 
 	return tasks, nil
 }
-

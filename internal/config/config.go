@@ -13,28 +13,6 @@ import (
 	"github.com/dongho-jung/paw/internal/logging"
 )
 
-// InheritConfig defines which fields inherit from global config.
-// Only used in project-level config.
-type InheritConfig struct {
-	Theme         bool `yaml:"theme"`
-	LogFormat     bool `yaml:"log_format"`
-	LogMaxSizeMB  bool `yaml:"log_max_size_mb"`
-	LogMaxBackups bool `yaml:"log_max_backups"`
-	SelfImprove   bool `yaml:"self_improve"`
-}
-
-// DefaultInheritConfig returns the default inherit configuration.
-// By default, all settings are inherited from global config.
-func DefaultInheritConfig() *InheritConfig {
-	return &InheritConfig{
-		Theme:         true,
-		LogFormat:     true,
-		LogMaxSizeMB:  true,
-		LogMaxBackups: true,
-		SelfImprove:   true,
-	}
-}
-
 // GlobalPawDir returns the global PAW directory path ($HOME/.config/paw).
 func GlobalPawDir() string {
 	home, err := os.UserHomeDir()
@@ -45,7 +23,7 @@ func GlobalPawDir() string {
 }
 
 // GlobalWorkspacesDir returns the global workspaces directory path ($HOME/.local/share/paw/workspaces).
-// This is used when paw_in_project is false (default).
+// This is used for git projects in auto mode.
 func GlobalWorkspacesDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -86,8 +64,7 @@ func ProjectWorkspaceID(projectDir string) string {
 
 // GetWorkspaceDir returns the workspace directory for a project.
 // If localPawDir exists, it takes priority (for backward compatibility).
-// Otherwise, uses global workspace location based on pawInProject setting.
-// isGitRepo is used when pawInProject is "auto": git -> global, non-git -> local.
+// Otherwise, it uses auto mode (git -> global, non-git -> local) unless overridden.
 func GetWorkspaceDir(projectDir string, pawInProject PawInProject, isGitRepo bool) string {
 	// Local .paw takes priority if it exists
 	localPawDir := filepath.Join(projectDir, constants.PawDirName)
@@ -122,11 +99,6 @@ func GetWorkspaceDir(projectDir string, pawInProject PawInProject, isGitRepo boo
 	}
 
 	return filepath.Join(globalDir, ProjectWorkspaceID(projectDir))
-}
-
-// ValidPawInProjectModes returns all valid paw_in_project modes.
-func ValidPawInProjectModes() []PawInProject {
-	return []PawInProject{PawInProjectAuto, PawInProjectGlobal, PawInProjectLocal}
 }
 
 // LoadGlobal reads the global configuration from $HOME/.config/paw/config.
@@ -207,21 +179,14 @@ const (
 
 // Config represents the PAW project configuration.
 type Config struct {
-	Theme           string       `yaml:"theme"`          // Theme preset: auto, dark, dark-blue, light, light-blue, etc.
-	PawInProject    PawInProject `yaml:"paw_in_project"` // Workspace location: auto, global, or local
-	PreWorktreeHook string       `yaml:"pre_worktree_hook"`
-	PreTaskHook     string       `yaml:"pre_task_hook"`
-	PostTaskHook    string       `yaml:"post_task_hook"`
-	PreMergeHook    string       `yaml:"pre_merge_hook"`
-	PostMergeHook   string       `yaml:"post_merge_hook"`
-	LogFormat       string       `yaml:"log_format"`
-	LogMaxSizeMB    int          `yaml:"log_max_size_mb"`
-	LogMaxBackups   int          `yaml:"log_max_backups"`
-	SelfImprove     bool         `yaml:"self_improve"`
-
-	// Inherit specifies which fields inherit from global config.
-	// Only used in project-level config files.
-	Inherit *InheritConfig `yaml:"inherit"`
+	PreWorktreeHook string `yaml:"pre_worktree_hook"`
+	PreTaskHook     string `yaml:"pre_task_hook"`
+	PostTaskHook    string `yaml:"post_task_hook"`
+	PreMergeHook    string `yaml:"pre_merge_hook"`
+	PostMergeHook   string `yaml:"post_merge_hook"`
+	LogFormat       string `yaml:"log_format"`
+	LogMaxSizeMB    int    `yaml:"log_max_size_mb"`
+	LogMaxBackups   int    `yaml:"log_max_backups"`
 }
 
 // Normalize validates configuration values, applying safe defaults when needed.
@@ -254,37 +219,9 @@ func (c *Config) Normalize() []string {
 // DefaultConfig returns the default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		PawInProject:  PawInProjectAuto,
 		LogFormat:     "text",
 		LogMaxSizeMB:  10,
 		LogMaxBackups: 3,
-	}
-}
-
-// MergeWithGlobal applies inherited values from global config.
-// Fields marked for inheritance in cfg.Inherit will be copied from global.
-func (c *Config) MergeWithGlobal(global *Config) {
-	if c == nil || global == nil {
-		return
-	}
-	if c.Inherit == nil {
-		return
-	}
-
-	if c.Inherit.Theme {
-		c.Theme = global.Theme
-	}
-	if c.Inherit.LogFormat {
-		c.LogFormat = global.LogFormat
-	}
-	if c.Inherit.LogMaxSizeMB {
-		c.LogMaxSizeMB = global.LogMaxSizeMB
-	}
-	if c.Inherit.LogMaxBackups {
-		c.LogMaxBackups = global.LogMaxBackups
-	}
-	if c.Inherit.SelfImprove {
-		c.SelfImprove = global.SelfImprove
 	}
 }
 
@@ -294,10 +231,6 @@ func (c *Config) Clone() *Config {
 		return nil
 	}
 	clone := *c
-	if c.Inherit != nil {
-		inherit := *c.Inherit
-		clone.Inherit = &inherit
-	}
 	return &clone
 }
 
@@ -337,13 +270,7 @@ func (c *Config) Save(pawDir string) error {
 	configPath := filepath.Join(pawDir, constants.ConfigFileName)
 
 	content := fmt.Sprintf(`# PAW Configuration
-# Generated by paw setup
-
-# Workspace location: auto, global, or local (default: auto)
-# - auto: Git repo -> global, non-git -> local (recommended)
-# - global: Store workspace in $HOME/.local/share/paw/workspaces/ (no .gitignore needed)
-# - local: Store .paw directory inside the project (requires .gitignore)
-paw_in_project: %s
+# Generated by paw
 
 # Log format: text or jsonl
 log_format: %s
@@ -352,18 +279,13 @@ log_format: %s
 log_max_size_mb: %d
 log_max_backups: %d
 
-# Self-improve: on or off (default: off)
-# When enabled, the agent reflects on mistakes at task finish and
-# appends learnings to CLAUDE.md, then merges to the default branch.
-self_improve: %t
-
 # Hooks (optional) (supports multi-line command with ': |')
 # pre_worktree_hook: echo "pre worktree"
 # pre_task_hook: echo "pre task"
 # post_task_hook: echo "post task"
 # pre_merge_hook: echo "pre merge"
 # post_merge_hook: echo "post merge"
-`, c.PawInProject, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups, c.SelfImprove)
+`, c.LogFormat, c.LogMaxSizeMB, c.LogMaxBackups)
 
 	// Add hooks if set
 	if c.PreWorktreeHook != "" {
@@ -380,11 +302,6 @@ self_improve: %t
 	}
 	if c.PostMergeHook != "" {
 		content += formatHook("post_merge_hook", c.PostMergeHook)
-	}
-
-	// Add inherit block if set (project config only)
-	if c.Inherit != nil {
-		content += formatInheritBlock(c.Inherit)
 	}
 
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {

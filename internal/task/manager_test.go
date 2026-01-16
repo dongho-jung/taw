@@ -103,16 +103,6 @@ func TestFindTaskByTruncatedName(t *testing.T) {
 		}
 	})
 
-	t.Run("find by legacy truncated name", func(t *testing.T) {
-		task, err := mgr.FindTaskByTruncatedName(constants.LegacyTruncateForWindowName(longTaskName))
-		if err != nil {
-			t.Fatalf("FindTaskByTruncatedName returned error: %v", err)
-		}
-		if task.Name != longTaskName {
-			t.Fatalf("Expected task name %s, got %s", longTaskName, task.Name)
-		}
-	})
-
 	t.Run("not found", func(t *testing.T) {
 		_, err := mgr.FindTaskByTruncatedName("nonexistent-t")
 		if !errors.Is(err, ErrTaskNotFound) {

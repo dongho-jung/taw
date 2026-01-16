@@ -848,3 +848,181 @@ func TestIsFileTracked(t *testing.T) {
 		t.Error("IsFileTracked() = true for non-existent file, want false")
 	}
 }
+
+func TestStashList(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// No stashes initially
+	entries, err := client.StashList(gitDir)
+	if err != nil {
+		t.Fatalf("StashList() error = %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("StashList() returned %d entries, want 0", len(entries))
+	}
+
+	// Create a file and stash it
+	_ = os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	if err := client.StashPush(gitDir, "test-stash-message"); err != nil {
+		t.Fatalf("StashPush() error = %v", err)
+	}
+
+	// Should have one stash now
+	entries, err = client.StashList(gitDir)
+	if err != nil {
+		t.Fatalf("StashList() error = %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("StashList() returned %d entries, want 1", len(entries))
+	}
+	if entries[0].Index != 0 {
+		t.Errorf("StashEntry.Index = %d, want 0", entries[0].Index)
+	}
+	if !contains(entries[0].Message, "test-stash-message") {
+		t.Errorf("StashEntry.Message = %q, want to contain 'test-stash-message'", entries[0].Message)
+	}
+}
+
+func TestStashPopByMessage(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Create a file and stash it with a specific message
+	_ = os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	if err := client.StashPush(gitDir, "paw-merge-temp"); err != nil {
+		t.Fatalf("StashPush() error = %v", err)
+	}
+
+	// Verify stash was created
+	entries, _ := client.StashList(gitDir)
+	if len(entries) != 1 {
+		t.Fatalf("Expected 1 stash entry, got %d", len(entries))
+	}
+
+	// Pop by message
+	if err := client.StashPopByMessage(gitDir, "paw-merge-temp"); err != nil {
+		t.Fatalf("StashPopByMessage() error = %v", err)
+	}
+
+	// Stash should be gone
+	entries, _ = client.StashList(gitDir)
+	if len(entries) != 0 {
+		t.Errorf("StashList() after pop returned %d entries, want 0", len(entries))
+	}
+
+	// File should be restored
+	if !client.HasChanges(gitDir) {
+		t.Error("HasChanges() = false after StashPopByMessage, want true (file should be restored)")
+	}
+}
+
+func TestStashPopByMessageWithMultipleStashes(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Create first stash (the one we want to pop)
+	_ = os.WriteFile(filepath.Join(gitDir, "first.txt"), []byte("first"), 0644)
+	if err := client.StashPush(gitDir, "paw-merge-temp"); err != nil {
+		t.Fatalf("StashPush() error = %v", err)
+	}
+
+	// Create second stash (a different one)
+	_ = os.WriteFile(filepath.Join(gitDir, "second.txt"), []byte("second"), 0644)
+	if err := client.StashPush(gitDir, "other-stash"); err != nil {
+		t.Fatalf("StashPush() error = %v", err)
+	}
+
+	// Verify both stashes exist
+	entries, _ := client.StashList(gitDir)
+	if len(entries) != 2 {
+		t.Fatalf("Expected 2 stash entries, got %d", len(entries))
+	}
+
+	// Pop by specific message (should pop the older one, not the recent one)
+	if err := client.StashPopByMessage(gitDir, "paw-merge-temp"); err != nil {
+		t.Fatalf("StashPopByMessage() error = %v", err)
+	}
+
+	// Only one stash should remain
+	entries, _ = client.StashList(gitDir)
+	if len(entries) != 1 {
+		t.Errorf("StashList() after pop returned %d entries, want 1", len(entries))
+	}
+
+	// The remaining stash should be "other-stash"
+	if !contains(entries[0].Message, "other-stash") {
+		t.Errorf("Remaining stash message = %q, want to contain 'other-stash'", entries[0].Message)
+	}
+}
+
+func TestStashPopByMessageNotFound(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Pop a non-existent stash should not error (no-op)
+	if err := client.StashPopByMessage(gitDir, "non-existent-stash"); err != nil {
+		t.Errorf("StashPopByMessage() error = %v, want nil for non-existent stash", err)
+	}
+}
+
+func TestStashDropByMessage(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Create a file and stash it
+	_ = os.WriteFile(filepath.Join(gitDir, "new.txt"), []byte("content"), 0644)
+	if err := client.StashPush(gitDir, "paw-merge-temp"); err != nil {
+		t.Fatalf("StashPush() error = %v", err)
+	}
+
+	// Verify stash was created
+	entries, _ := client.StashList(gitDir)
+	if len(entries) != 1 {
+		t.Fatalf("Expected 1 stash entry, got %d", len(entries))
+	}
+
+	// Drop by message
+	if err := client.StashDropByMessage(gitDir, "paw-merge-temp"); err != nil {
+		t.Fatalf("StashDropByMessage() error = %v", err)
+	}
+
+	// Stash should be gone
+	entries, _ = client.StashList(gitDir)
+	if len(entries) != 0 {
+		t.Errorf("StashList() after drop returned %d entries, want 0", len(entries))
+	}
+
+	// File should NOT be restored (drop doesn't apply)
+	if client.HasChanges(gitDir) {
+		t.Error("HasChanges() = true after StashDropByMessage, want false (drop should not apply changes)")
+	}
+}
+
+func TestStashDropByMessageNotFound(t *testing.T) {
+	client := New()
+	gitDir := setupGitRepo(t)
+
+	// Create initial commit
+	createCommit(t, gitDir, "README.md", "test", "Initial commit")
+
+	// Drop a non-existent stash should not error (no-op)
+	if err := client.StashDropByMessage(gitDir, "non-existent-stash"); err != nil {
+		t.Errorf("StashDropByMessage() error = %v, want nil for non-existent stash", err)
+	}
+}

@@ -120,6 +120,7 @@ func collectCheckResults() []checkResult {
 	results := []checkResult{
 		checkTmux(),
 		checkClaude(),
+		checkClaudeMem(),
 		checkGit(),
 		checkGh(),
 	}
@@ -191,6 +192,35 @@ func checkClaude() checkResult {
 	}
 	result.ok = true
 	result.message = fmt.Sprintf("installed (%s)", version)
+	return result
+}
+
+// checkClaudeMem verifies the claude-mem plugin is installed.
+func checkClaudeMem() checkResult {
+	result := checkResult{name: "claude-mem", required: false}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		result.ok = false
+		result.message = "not installed - unable to resolve home directory"
+		return result
+	}
+
+	candidates := []string{
+		filepath.Join(homeDir, ".claude", "plugins", "marketplaces", "thedotmack", "claude-mem"),
+		filepath.Join(homeDir, ".claude", "plugins", "claude-mem"),
+	}
+
+	for _, path := range candidates {
+		if pathExists(path) {
+			result.ok = true
+			result.message = fmt.Sprintf("installed (%s)", path)
+			return result
+		}
+	}
+
+	result.ok = false
+	result.message = "not installed - run /plugin marketplace add thedotmack/claude-mem"
 	return result
 }
 

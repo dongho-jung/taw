@@ -191,55 +191,6 @@ func runClean(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runSetup runs the setup wizard
-func runSetup(cmd *cobra.Command, args []string) error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	// If in git repo, use repo root as project directory
-	gitClient := git.New()
-	isGitRepo := gitClient.IsGitRepo(cwd)
-	projectDir := cwd
-	if isGitRepo {
-		if repoRoot, err := gitClient.GetRepoRoot(cwd); err == nil {
-			projectDir = repoRoot
-		}
-	}
-
-	application, err := app.New(projectDir)
-	if err != nil {
-		return err
-	}
-
-	application.SetGitRepo(isGitRepo)
-
-	// Initialize .paw directory
-	if err := application.Initialize(); err != nil {
-		return err
-	}
-
-	return runSetupWizard(application)
-}
-
-// runSetupWizard runs the interactive setup wizard
-func runSetupWizard(appCtx *app.App) error {
-	cfg := config.DefaultConfig()
-
-	fmt.Println("\n🚀 PAW Setup Wizard")
-
-	// Save configuration
-	if err := cfg.Save(appCtx.PawDir); err != nil {
-		return fmt.Errorf("failed to save configuration: %w", err)
-	}
-
-	fmt.Println("\n✅ Configuration saved!")
-	fmt.Printf("   Workspace: %s\n", appCtx.PawDir)
-
-	return nil
-}
-
 // getPawHome returns the PAW installation directory
 func getPawHome() (string, error) {
 	// Check PAW_HOME env var
@@ -264,7 +215,7 @@ func getPawHome() (string, error) {
 }
 
 // updateGitignore adds .paw gitignore rules if not already present
-// Rules: .paw/ (ignore all), !.paw/config (keep config), !.paw/memory (keep memory)
+// Rules: .paw/ (ignore all), !.paw/config (keep config)
 func updateGitignore(projectDir string) {
 	gitignorePath := filepath.Join(projectDir, ".gitignore")
 
@@ -273,11 +224,10 @@ func updateGitignore(projectDir string) {
 	contentStr := string(content)
 
 	// Check if proper .paw rules already exist
-	// Need: .paw/ + !.paw/config + !.paw/memory
+	// Need: .paw/ + !.paw/config
 	lines := strings.Split(contentStr, "\n")
 	hasPawIgnore := false
 	hasConfigException := false
-	hasMemoryException := false
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -287,18 +237,15 @@ func updateGitignore(projectDir string) {
 		if line == "!.paw/config" {
 			hasConfigException = true
 		}
-		if line == "!.paw/memory" {
-			hasMemoryException = true
-		}
 	}
 
 	// If all rules exist, nothing to do
-	if hasPawIgnore && hasConfigException && hasMemoryException {
+	if hasPawIgnore && hasConfigException {
 		return
 	}
 
 	// Prompt user to add rules (default Y)
-	fmt.Print("Add .paw/ gitignore rules (keeps config and memory tracked)? [Y/n]: ")
+	fmt.Print("Add .paw/ gitignore rules (keeps config tracked)? [Y/n]: ")
 	var answer string
 	_, _ = fmt.Scanln(&answer)
 	answer = strings.TrimSpace(strings.ToLower(answer))
@@ -327,8 +274,5 @@ func updateGitignore(projectDir string) {
 	}
 	if !hasConfigException {
 		_, _ = f.WriteString("!.paw/config\n")
-	}
-	if !hasMemoryException {
-		_, _ = f.WriteString("!.paw/memory\n")
 	}
 }

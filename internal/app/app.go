@@ -35,7 +35,7 @@ type App struct {
 // New creates a new App instance for the given project directory.
 // It resolves the PawDir based on:
 // 1. Local .paw directory if it exists (takes priority for backward compatibility)
-// 2. Global config's paw_in_project setting (auto = based on git, global = always global, local = always local)
+// 2. Auto mode (git repo -> global, non-git -> local)
 func New(projectDir string) (*App, error) {
 	return NewWithGitInfo(projectDir, false)
 }
@@ -43,6 +43,13 @@ func New(projectDir string) (*App, error) {
 // NewWithGitInfo creates a new App instance with explicit git repo information.
 // This is used when the caller already knows if the project is a git repo.
 func NewWithGitInfo(projectDir string, isGitRepo bool) (*App, error) {
+	return NewWithGitInfoWithWorkspace(projectDir, isGitRepo, config.PawInProjectAuto)
+}
+
+// NewWithGitInfoWithWorkspace creates a new App instance with explicit git repo
+// information and workspace mode override.
+// Use PawInProjectAuto for default behavior or PawInProjectLocal to force local workspace.
+func NewWithGitInfoWithWorkspace(projectDir string, isGitRepo bool, pawInProject config.PawInProject) (*App, error) {
 	absPath, err := filepath.Abs(projectDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve project path: %w", err)
@@ -53,13 +60,6 @@ func NewWithGitInfo(projectDir string, isGitRepo bool) (*App, error) {
 
 	// Check if debug mode is enabled
 	debug := os.Getenv("PAW_DEBUG") == "1"
-
-	// Load global config to check paw_in_project setting
-	globalCfg, _ := config.LoadGlobal()
-	pawInProject := config.PawInProjectAuto
-	if globalCfg != nil {
-		pawInProject = globalCfg.PawInProject
-	}
 
 	// Resolve workspace directory (local .paw takes priority if exists)
 	pawDir := config.GetWorkspaceDir(absPath, pawInProject, isGitRepo)
@@ -89,10 +89,6 @@ func (a *App) Initialize() error {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
-	}
-
-	if err := ensureMemoryFile(filepath.Join(a.PawDir, constants.MemoryFileName)); err != nil {
-		return fmt.Errorf("failed to create memory file: %w", err)
 	}
 
 	// Write project path file for global workspaces

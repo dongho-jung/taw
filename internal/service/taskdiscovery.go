@@ -23,6 +23,8 @@ type DiscoveredTask struct {
 	WindowID      string    // Tmux window ID
 	Preview       string    // Last 3 lines from agent pane
 	CurrentAction string    // Agent's current action (extracted from ⏺ spinner line)
+	Duration      string    // Task duration (e.g., "1m 36s") extracted from Claude status
+	Tokens        string    // Token count (e.g., "↓ 5.9k") extracted from Claude status
 	CreatedAt     time.Time // Estimated creation time
 }
 
@@ -33,9 +35,6 @@ const (
 	DiscoveredWorking DiscoveredStatus = "working"
 	DiscoveredWaiting DiscoveredStatus = "waiting"
 	DiscoveredDone    DiscoveredStatus = "done"
-	// DiscoveredWarning is kept for backward compatibility with old windows.
-	// New windows no longer use Warning status; it maps to Waiting.
-	DiscoveredWarning DiscoveredStatus = "warning"
 )
 
 // TaskDiscoveryService discovers tasks across all PAW sessions.
@@ -61,7 +60,6 @@ func NewTaskDiscoveryService() *TaskDiscoveryService {
 
 // DiscoverAll finds all PAW tasks across all sessions.
 // Returns tasks grouped by status for Kanban display (3 columns: Working, Waiting, Done).
-// Note: Warning status is merged into Waiting (Warning column removed from UI).
 func (s *TaskDiscoveryService) DiscoverAll() (working, waiting, done []*DiscoveredTask) {
 	sockets := s.findPawSockets()
 
@@ -77,13 +75,12 @@ func (s *TaskDiscoveryService) DiscoverAll() (working, waiting, done []*Discover
 		return allTasks[i].CreatedAt.Before(allTasks[j].CreatedAt)
 	})
 
-	// Group by status (Warning merged into Waiting)
+	// Group by status
 	for _, task := range allTasks {
 		switch task.Status {
 		case DiscoveredWorking:
 			working = append(working, task)
-		case DiscoveredWaiting, DiscoveredWarning:
-			// Warning tasks now display in Waiting column
+		case DiscoveredWaiting:
 			waiting = append(waiting, task)
 		case DiscoveredDone:
 			done = append(done, task)
@@ -158,12 +155,18 @@ func (s *TaskDiscoveryService) discoverFromSocket(socketName string) []*Discover
 			CreatedAt: time.Now(), // We don't have exact creation time
 		}
 
-		// Capture pane content for preview and current action (pane .0)
-		// Use more lines (50) to find the spinner indicator which shows current action
-		agentPane := w.ID + ".0"
-		if capture, err := tm.CapturePane(agentPane, 50); err == nil {
-			task.Preview = trimPreview(capture)
-			task.CurrentAction = extractCurrentAction(capture)
+		// Only capture pane content for Working tasks (performance optimization)
+		// Done and Waiting tasks don't need continuous monitoring since their
+		// action/duration/tokens won't be changing
+		if status == DiscoveredWorking {
+			// Capture pane content for preview and current action (pane .0)
+			// Use more lines (50) to find the spinner indicator which shows current action
+			agentPane := w.ID + ".0"
+			if capture, err := tm.CapturePane(agentPane, 50); err == nil {
+				task.Preview = trimPreview(capture)
+				task.CurrentAction = extractCurrentAction(capture)
+				task.Duration, task.Tokens = extractDurationAndTokens(capture)
+			}
 		}
 
 		tasks = append(tasks, task)
@@ -217,7 +220,6 @@ func buildTokenMap(pawDir string) map[string]string {
 		}
 		name := entry.Name()
 		mapping[constants.TruncateForWindowName(name)] = name
-		mapping[constants.LegacyTruncateForWindowName(name)] = name
 	}
 
 	return mapping
@@ -244,8 +246,6 @@ func parseWindowName(windowName string) (string, DiscoveredStatus) {
 		return strings.TrimPrefix(windowName, constants.EmojiWaiting), DiscoveredWaiting
 	case strings.HasPrefix(windowName, constants.EmojiDone):
 		return strings.TrimPrefix(windowName, constants.EmojiDone), DiscoveredDone
-	case strings.HasPrefix(windowName, constants.EmojiWarning):
-		return strings.TrimPrefix(windowName, constants.EmojiWarning), DiscoveredWarning
 	}
 
 	return "", ""
@@ -308,4 +308,92 @@ func extractCurrentAction(capture string) string {
 	}
 
 	return action
+}
+
+// extractDurationAndTokens extracts duration and token count from pane capture.
+// Looks for the Claude status line which shows duration and tokens.
+// Example formats:
+//   - "✻ Whirring… (ctrl+c to interrupt · 54s · ↓ 2.7k tokens)"
+//   - "⏺ Reading file… (ctrl+c to interrupt · 1m 36s · ↓ 5.9k tokens · thought for 2s)"
+//
+// Returns duration (e.g., "54s", "1m 36s") and tokens (e.g., "↓ 2.7k").
+func extractDurationAndTokens(capture string) (duration, tokens string) {
+	lines := strings.Split(capture, "\n")
+
+	// Find the last Claude status line containing duration/token info
+	// Status lines typically start with spinner indicators (✻, ⏺, etc.)
+	// and contain parenthetical metadata
+	var lastStatusLine string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Look for lines with parenthetical metadata containing "·" separator
+		if strings.Contains(trimmed, "(ctrl+c") && strings.Contains(trimmed, "·") {
+			lastStatusLine = trimmed
+		}
+	}
+
+	if lastStatusLine == "" {
+		return "", ""
+	}
+
+	// Extract the parenthetical part
+	startIdx := strings.Index(lastStatusLine, "(")
+	endIdx := strings.LastIndex(lastStatusLine, ")")
+	if startIdx == -1 || endIdx == -1 || startIdx >= endIdx {
+		return "", ""
+	}
+
+	metadata := lastStatusLine[startIdx+1 : endIdx]
+	parts := strings.Split(metadata, "·")
+
+	// Parse each part to find duration and tokens
+	// Duration format: "1m 36s", "54s", "2h 5m", etc.
+	// Tokens format: "↓ 2.7k tokens", "↑ 1.2k tokens"
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+
+		// Check for tokens (contains "tokens" or arrow symbol)
+		if strings.Contains(part, "tokens") {
+			// Extract just the arrow and number (e.g., "↓ 2.7k")
+			tokens = strings.TrimSuffix(part, " tokens")
+			tokens = strings.TrimSpace(tokens)
+			continue
+		}
+
+		// Check for duration (contains time units like 's', 'm', 'h')
+		// Skip "ctrl+c to interrupt" and "thought for Xs"
+		if strings.Contains(part, "ctrl+c") || strings.Contains(part, "thought for") {
+			continue
+		}
+
+		// Duration typically ends with 's' (seconds) or contains 'm' (minutes) or 'h' (hours)
+		if isDurationString(part) {
+			duration = part
+		}
+	}
+
+	return duration, tokens
+}
+
+// isDurationString checks if a string looks like a duration (e.g., "54s", "1m 36s", "2h 5m").
+func isDurationString(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+
+	// Duration strings contain digits and time unit suffixes
+	hasDigit := false
+	hasTimeUnit := false
+
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			hasDigit = true
+		}
+		if r == 's' || r == 'm' || r == 'h' {
+			hasTimeUnit = true
+		}
+	}
+
+	return hasDigit && hasTimeUnit
 }

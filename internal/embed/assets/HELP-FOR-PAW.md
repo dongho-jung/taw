@@ -1,31 +1,25 @@
 # PAW Help for Agents
 
-This guide helps you (the agent) perform PAW-related operations when users ask about hooks, settings, logs, or other PAW features.
+This guide helps you (the agent) perform PAW-related operations when users ask about hooks, config, logs, or other PAW features.
 
 ## Configuration Files
 
-PAW has two configuration levels:
-
-| Level | Path | Scope |
-|-------|------|-------|
-| **Global** | `$HOME/.paw/config` | Default settings for all projects |
-| **Project** | `.paw/config` | Project-specific overrides |
+PAW configuration lives in `.paw/config` (project scope).
 
 ### When to Ask User (Use AskUserQuestion)
 
-**Always ask** when modifying settings that could apply at either level:
-- Hooks (pre_worktree_hook, post_task_hook, etc.)
+**Always ask** before editing `.paw/config`, especially for hooks.
 
 Example AskUserQuestion:
 ```
 questions:
-  - question: "Apply this setting at which level?"
-    header: "Scope"
+  - question: "Update .paw/config with this change?"
+    header: "Config"
     options:
-      - label: "Project (Recommended)"
-        description: "Only affects this project"
-      - label: "Global"
-        description: "Applies to all projects"
+      - label: "Proceed"
+        description: "Apply to this project"
+      - label: "Cancel"
+        description: "Don't change config"
 ```
 
 ## Hooks Configuration
@@ -104,36 +98,12 @@ paw logs --since 2d --task my-task
 - `.paw/log` - PAW system log (internal commands, task lifecycle events)
 - `.paw/agents/{task}/log` - Task-specific progress log (for agent progress updates)
 
-## Settings UI
-
-Users can configure settings via the command palette:
-1. Press `⌃P` to open command palette
-2. Select "Settings"
-3. Press `⌥Tab` to switch between Global and Project scope
-4. Use `←/→` to change values
-5. Press `i` to toggle inherit from global (project scope only)
-6. Press `⌃S` or `Enter` to save
-
-## Inheritance System
-
-Project settings can inherit from global settings:
-
-```yaml
-# In .paw/config
-self_improve: false
-
-inherit:
-  self_improve: true     # Use global self_improve instead
-```
-
-When `inherit.<field>: true`, the project uses the global value for that field.
-
 ## Common User Requests
 
 ### "Set up automatic npm install when creating worktree"
 
 ```yaml
-# In .paw/config (ask user which level)
+# In .paw/config
 pre_worktree_hook: npm install
 ```
 

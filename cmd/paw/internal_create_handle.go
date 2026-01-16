@@ -123,17 +123,16 @@ var handleTaskCmd = &cobra.Command{
 
 		// Setup .claude symlink for stop-hook support
 		// For worktree mode: symlink in worktree directory
-		// For non-worktree mode: symlink in agent directory (Claude runs there)
+		// For non-worktree mode: symlink in project directory (Claude runs there)
 		if appCtx.IsWorktreeMode() {
 			// Worktree mode: symlink in worktree (must be done after worktree setup)
 			if err := t.SetupClaudeSymlink(appCtx.PawDir); err != nil {
 				logging.Warn("Failed to setup claude symlink in worktree: %v", err)
 			}
 		} else {
-			// Non-worktree mode: symlink in agent directory
-			// Claude runs in agent dir and accesses project via origin/ symlink
-			if err := t.SetupClaudeSymlinkInDir(appCtx.PawDir, t.AgentDir); err != nil {
-				logging.Warn("Failed to setup claude symlink in agent dir: %v", err)
+			// Non-worktree mode: symlink in project directory
+			if err := t.SetupClaudeSymlinkInDir(appCtx.PawDir, appCtx.ProjectDir); err != nil {
+				logging.Warn("Failed to setup claude symlink in project dir: %v", err)
 			}
 		}
 
@@ -440,12 +439,7 @@ func startNewTaskSession(tm tmux.Client, claudeClient claude.Client, agentPane s
 	time.Sleep(200 * time.Millisecond)
 
 	// Send task instruction - tell Claude to read from file
-	var taskInstruction string
-	if taskOpts.Ultrathink {
-		taskInstruction = fmt.Sprintf("ultrathink Read and execute the task from '%s'", t.GetUserPromptPath())
-	} else {
-		taskInstruction = fmt.Sprintf("Read and execute the task from '%s'", t.GetUserPromptPath())
-	}
+	taskInstruction := buildTaskInstruction(t.GetUserPromptPath(), taskOpts.Ultrathink)
 	logging.Trace("Sending task instruction: length=%d, ultrathink=%v", len(taskInstruction), taskOpts.Ultrathink)
 	if err := claudeClient.SendInputWithRetry(tm, agentPane, taskInstruction, 5); err != nil {
 		logging.Warn("Failed to send task instruction: %v", err)

@@ -26,6 +26,7 @@ type KeybindingsContext struct {
 //   - Ctrl+B: Toggle bottom (shell)
 //   - Ctrl+/: Toggle help
 //   - Ctrl+R: Toggle history search (in new task window only)
+//   - Ctrl+T: Toggle template picker (in new task window only)
 //   - Ctrl+J: Toggle project picker (switch between PAW sessions)
 //   - Alt+Left/Right: Move window
 //   - Alt+Tab: Cycle pane forward (in task windows) / Cycle options (in new task window)
@@ -58,6 +59,8 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 	// Ctrl+R: context-aware - show history picker only in new task window (⭐️)
 	// In other windows, pass through Ctrl+R for normal reverse search
 	cmdCtrlR := fmt.Sprintf(`if -F "#{m:⭐️*,#{window_name}}" "run-shell '%s%s internal toggle-history %s'" "send-keys C-r"`, envPrefix, ctx.PawBin, ctx.SessionName)
+	// Ctrl+T: context-aware - show template picker only in new task window (⭐️)
+	cmdCtrlT := fmt.Sprintf(`if -F "#{m:⭐️*,#{window_name}}" "run-shell '%s%s internal toggle-template %s'" "send-keys C-t"`, envPrefix, ctx.PawBin, ctx.SessionName)
 
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
@@ -76,8 +79,9 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 		{Key: "C-o", Command: cmdToggleLogs, NoPrefix: true},
 		{Key: "C-g", Command: cmdToggleGitStatus, NoPrefix: true},
 		{Key: "C-b", Command: cmdToggleBottom, NoPrefix: true},
-		{Key: "C-_", Command: cmdToggleHelp, NoPrefix: true},        // Ctrl+/ sends C-_
-		{Key: "C-r", Command: cmdCtrlR, NoPrefix: true},           // History search in new task window
+		{Key: "C-_", Command: cmdToggleHelp, NoPrefix: true},          // Ctrl+/ sends C-_
+		{Key: "C-r", Command: cmdCtrlR, NoPrefix: true},               // History search in new task window
+		{Key: "C-t", Command: cmdCtrlT, NoPrefix: true},               // Template picker in new task window
 		{Key: "C-j", Command: cmdToggleProjectPicker, NoPrefix: true}, // Project picker
 	}
 }

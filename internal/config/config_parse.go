@@ -34,9 +34,9 @@ func parseConfig(content string) (*Config, error) {
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
-		// Check for nested block (inherit:)
-		if key == "inherit" && value == "" {
-			cfg.Inherit = parseInheritBlock(lines, &i)
+		// Skip unsupported nested blocks to avoid mis-parsing indented content.
+		if value == "" && hasIndentedBlock(lines, i) {
+			skipIndentedBlock(lines, &i)
 			continue
 		}
 
@@ -77,8 +77,6 @@ func parseConfig(content string) (*Config, error) {
 		}
 
 		switch key {
-		case "work_mode":
-			// work_mode is deprecated and ignored - PAW always uses worktree mode
 		case "pre_worktree_hook":
 			cfg.PreWorktreeHook = value
 		case "pre_task_hook":
@@ -99,86 +97,10 @@ func parseConfig(content string) (*Config, error) {
 			if parsed, err := strconv.Atoi(value); err == nil {
 				cfg.LogMaxBackups = parsed
 			}
-		case "self_improve":
-			if parsed, err := strconv.ParseBool(value); err == nil {
-				cfg.SelfImprove = parsed
-			}
-		case "paw_in_project":
-			// Support both string values (auto, global, local) and legacy bool values (true, false)
-			switch strings.ToLower(value) {
-			case "auto":
-				cfg.PawInProject = PawInProjectAuto
-			case "global", "false":
-				cfg.PawInProject = PawInProjectGlobal
-			case "local", "true":
-				cfg.PawInProject = PawInProjectLocal
-			default:
-				cfg.PawInProject = PawInProjectAuto // default
-			}
 		}
 	}
 
 	return cfg, nil
-}
-
-// parseInheritBlock parses the inherit configuration block.
-func parseInheritBlock(lines []string, i *int) *InheritConfig {
-	*i++ // Move past "inherit:" line
-	inherit := &InheritConfig{}
-	baseIndent := getIndentLevel(lines, *i-1)
-
-	for *i < len(lines) {
-		line := lines[*i]
-
-		// Check if we're still in the inherit block (more indented than parent)
-		if len(line) == 0 {
-			*i++
-			continue
-		}
-
-		currentIndent := countLeadingSpaces(line)
-		if currentIndent <= baseIndent && strings.TrimSpace(line) != "" {
-			// Less or equal indent, end of inherit block
-			break
-		}
-
-		trimmed := strings.TrimSpace(line)
-
-		// Skip empty lines and comments
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			*i++
-			continue
-		}
-
-		parts := strings.SplitN(trimmed, ":", 2)
-		if len(parts) != 2 {
-			*i++
-			continue
-		}
-
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-		boolVal, _ := strconv.ParseBool(value)
-
-		switch key {
-		case "work_mode":
-			// work_mode is deprecated and ignored - PAW always uses worktree mode
-		case "theme":
-			inherit.Theme = boolVal
-		case "log_format":
-			inherit.LogFormat = boolVal
-		case "log_max_size_mb":
-			inherit.LogMaxSizeMB = boolVal
-		case "log_max_backups":
-			inherit.LogMaxBackups = boolVal
-		case "self_improve":
-			inherit.SelfImprove = boolVal
-		}
-
-		*i++
-	}
-
-	return inherit
 }
 
 // getIndentLevel returns the indentation level of a line at the given index.
@@ -187,6 +109,17 @@ func getIndentLevel(lines []string, index int) int {
 		return 0
 	}
 	return countLeadingSpaces(lines[index])
+}
+
+func hasIndentedBlock(lines []string, index int) bool {
+	baseIndent := getIndentLevel(lines, index)
+	for i := index + 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "" {
+			continue
+		}
+		return getIndentLevel(lines, i) > baseIndent
+	}
+	return false
 }
 
 // countLeadingSpaces counts the number of leading spaces/tabs in a string.
@@ -206,6 +139,25 @@ func countLeadingSpaces(s string) int {
 	return count
 }
 
+// skipIndentedBlock skips a nested YAML-like block.
+func skipIndentedBlock(lines []string, i *int) {
+	*i++ // Move past the parent line
+	baseIndent := getIndentLevel(lines, *i-1)
+
+	for *i < len(lines) {
+		line := lines[*i]
+		if len(strings.TrimSpace(line)) == 0 {
+			*i++
+			continue
+		}
+		currentIndent := countLeadingSpaces(line)
+		if currentIndent <= baseIndent {
+			break
+		}
+		*i++
+	}
+}
+
 // formatHook formats a hook command for saving.
 // Multi-line values use YAML-like '|' syntax.
 func formatHook(key, hook string) string {
@@ -223,22 +175,4 @@ func formatHook(key, hook string) string {
 	}
 	// Single line
 	return fmt.Sprintf("%s: %s\n", key, hook)
-}
-
-// formatInheritBlock formats the inherit configuration block for saving.
-func formatInheritBlock(inherit *InheritConfig) string {
-	if inherit == nil {
-		return ""
-	}
-
-	var sb strings.Builder
-	sb.WriteString("\n# Inherit settings from global config\n")
-	sb.WriteString("# Set to true to use global value, false to use project-specific value\n")
-	sb.WriteString("inherit:\n")
-	sb.WriteString(fmt.Sprintf("  theme: %t\n", inherit.Theme))
-	sb.WriteString(fmt.Sprintf("  log_format: %t\n", inherit.LogFormat))
-	sb.WriteString(fmt.Sprintf("  log_max_size_mb: %t\n", inherit.LogMaxSizeMB))
-	sb.WriteString(fmt.Sprintf("  log_max_backups: %t\n", inherit.LogMaxBackups))
-	sb.WriteString(fmt.Sprintf("  self_improve: %t\n", inherit.SelfImprove))
-	return sb.String()
 }

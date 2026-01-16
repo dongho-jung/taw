@@ -166,7 +166,7 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 	// The .claude directory may be missing if:
 	// - Workspace was created before .claude support was added
 	// - WriteClaudeFiles failed silently during initial setup
-	// - User is using a global workspace (paw_in_project: false)
+	// - Workspace is stored in the global workspace location
 	claudeDir := filepath.Join(appCtx.PawDir, constants.ClaudeLink)
 	if _, err := os.Stat(claudeDir); os.IsNotExist(err) {
 		logging.Log("Creating missing .claude directory for stop-hook support...")
@@ -211,12 +211,8 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 			}
 			if !windowKilled {
 				token := constants.TruncateForWindowName(t.Name)
-				legacy := constants.LegacyTruncateForWindowName(t.Name)
 				if windowID, ok := taskWindowMap[token]; ok {
 					logging.Debug("Killing window %s (by name) for merged task %s", windowID, t.Name)
-					_ = tm.KillWindow(windowID)
-				} else if windowID, ok := taskWindowMap[legacy]; ok {
-					logging.Debug("Killing window %s (legacy name) for merged task %s", windowID, t.Name)
 					_ = tm.KillWindow(windowID)
 				}
 			}
@@ -285,10 +281,7 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 	// Detect terminal theme and apply theme-aware tmux colors.
 	// This ensures status bar, window tabs, and pane borders match the terminal's
 	// dark/light mode when re-attaching from a different terminal.
-	themePreset := ThemePreset(appCtx.Config.Theme)
-	if themePreset == "" {
-		themePreset = ThemeAuto
-	}
+	themePreset := ThemeAuto
 	resolved := resolveThemePreset(themePreset)
 	applyTmuxTheme(tm, resolved)
 	logging.Debug("Applied theme on reattach: preset=%s resolved=%s", themePreset, resolved)

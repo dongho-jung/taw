@@ -2,8 +2,6 @@
 package constants
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"strings"
 	"time"
 	"unicode"
@@ -14,18 +12,14 @@ const (
 	EmojiWorking = "🤖"
 	EmojiWaiting = "💬"
 	EmojiDone    = "✅"
-	EmojiWarning = "⚠️"
 	EmojiNew     = "⭐️"
 )
 
 // TaskEmojis contains all emojis used for task windows.
-// Note: EmojiWarning is kept for backward compatibility with old window names
-// but is no longer used for new windows. Warning state now maps to Waiting.
 var TaskEmojis = []string{
 	EmojiWorking,
 	EmojiWaiting,
 	EmojiDone,
-	EmojiWarning, // Legacy: kept for detecting old windows, new windows use EmojiWaiting
 }
 
 // IsTaskWindow returns true if the window name has a task emoji prefix.
@@ -48,11 +42,6 @@ func ExtractTaskName(windowName string) (string, bool) {
 	}
 	return "", false
 }
-
-const (
-	WindowTokenSep = "~"
-	WindowIDLen    = 4
-)
 
 // ToCamelCase converts kebab-case or snake_case to camelCase.
 // Examples: "cancel-task-twice" → "cancelTaskTwice", "my_task_name" → "myTaskName"
@@ -110,15 +99,6 @@ func TruncateWithWidth(name string, maxLen int) string {
 	return camel[:maxLen-1] + "…"
 }
 
-// LegacyTruncateForWindowName truncates a task name without an ID suffix.
-// This preserves backward compatibility with older window names.
-func LegacyTruncateForWindowName(name string) string {
-	if len(name) > MaxWindowNameLen {
-		return name[:MaxWindowNameLen]
-	}
-	return name
-}
-
 // WindowToken builds a window-safe token for a task name.
 // The name is converted to camelCase for display and truncated if needed.
 func WindowToken(name string) string {
@@ -130,34 +110,9 @@ func WindowToken(name string) string {
 	return base
 }
 
-// ShortTaskID returns a stable short ID for a task name.
-func ShortTaskID(name string) string {
-	sum := sha1.Sum([]byte(name))
-	return hex.EncodeToString(sum[:])[:WindowIDLen]
-}
-
 // MatchesWindowToken returns true if the extracted window token matches the task name.
-// Supports: new format (camelCase), legacy format (plain truncation), and old hash format (camelCase~xxxx).
 func MatchesWindowToken(extracted, taskName string) bool {
-	return extracted == TruncateForWindowName(taskName) ||
-		extracted == LegacyTruncateForWindowName(taskName) ||
-		extracted == oldHashWindowToken(taskName)
-}
-
-// oldHashWindowToken builds the old window token format with hash suffix.
-// Used for backward compatibility with existing windows.
-func oldHashWindowToken(name string) string {
-	id := ShortTaskID(name)
-	suffix := WindowTokenSep + id
-	maxBase := MaxWindowNameLen - len(suffix)
-	if maxBase < 1 {
-		maxBase = 1
-	}
-	base := ToCamelCase(name)
-	if len(base) > maxBase {
-		base = base[:maxBase]
-	}
-	return base + suffix
+	return extracted == TruncateForWindowName(taskName)
 }
 
 // Display limits
@@ -202,27 +157,28 @@ const (
 
 // Directory and file names
 const (
-	PawDirName             = ".paw"
-	AgentsDirName          = "agents"
-	HistoryDirName         = "history"
-	WindowMapFileName      = "window-map.json"
-	ConfigFileName         = "config"
-	LogFileName            = "log"
-	MemoryFileName         = "memory"
-	PromptFileName         = "PROMPT.md"
-	TaskFileName           = "task"
-	TabLockDirName         = ".tab-lock"
-	WindowIDFileName       = "window_id"
-	PRFileName             = ".pr"
-	GitRepoMarker          = ".is-git-repo"
-	GlobalPromptLink       = ".global-prompt"
-	ClaudeLink             = ".claude"
-	BinSymlinkName         = "bin"                // Symlink to current paw binary (updated on attach)
-	VersionFileName        = ".version"           // Stores PAW version for upgrade detection
-	HistorySelectionFile   = ".history-selection" // Temp file for Ctrl+R history selection
-	StatusSignalFileName   = ".status-signal"     // Temp file for Claude to signal status directly
-	ProjectSwitchFileName  = ".project-switch"    // Temp file for project picker to signal switch target
-	ProjectPathFileName    = ".project-path"      // Stores project path for global workspaces
+	PawDirName            = ".paw"
+	AgentsDirName         = "agents"
+	HistoryDirName        = "history"
+	WindowMapFileName     = "window-map.json"
+	ConfigFileName        = "config"
+	LogFileName           = "log"
+	PromptFileName        = "PROMPT.md"
+	TaskFileName          = "task"
+	TabLockDirName        = ".tab-lock"
+	WindowIDFileName      = "window_id"
+	PRFileName            = ".pr"
+	GitRepoMarker         = ".is-git-repo"
+	GlobalPromptLink      = ".global-prompt"
+	ClaudeLink            = ".claude"
+	BinSymlinkName        = "bin"                 // Symlink to current paw binary (updated on attach)
+	VersionFileName       = ".version"            // Stores PAW version for upgrade detection
+	HistorySelectionFile  = ".history-selection"  // Temp file for Ctrl+R history selection
+	TemplateSelectionFile = ".template-selection" // Temp file for Ctrl+T template selection
+	TemplateDraftFile     = ".template-draft"     // Temp file for Ctrl+T template creation
+	StatusSignalFileName  = ".status-signal"      // Temp file for Claude to signal status directly
+	ProjectSwitchFileName = ".project-switch"     // Temp file for project picker to signal switch target
+	ProjectPathFileName   = ".project-path"       // Stores project path for global workspaces
 )
 
 // Tmux related constants
@@ -248,6 +204,11 @@ const (
 	CommitMessageAutoCommit      = "chore: auto-commit on task end\n\n%s"
 	CommitMessageAutoCommitMerge = "chore: auto-commit before merge\n\n%s"
 	CommitMessageAutoCommitPush  = "chore: auto-commit before push"
+)
+
+// Stash message for merge operations
+const (
+	MergeStashMessage = "paw-merge-temp"
 )
 
 // commitTypeMapping defines the mapping from task name patterns to commit types.
@@ -409,13 +370,11 @@ const (
 	PopupWidthPalette  = "60"
 	PopupHeightPalette = "18"
 
-	// Medium size for settings popup (percentage-based for auto-scaling)
-	PopupWidthSettings  = "80%"
-	PopupHeightSettings = "50%"
-
 	// Medium size for history picker
-	PopupWidthHistory  = "80%"
-	PopupHeightHistory = "70%"
+	PopupWidthHistory   = "80%"
+	PopupHeightHistory  = "70%"
+	PopupWidthTemplate  = "80%"
+	PopupHeightTemplate = "70%"
 
 	// Medium size for project picker
 	PopupWidthProjectPicker  = "60"

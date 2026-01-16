@@ -44,6 +44,9 @@ type Client interface {
 	StashApply(dir, stashHash string) error
 	StashPush(dir, message string) error
 	StashPop(dir string) error
+	StashList(dir string) ([]StashEntry, error)
+	StashPopByMessage(dir, message string) error
+	StashDropByMessage(dir, message string) error
 
 	// Commit
 	Add(dir, path string) error
@@ -97,6 +100,12 @@ type Worktree struct {
 	Path   string
 	Branch string
 	Head   string
+}
+
+// StashEntry represents a git stash entry.
+type StashEntry struct {
+	Index   int    // 0 for stash@{0}, 1 for stash@{1}, etc.
+	Message string // The stash message
 }
 
 // gitClient implements the Client interface.
@@ -348,6 +357,78 @@ func (c *gitClient) StashPush(dir, message string) error {
 
 func (c *gitClient) StashPop(dir string) error {
 	return c.run(dir, "stash", "pop")
+}
+
+// StashList returns all stash entries with their indices and messages.
+func (c *gitClient) StashList(dir string) ([]StashEntry, error) {
+	output, err := c.runOutput(dir, "stash", "list", "--format=%gs")
+	if err != nil {
+		return nil, err
+	}
+
+	if output == "" {
+		return nil, nil
+	}
+
+	var entries []StashEntry
+	for i, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		entries = append(entries, StashEntry{
+			Index:   i,
+			Message: line,
+		})
+	}
+	return entries, nil
+}
+
+// StashPopByMessage finds a stash by message and pops it.
+// If the stash is not found, returns nil (no-op).
+// If pop fails (e.g., due to conflicts), drops the stash to prevent orphaned entries.
+func (c *gitClient) StashPopByMessage(dir, message string) error {
+	entries, err := c.StashList(dir)
+	if err != nil {
+		return fmt.Errorf("failed to list stashes: %w", err)
+	}
+
+	// Find stash with matching message
+	for _, entry := range entries {
+		if strings.Contains(entry.Message, message) {
+			// Try to pop this specific stash
+			stashRef := fmt.Sprintf("stash@{%d}", entry.Index)
+			if popErr := c.run(dir, "stash", "pop", stashRef); popErr != nil {
+				// Pop failed (likely conflict), drop the stash to prevent orphaned entry
+				_ = c.run(dir, "stash", "drop", stashRef)
+				return fmt.Errorf("failed to pop stash (dropped to prevent orphan): %w", popErr)
+			}
+			return nil
+		}
+	}
+
+	// Stash not found - this is OK, might have been cleaned up already
+	return nil
+}
+
+// StashDropByMessage finds a stash by message and drops it without applying.
+// If the stash is not found, returns nil (no-op).
+func (c *gitClient) StashDropByMessage(dir, message string) error {
+	entries, err := c.StashList(dir)
+	if err != nil {
+		return fmt.Errorf("failed to list stashes: %w", err)
+	}
+
+	// Find stash with matching message
+	for _, entry := range entries {
+		if strings.Contains(entry.Message, message) {
+			stashRef := fmt.Sprintf("stash@{%d}", entry.Index)
+			return c.run(dir, "stash", "drop", stashRef)
+		}
+	}
+
+	// Stash not found - this is OK
+	return nil
 }
 
 // Commit

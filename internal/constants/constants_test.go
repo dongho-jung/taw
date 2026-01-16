@@ -30,12 +30,6 @@ func TestExtractTaskName(t *testing.T) {
 			wantFound:    true,
 		},
 		{
-			name:         "warning emoji prefix",
-			windowName:   "⚠️" + WindowToken("my-task"),
-			wantTaskName: WindowToken("my-task"),
-			wantFound:    true,
-		},
-		{
 			name:         "no emoji prefix",
 			windowName:   "my-task",
 			wantTaskName: "",
@@ -102,11 +96,6 @@ func TestIsTaskWindow(t *testing.T) {
 			want:       true,
 		},
 		{
-			name:       "warning emoji prefix",
-			windowName: "⚠️my-task",
-			want:       true,
-		},
-		{
 			name:       "no emoji prefix",
 			windowName: "my-task",
 			want:       false,
@@ -137,7 +126,6 @@ func TestTaskEmojis(t *testing.T) {
 		EmojiWorking,
 		EmojiWaiting,
 		EmojiDone,
-		EmojiWarning,
 	}
 
 	if len(TaskEmojis) != len(expectedEmojis) {
@@ -357,18 +345,6 @@ func TestMatchesWindowToken(t *testing.T) {
 			want:      true,
 		},
 		{
-			name:      "old hash format matches",
-			extracted: "cancelTaskTwice~" + ShortTaskID("cancel-task-twice"),
-			taskName:  "cancel-task-twice",
-			want:      true,
-		},
-		{
-			name:      "legacy format matches",
-			extracted: "cancel-task-twice",
-			taskName:  "cancel-task-twice",
-			want:      true,
-		},
-		{
 			name:      "different task does not match",
 			extracted: "otherTask",
 			taskName:  "cancel-task-twice",
@@ -435,7 +411,6 @@ func TestFileAndDirNames(t *testing.T) {
 		"HistoryDirName":   HistoryDirName,
 		"ConfigFileName":   ConfigFileName,
 		"LogFileName":      LogFileName,
-		"MemoryFileName":   MemoryFileName,
 		"PromptFileName":   PromptFileName,
 		"TaskFileName":     TaskFileName,
 		"TabLockDirName":   TabLockDirName,
@@ -459,7 +434,6 @@ func TestEmojiConstants(t *testing.T) {
 		"EmojiWorking": EmojiWorking,
 		"EmojiWaiting": EmojiWaiting,
 		"EmojiDone":    EmojiDone,
-		"EmojiWarning": EmojiWarning,
 		"EmojiNew":     EmojiNew,
 	}
 

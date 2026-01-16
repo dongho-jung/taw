@@ -262,6 +262,9 @@ type Model struct {
 	// hasn't entered anything yet.
 	Placeholder string
 
+	// HighlightToken, when set, renders matching substrings with a blink style.
+	HighlightToken string
+
 	// ShowLineNumbers, if enabled, causes line numbers to be printed
 	// after the prompt.
 	ShowLineNumbers bool
@@ -901,7 +904,7 @@ func (m *Model) deleteWordLeft() {
 	// Linter note: it's critical that we acquire the initial cursor position
 	// here prior to altering it via SetCursor() below. As such, moving this
 	// call into the corresponding if clause does not apply here.
-	oldCol := m.col //nolint:ifshort
+	oldCol := m.col
 
 	m.SetCursorColumn(m.col - 1)
 	for unicode.IsSpace(m.value[m.row][m.col]) {
@@ -1403,9 +1406,13 @@ func (m Model) View() string {
 		styles           = m.activeStyle()
 		selStart, selEnd cursorPos
 		hasSelection     bool
+		tokenRunes       []rune
 	)
 
 	selStart, selEnd, hasSelection = m.selectionBounds()
+	if m.HighlightToken != "" {
+		tokenRunes = []rune(m.HighlightToken)
+	}
 
 	displayLine := 0
 	for l, line := range m.value {
@@ -1420,6 +1427,10 @@ func (m Model) View() string {
 		lineSelStart, lineSelEnd, lineHasSelection := m.selectionOffsetsForLine(l, line, selStart, selEnd, hasSelection)
 		selectionStyle := styles.computedSelection()
 		wrapStart := 0
+		var lineHighlights []highlightRange
+		if len(tokenRunes) > 0 {
+			lineHighlights = findHighlightRanges(line, tokenRunes)
+		}
 
 		for wl, wrappedLine := range wrappedLines {
 			prompt := m.promptView(displayLine)
@@ -1471,23 +1482,27 @@ func (m Model) View() string {
 				wrappedLine = []rune(strings.TrimSuffix(string(wrappedLine), " "))
 				padding -= m.width - strwidth
 			}
+			segmentHighlights := sliceHighlightRanges(lineHighlights, wrapStart, wrapEnd)
+			highlightStyle := style.Blink(true)
 			if m.row == l && lineInfo.RowOffset == wl {
 				before := wrappedLine[:lineInfo.ColumnOffset]
+				beforeHighlights := sliceHighlightRanges(segmentHighlights, 0, lineInfo.ColumnOffset)
 				if m.col >= len(line) && lineInfo.CharOffset >= m.width {
-					s.WriteString(renderWithSelection(before, style, selectionStyle, selStartInLine, selEndInLine))
+					s.WriteString(renderWithSelectionAndHighlights(before, style, selectionStyle, highlightStyle, selStartInLine, selEndInLine, beforeHighlights))
 					m.virtualCursor.SetChar(" ")
 					s.WriteString(m.virtualCursor.View())
 				} else {
-					s.WriteString(renderWithSelection(before, style, selectionStyle, selStartInLine, selEndInLine))
+					s.WriteString(renderWithSelectionAndHighlights(before, style, selectionStyle, highlightStyle, selStartInLine, selEndInLine, beforeHighlights))
 					m.virtualCursor.SetChar(string(wrappedLine[lineInfo.ColumnOffset]))
 					s.WriteString(style.Render(m.virtualCursor.View()))
 					after := wrappedLine[lineInfo.ColumnOffset+1:]
 					afterStart := lineInfo.ColumnOffset + 1
-					s.WriteString(renderWithSelection(after, style, selectionStyle, selStartInLine-afterStart, selEndInLine-afterStart))
+					afterHighlights := sliceHighlightRanges(segmentHighlights, afterStart, len(wrappedLine))
+					s.WriteString(renderWithSelectionAndHighlights(after, style, selectionStyle, highlightStyle, selStartInLine-afterStart, selEndInLine-afterStart, afterHighlights))
 				}
 			} else {
-				if hasSelSegment {
-					s.WriteString(renderWithSelection(wrappedLine, style, selectionStyle, selStartInLine, selEndInLine))
+				if hasSelSegment || len(segmentHighlights) > 0 {
+					s.WriteString(renderWithSelectionAndHighlights(wrappedLine, style, selectionStyle, highlightStyle, selStartInLine, selEndInLine, segmentHighlights))
 				} else {
 					s.WriteString(style.Render(string(wrappedLine)))
 				}
@@ -1644,36 +1659,119 @@ func (m Model) placeholderView() string {
 	return styles.Base.Render(m.viewport.View())
 }
 
-func renderWithSelection(runes []rune, baseStyle, selectionStyle lipgloss.Style, selStart, selEnd int) string {
+type highlightRange struct {
+	start int
+	end   int
+}
+
+func findHighlightRanges(line []rune, token []rune) []highlightRange {
+	if len(line) == 0 || len(token) == 0 || len(token) > len(line) {
+		return nil
+	}
+
+	var ranges []highlightRange
+	for i := 0; i <= len(line)-len(token); i++ {
+		match := true
+		for j := 0; j < len(token); j++ {
+			if line[i+j] != token[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			ranges = append(ranges, highlightRange{start: i, end: i + len(token)})
+			i += len(token) - 1
+		}
+	}
+	return ranges
+}
+
+func sliceHighlightRanges(ranges []highlightRange, start, end int) []highlightRange {
+	if len(ranges) == 0 {
+		return nil
+	}
+	if start < 0 {
+		start = 0
+	}
+	if end < start {
+		end = start
+	}
+
+	var out []highlightRange
+	for _, r := range ranges {
+		if r.end <= start {
+			continue
+		}
+		if r.start >= end {
+			break
+		}
+		s := max(r.start, start) - start
+		e := min(r.end, end) - start
+		if s < e {
+			out = append(out, highlightRange{start: s, end: e})
+		}
+	}
+	return out
+}
+
+func renderWithSelectionAndHighlights(runes []rune, baseStyle, selectionStyle, highlightStyle lipgloss.Style, selStart, selEnd int, highlights []highlightRange) string {
 	if len(runes) == 0 {
 		return baseStyle.Render("")
 	}
 
-	if selStart < 0 {
-		selStart = 0
-	}
-	if selEnd < 0 {
-		selEnd = 0
-	}
-	if selStart > len(runes) {
-		selStart = len(runes)
-	}
-	if selEnd > len(runes) {
-		selEnd = len(runes)
-	}
-	if selStart >= selEnd {
-		return baseStyle.Render(string(runes))
+	selActive := selStart < selEnd
+	highlightIdx := 0
+	nextHighlight := highlightRange{start: -1, end: -1}
+	if len(highlights) > 0 {
+		nextHighlight = highlights[0]
 	}
 
 	var b strings.Builder
-	if selStart > 0 {
-		b.WriteString(baseStyle.Render(string(runes[:selStart])))
+	runStart := 0
+	runStyleID := -1
+
+	for i := 0; i < len(runes); i++ {
+		inSelection := selActive && i >= selStart && i < selEnd
+
+		for highlightIdx < len(highlights) && nextHighlight.end <= i {
+			highlightIdx++
+			if highlightIdx < len(highlights) {
+				nextHighlight = highlights[highlightIdx]
+			} else {
+				nextHighlight = highlightRange{start: -1, end: -1}
+			}
+		}
+		inHighlight := nextHighlight.start <= i && i < nextHighlight.end
+
+		styleID := 0
+		if inSelection {
+			styleID = 1
+		} else if inHighlight {
+			styleID = 2
+		}
+
+		if styleID != runStyleID {
+			if runStyleID >= 0 {
+				b.WriteString(renderByStyleID(runes[runStart:i], baseStyle, selectionStyle, highlightStyle, runStyleID))
+			}
+			runStyleID = styleID
+			runStart = i
+		}
 	}
-	b.WriteString(selectionStyle.Render(string(runes[selStart:selEnd])))
-	if selEnd < len(runes) {
-		b.WriteString(baseStyle.Render(string(runes[selEnd:])))
-	}
+
+	b.WriteString(renderByStyleID(runes[runStart:], baseStyle, selectionStyle, highlightStyle, runStyleID))
 	return b.String()
+}
+
+func renderByStyleID(runes []rune, baseStyle, selectionStyle, highlightStyle lipgloss.Style, styleID int) string {
+	switch styleID {
+	case 1:
+		return selectionStyle.Render(string(runes))
+	case 2:
+		return highlightStyle.Render(string(runes))
+	default:
+		return baseStyle.Render(string(runes))
+	}
 }
 
 // Blink returns the blink command for the virtual cursor.

@@ -37,9 +37,9 @@ var askUserQuestionUIMarkers = []string{
 //   - Stop: DONE/WORKING (via .status-signal or Claude classification)
 //
 // This watcher only:
-//   1. Detects when window is in WAITING state (set by hooks)
-//   2. Parses prompt content and sends notifications
-//   3. Handles notification action responses
+//  1. Detects when window is in WAITING state (set by hooks)
+//  2. Parses prompt content and sends notifications
+//  3. Handles notification action responses
 var watchWaitCmd = &cobra.Command{
 	Use:   "watch-wait [session] [window-id] [task-name]",
 	Short: "Watch agent output and notify when user input is needed",
@@ -169,9 +169,6 @@ func isWaitingWindow(name string) bool {
 }
 
 // isFinalWindow returns true if the window is in a completed state.
-// Includes legacy warning emoji for backward compatibility with old windows.
 func isFinalWindow(name string) bool {
-	return strings.HasPrefix(name, constants.EmojiDone) ||
-		strings.HasPrefix(name, constants.EmojiWarning)
+	return strings.HasPrefix(name, constants.EmojiDone)
 }
-
