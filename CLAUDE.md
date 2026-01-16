@@ -36,6 +36,11 @@ This checks:
 | gh | ❌ | GitHub CLI for PR creation (optional) |
 | sounds | ❌ | macOS system sounds for alerts (optional) |
 
+## Release
+
+- GoReleaser config: `.github/goreleaser.yaml`
+- Tag and push `v*` to trigger the release workflow
+
 ## Testing
 
 ```bash
@@ -83,6 +88,8 @@ go tool cover -html=coverage.out -o coverage.html
 
 ```
 paw/                           # This repository
+├── .github/                   # GitHub metadata
+│   └── goreleaser.yaml        # GoReleaser configuration
 ├── cmd/paw/                   # Go main package
 │   ├── main.go                # Entry point and root command
 │   ├── session.go             # Session management (attach, create)
@@ -173,7 +180,7 @@ paw/                           # This repository
         ├── task               # Task contents
         ├── end-task           # Per-task end-task script (called for auto-merge)
         ├── origin             # -> Project root (symlink)
-        ├── {project-name}/    # Git worktree (auto-created in git mode)
+        ├── {project-name}-{hash}/    # Git worktree (auto-created in git mode)
         ├── .tab-lock/         # Tab creation lock (atomic mkdir prevents races)
         │   └── window_id      # Tmux window ID (used in cleanup)
         ├── .session-started   # Session marker (for resume on reopen)
@@ -188,7 +195,8 @@ $HOME/.local/share/paw/            # Global PAW data (auto mode for git projects
 ```
 
 PAW uses claude-mem for shared memory across tasks/workspaces. Memory is stored
-globally in `~/.claude-mem` and scoped by project name (no `.paw/memory` file).
+globally in `~/.claude-mem` and scoped by project directory name; in worktree
+mode PAW appends a short hash suffix to avoid collisions.
 
 ### Workspace Location
 

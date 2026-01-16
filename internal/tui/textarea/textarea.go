@@ -904,7 +904,7 @@ func (m *Model) deleteWordLeft() {
 	// Linter note: it's critical that we acquire the initial cursor position
 	// here prior to altering it via SetCursor() below. As such, moving this
 	// call into the corresponding if clause does not apply here.
-	oldCol := m.col //nolint:ifshort
+	oldCol := m.col
 
 	m.SetCursorColumn(m.col - 1)
 	for unicode.IsSpace(m.value[m.row][m.col]) {
@@ -1657,38 +1657,6 @@ func (m Model) placeholderView() string {
 
 	m.viewport.SetContent(s.String())
 	return styles.Base.Render(m.viewport.View())
-}
-
-func renderWithSelection(runes []rune, baseStyle, selectionStyle lipgloss.Style, selStart, selEnd int) string {
-	if len(runes) == 0 {
-		return baseStyle.Render("")
-	}
-
-	if selStart < 0 {
-		selStart = 0
-	}
-	if selEnd < 0 {
-		selEnd = 0
-	}
-	if selStart > len(runes) {
-		selStart = len(runes)
-	}
-	if selEnd > len(runes) {
-		selEnd = len(runes)
-	}
-	if selStart >= selEnd {
-		return baseStyle.Render(string(runes))
-	}
-
-	var b strings.Builder
-	if selStart > 0 {
-		b.WriteString(baseStyle.Render(string(runes[:selStart])))
-	}
-	b.WriteString(selectionStyle.Render(string(runes[selStart:selEnd])))
-	if selEnd < len(runes) {
-		b.WriteString(baseStyle.Render(string(runes[selEnd:])))
-	}
-	return b.String()
 }
 
 type highlightRange struct {

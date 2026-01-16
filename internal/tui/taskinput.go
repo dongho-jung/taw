@@ -779,6 +779,7 @@ func (m *TaskInput) View() tea.View {
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
+	v.ReportFocus = true
 	// Use AllMotion for better tmux mouse passthrough compatibility
 	// CellMotion was causing tmux to intercept mouse events and use its own copy-mode
 	// (line-by-line selection at window level instead of cell-based TUI selection)

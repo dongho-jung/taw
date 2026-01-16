@@ -35,14 +35,14 @@ func waitForDependency(appCtx *app.App, tm tmux.Client, windowID string, t *task
 		if dependencySatisfied(dep.Condition, status) {
 			if !firstWait {
 				workingName := windowNameForStatus(t.Name, task.StatusWorking)
-				_ = renameWindowWithStatus(tm, windowID, workingName, appCtx.PawDir, t.Name, "depends-on")
+				_ = renameWindowWithStatus(tm, windowID, workingName, appCtx.PawDir, t.Name, "depends-on", task.StatusWorking)
 			}
 			return true
 		}
 
 		if terminal {
-			warningName := windowNameForStatus(t.Name, task.StatusCorrupted)
-			_ = renameWindowWithStatus(tm, windowID, warningName, appCtx.PawDir, t.Name, "depends-on")
+			corruptedName := windowNameForStatus(t.Name, task.StatusCorrupted)
+			_ = renameWindowWithStatus(tm, windowID, corruptedName, appCtx.PawDir, t.Name, "depends-on", task.StatusCorrupted)
 			msg := fmt.Sprintf("⚠️ Dependency %s did not satisfy %s", dep.TaskName, dep.Condition)
 			_ = tm.DisplayMessage(msg, 3000)
 			logging.Warn("Dependency %s ended with %s; blocking task %s", dep.TaskName, status, t.Name)
@@ -51,7 +51,7 @@ func waitForDependency(appCtx *app.App, tm tmux.Client, windowID string, t *task
 
 		if firstWait {
 			waitName := windowNameForStatus(t.Name, task.StatusWaiting)
-			_ = renameWindowWithStatus(tm, windowID, waitName, appCtx.PawDir, t.Name, "depends-on")
+			_ = renameWindowWithStatus(tm, windowID, waitName, appCtx.PawDir, t.Name, "depends-on", task.StatusWaiting)
 			msg := fmt.Sprintf("⏳ Waiting for %s (%s)", dep.TaskName, dep.Condition)
 			_ = tm.DisplayMessage(msg, 3000)
 			firstWait = false

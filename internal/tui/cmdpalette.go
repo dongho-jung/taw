@@ -214,7 +214,6 @@ func (m *CommandPalette) View() tea.View {
 	inputBoxTopY := line
 	sb.WriteString(inputBox)
 	sb.WriteString("\n\n")
-	line += lipgloss.Height(inputBox) + 2
 
 	// Filtered commands
 	if len(m.filtered) == 0 {

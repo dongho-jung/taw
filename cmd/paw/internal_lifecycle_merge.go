@@ -381,8 +381,8 @@ var mergeTaskCmd = &cobra.Command{
 			_ = tm.DisplayMessage(fmt.Sprintf("✅ Merged: %s → %s", targetTask.Name, mainBranch), 2000)
 		} else {
 			fmt.Println("  ✗ Merge failed - manual resolution needed")
-			warningName := windowNameForStatus(targetTask.Name, task.StatusCorrupted)
-			_ = renameWindowWithStatus(tm, windowID, warningName, appCtx.PawDir, targetTask.Name, "merge-task")
+			corruptedName := windowNameForStatus(targetTask.Name, task.StatusCorrupted)
+			_ = renameWindowWithStatus(tm, windowID, corruptedName, appCtx.PawDir, targetTask.Name, "merge-task", task.StatusCorrupted)
 			notify.PlaySound(notify.SoundError)
 			_ = tm.DisplayMessage(fmt.Sprintf("⚠️ Merge failed: %s", targetTask.Name), 3000)
 		}

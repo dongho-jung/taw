@@ -230,7 +230,6 @@ func (m *ProjectPicker) View() tea.View {
 	inputBoxTopY := line
 	sb.WriteString(inputBox)
 	sb.WriteString("\n\n")
-	line += lipgloss.Height(inputBox) + 2
 
 	// Calculate available height for list
 	// Reserve: title(1) + gap(1) + input(3) + gap(1) + help(2)

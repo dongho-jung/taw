@@ -632,9 +632,9 @@ func handleMergeFailure(appCtx *app.App, targetTask *task.Task, windowID string,
 	logging.Warn("Merge failed - keeping task for manual resolution")
 	fmt.Println()
 	fmt.Println("  ✗ Merge failed - manual resolution needed")
-	warningWindowName := windowNameForStatus(targetTask.Name, task.StatusCorrupted)
-	logging.Trace("endTaskCmd: renaming window to warning state name=%s", warningWindowName)
-	if err := renameWindowWithStatus(tm, windowID, warningWindowName, appCtx.PawDir, targetTask.Name, "end-task"); err != nil {
+	corruptedWindowName := windowNameForStatus(targetTask.Name, task.StatusCorrupted)
+	logging.Trace("endTaskCmd: renaming window to corrupted state name=%s", corruptedWindowName)
+	if err := renameWindowWithStatus(tm, windowID, corruptedWindowName, appCtx.PawDir, targetTask.Name, "end-task", task.StatusCorrupted); err != nil {
 		logging.Warn("Failed to rename window: %v", err)
 	}
 	logging.Trace("endTaskCmd: playing SoundError for merge failure task=%s", targetTask.Name)

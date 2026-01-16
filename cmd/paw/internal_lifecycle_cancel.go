@@ -112,9 +112,9 @@ var cancelTaskCmd = &cobra.Command{
 							abortCmd.Dir = appCtx.ProjectDir
 							_ = abortCmd.Run()
 
-							// Rename window to warning state and notify user
-							warningName := windowNameForStatus(targetTask.Name, task.StatusCorrupted)
-							_ = renameWindowWithStatus(tm, windowID, warningName, appCtx.PawDir, targetTask.Name, "cancel-task")
+							// Rename window to corrupted state and notify user
+							corruptedName := windowNameForStatus(targetTask.Name, task.StatusCorrupted)
+							_ = renameWindowWithStatus(tm, windowID, corruptedName, appCtx.PawDir, targetTask.Name, "cancel-task", task.StatusCorrupted)
 							notify.PlaySound(notify.SoundError)
 							_ = notify.Send("Revert conflict", fmt.Sprintf("⚠️ %s - manual resolution needed", targetTask.Name))
 							return nil // Don't cleanup - keep task for manual resolution

@@ -23,7 +23,7 @@ You are in `$WORKTREE_DIR` on branch `$TASK_NAME`. Changes are isolated from mai
 $PAW_DIR/agents/$TASK_NAME/
 ├── task           # Your task description (READ THIS FIRST)
 ├── origin/        # -> PROJECT_DIR (symlink)
-└── {project-name}/  # Your working directory (git worktree, name matches project root)
+└── {project-name}-{hash}/  # Your working directory (git worktree, hash avoids name collisions)
 
 $PAW_DIR/log        # Unified log file (all tasks write here)
 ```
@@ -310,7 +310,7 @@ PR #42 created
 
 PAW uses claude-mem for shared, durable memory across tasks/workspaces.
 
-- Memory is stored automatically; do not edit `.paw/memory` (deprecated).
+- Memory is stored automatically by claude-mem.
 - Use mem-search or the MCP tools (`search`, `timeline`, `get_observations`) when you need prior context.
 - Use `<private>` tags to exclude sensitive info from memory.
 

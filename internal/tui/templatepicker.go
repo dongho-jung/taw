@@ -428,7 +428,6 @@ func (m *TemplatePicker) View() tea.View {
 	inputBoxTopY := line
 	sb.WriteString(inputBox)
 	sb.WriteString("\n\n")
-	line += lipgloss.Height(inputBox) + 2
 
 	reservedLines := 10
 	previewHeight := 5

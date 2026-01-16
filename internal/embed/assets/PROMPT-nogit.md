@@ -223,7 +223,7 @@ Work complete
 
 PAW uses claude-mem for shared, durable memory across tasks/workspaces.
 
-- Memory is stored automatically; do not edit `.paw/memory` (deprecated).
+- Memory is stored automatically by claude-mem.
 - Use mem-search or the MCP tools (`search`, `timeline`, `get_observations`) when you need prior context.
 - Use `<private>` tags to exclude sensitive info from memory.
 
