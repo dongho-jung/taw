@@ -29,6 +29,7 @@ Claude Code-based autonomous agent work environment
   ⌃G          Toggle git viewer
   ⌃B          Toggle bottom (shell pane)
   ⌃/          Toggle help
+  ⌃Y          Edit prompts (open prompt picker)
 
 ## Directory Structure
 
@@ -39,6 +40,12 @@ Claude Code-based autonomous agent work environment
   ├── input-history          Task input history (for ⌃R search)
   ├── input-templates        Task templates (for ⌃T picker)
   ├── window-map.json        Window token to task mapping
+  ├── prompts/               Custom prompt templates (⌃Y to edit)
+  │   ├── system.md          System prompt override
+  │   ├── task-name.md       Task name generation rules
+  │   ├── merge-conflict.md  Merge conflict resolution
+  │   ├── pr-description.md  PR description template
+  │   └── commit-message.md  Commit message template
   ├── history/               Completed task history
   │   └── YYMMDD_HHMMSS_name Task content + work capture
   └── agents/{task-name}/
@@ -155,3 +162,28 @@ Switch between running PAW project sessions.
   - Fuzzy search by project name
   - Shows all running PAW sessions except current
   - Jumps to main window of selected project
+
+## Prompt Editor (⌃Y)
+
+Edit prompts used by PAW. Opens selected prompt in $EDITOR.
+
+### Available Prompts
+  Task Prompt           Project instructions (.paw/PROMPT.md)
+  System Prompt         Global system prompt for agents
+  Task Name Rules       Rules for generating task names
+  Merge Conflict        Prompt for resolving merge conflicts
+  PR Description        Template for PR title and body
+  Commit Message        Template for auto-commit messages
+
+### Navigation
+  ↑/↓         Navigate prompts
+  Enter       Open in $EDITOR
+  Esc/⌃Y      Cancel
+
+### Prompt Locations
+  .paw/PROMPT.md              Task prompt (project-specific)
+  .paw/prompts/system.md      System prompt override
+  .paw/prompts/task-name.md   Task name generation rules
+  .paw/prompts/merge-conflict.md  Merge conflict resolution
+  .paw/prompts/pr-description.md  PR description template
+  .paw/prompts/commit-message.md  Commit message template

@@ -103,3 +103,63 @@ func WriteClaudeFiles(targetDir string) error {
 		return os.WriteFile(targetPath, data, 0644)
 	})
 }
+
+// GetDefaultPrompt returns the default prompt content by name.
+// Available prompts: task-name, merge-conflict, pr-description, commit-message
+func GetDefaultPrompt(name string) (string, error) {
+	filename := "assets/prompts/" + name + ".md"
+	data, err := Assets.ReadFile(filename)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// GetTaskNamePrompt returns the default task name generation prompt.
+func GetTaskNamePrompt() (string, error) {
+	return GetDefaultPrompt("task-name")
+}
+
+// GetMergeConflictPrompt returns the default merge conflict resolution prompt.
+func GetMergeConflictPrompt() (string, error) {
+	return GetDefaultPrompt("merge-conflict")
+}
+
+// GetPRDescriptionPrompt returns the default PR description template.
+func GetPRDescriptionPrompt() (string, error) {
+	return GetDefaultPrompt("pr-description")
+}
+
+// GetCommitMessagePrompt returns the default commit message template.
+func GetCommitMessagePrompt() (string, error) {
+	return GetDefaultPrompt("commit-message")
+}
+
+// WriteDefaultPrompt writes a default prompt to the target directory if it doesn't exist.
+// Returns the path to the prompt file.
+func WriteDefaultPrompt(promptsDir, name string) (string, error) {
+	targetPath := filepath.Join(promptsDir, name+".md")
+
+	// Don't overwrite existing file
+	if _, err := os.Stat(targetPath); err == nil {
+		return targetPath, nil
+	}
+
+	// Create prompts directory if needed
+	if err := os.MkdirAll(promptsDir, 0755); err != nil {
+		return "", err
+	}
+
+	// Get default content
+	content, err := GetDefaultPrompt(name)
+	if err != nil {
+		return "", err
+	}
+
+	// Write file
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		return "", err
+	}
+
+	return targetPath, nil
+}

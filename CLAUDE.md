@@ -105,7 +105,7 @@ paw/                           # This repository
 │   ├── internal.go            # Internal command registration
 │   ├── internal_create*.go    # Task creation (toggleNew, newTask, spawnTask, handleTask)
 │   ├── internal_lifecycle*.go # Task lifecycle (endTask, cancelTask, merge, helpers)
-│   ├── internal_popup*.go     # Popup/UI (toggleLog, toggleHelp, shell)
+│   ├── internal_popup*.go     # Popup/UI (toggleLog, toggleHelp, shell, prompts)
 │   ├── internal_sync.go       # Sync commands (syncWithMain)
 │   ├── internal_stop_hook.go  # Claude stop hook handling (task status classification)
 │   ├── internal_user_prompt_hook.go # User prompt submission hook
@@ -126,6 +126,11 @@ paw/                           # This repository
 │   │       ├── PROMPT.md      # System prompt (git mode)
 │   │       ├── PROMPT-nogit.md # System prompt (non-git mode)
 │   │       ├── tmux.conf      # Base tmux configuration
+│   │       ├── prompts/       # Default prompt templates
+│   │       │   ├── task-name.md      # Task name generation rules
+│   │       │   ├── merge-conflict.md # Merge conflict resolution prompt
+│   │       │   ├── pr-description.md # PR description template
+│   │       │   └── commit-message.md # Commit message template
 │   │       └── claude/        # Claude settings
 │   │           ├── CLAUDE.md  # Default CLAUDE.md for new workspaces
 │   │           └── settings.local.json # Claude Code local settings
@@ -152,6 +157,7 @@ paw/                           # This repository
 │       ├── endtask.go         # End task confirmation UI
 │       ├── kanban.go          # Kanban board view for tasks
 │       ├── projectpicker.go   # Project session picker (⌃J)
+│       ├── promptpicker.go    # Prompt editor picker (⌃Y)
 │       ├── branchmenu.go      # Branch selection menu
 │       ├── inputhistory.go    # Task input history (⌃R search)
 │       ├── recover.go         # Task recovery UI
@@ -174,6 +180,12 @@ paw/                           # This repository
     ├── .is-git-repo           # Git mode marker (exists only in git repos)
     ├── .claude/               # Claude settings (copied from embed)
     │   └── settings.local.json
+    ├── prompts/               # Custom prompt templates (⌃Y to edit)
+    │   ├── system.md          # System prompt override
+    │   ├── task-name.md       # Task name generation rules
+    │   ├── merge-conflict.md  # Merge conflict resolution prompt
+    │   ├── pr-description.md  # PR description template
+    │   └── commit-message.md  # Commit message template
     ├── history/               # Task history directory
     │   └── YYMMDD_HHMMSS_task-name  # Task + summary + pane capture at task end
     └── agents/{task-name}/    # Per-task workspace

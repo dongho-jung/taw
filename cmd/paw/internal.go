@@ -55,6 +55,8 @@ func init() {
 	internalCmd.AddCommand(restorePanesCmd)
 	internalCmd.AddCommand(finishPickerTUICmd)
 	internalCmd.AddCommand(prPopupTUICmd)
+	internalCmd.AddCommand(togglePromptPickerCmd)
+	internalCmd.AddCommand(promptPickerTUICmd)
 
 	// Utility commands
 	internalCmd.AddCommand(renameWindowCmd)

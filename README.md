@@ -193,6 +193,7 @@ Install tmux/gh via Homebrew: `brew install tmux gh`. Install the Claude Code CL
 | Toggle git viewer | `⌃G` |
 | Toggle bottom (shell) | `⌃B` |
 | Toggle help | `⌃/` |
+| Edit prompts | `⌃Y` |
 
 ## Git viewer
 
