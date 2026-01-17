@@ -108,21 +108,29 @@ func (m *TaskInput) checkHistorySelection() {
 }
 
 // RunTaskInput runs the task input and returns the result.
+// Deprecated: Use RunTaskInputWithOptions for explicit git mode control.
 func RunTaskInput() (*TaskInputResult, error) {
-	return RunTaskInputWithTasks(nil)
+	return RunTaskInputWithOptions(nil, true, "") // Default to git mode for backward compatibility
 }
 
 // RunTaskInputWithTasks runs the task input with active task list and returns the result.
+// Deprecated: Use RunTaskInputWithOptions for explicit git mode control.
 func RunTaskInputWithTasks(activeTasks []string) (*TaskInputResult, error) {
-	return RunTaskInputWithTasksAndContent(activeTasks, "")
+	return RunTaskInputWithOptions(activeTasks, true, "") // Default to git mode for backward compatibility
 }
 
 // RunTaskInputWithTasksAndContent runs the task input with active task list and initial content.
+// Deprecated: Use RunTaskInputWithOptions for explicit git mode control.
 func RunTaskInputWithTasksAndContent(activeTasks []string, initialContent string) (*TaskInputResult, error) {
+	return RunTaskInputWithOptions(activeTasks, true, initialContent) // Default to git mode for backward compatibility
+}
+
+// RunTaskInputWithOptions runs the task input with active task list, git mode flag, and optional initial content.
+func RunTaskInputWithOptions(activeTasks []string, isGitRepo bool, initialContent string) (*TaskInputResult, error) {
 	// Reset theme cache to ensure fresh detection on each TUI start
 	ResetDarkModeCache()
 
-	m := NewTaskInputWithTasks(activeTasks)
+	m := NewTaskInputWithOptions(activeTasks, isGitRepo)
 	if initialContent != "" {
 		m.SetContent(initialContent)
 	}

@@ -32,7 +32,14 @@ const (
 	OptFieldBranchName
 )
 
-const optFieldCount = 2
+// optFieldCount returns the number of option fields based on git mode.
+// In non-git mode, the Branch field is hidden.
+func optFieldCount(isGitRepo bool) int {
+	if isGitRepo {
+		return 2 // Model + Branch
+	}
+	return 1 // Model only
+}
 
 // cancelDoublePressTimeout is the time window for double-press cancel detection.
 const cancelDoublePressTimeout = 2 * time.Second
@@ -57,6 +64,7 @@ type TaskInput struct {
 	options     *config.TaskOptions
 	activeTasks []string // Active task names for dependency selection
 	isDark      bool     // Cached dark mode detection (must be detected before bubbletea starts)
+	isGitRepo   bool     // Whether the project is a git repository
 	pawDir      string
 
 	// Dynamic textarea height
@@ -134,12 +142,19 @@ type TaskInputResult struct {
 }
 
 // NewTaskInput creates a new task input model.
+// Deprecated: Use NewTaskInputWithOptions for explicit git mode control.
 func NewTaskInput() *TaskInput {
-	return NewTaskInputWithTasks(nil)
+	return NewTaskInputWithOptions(nil, true) // Default to git mode for backward compatibility
 }
 
 // NewTaskInputWithTasks creates a new task input model with active task list.
+// Deprecated: Use NewTaskInputWithOptions for explicit git mode control.
 func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
+	return NewTaskInputWithOptions(activeTasks, true) // Default to git mode for backward compatibility
+}
+
+// NewTaskInputWithOptions creates a new task input model with active task list and git mode flag.
+func NewTaskInputWithOptions(activeTasks []string, isGitRepo bool) *TaskInput {
 	// Detect dark mode BEFORE bubbletea starts
 	isDark := DetectDarkMode()
 
@@ -180,6 +195,7 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 		options:           opts,
 		activeTasks:       activeTasks,
 		isDark:            isDark,
+		isGitRepo:         isGitRepo,
 		pawDir:            findPawDir(),
 		textareaHeight:    textareaDefaultHeight,
 		textareaMaxHeight: 15, // Will be updated on WindowSizeMsg

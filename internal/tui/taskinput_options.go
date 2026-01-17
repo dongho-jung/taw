@@ -14,17 +14,18 @@ import (
 // updateOptionsPanel handles key events when the options panel is focused.
 func (m *TaskInput) updateOptionsPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	keyStr := msg.String()
+	fieldCount := optFieldCount(m.isGitRepo)
 
-	// Handle text input for branch name field
-	if m.optField == OptFieldBranchName {
+	// Handle text input for branch name field (only in git mode)
+	if m.isGitRepo && m.optField == OptFieldBranchName {
 		switch keyStr {
 		case "tab", "down":
 			m.applyOptionInputValues()
-			m.optField = OptField((int(m.optField) + 1) % optFieldCount)
+			m.optField = OptField((int(m.optField) + 1) % fieldCount)
 			return m, nil
 		case "shift+tab", "up":
 			m.applyOptionInputValues()
-			m.optField = OptField((int(m.optField) - 1 + optFieldCount) % optFieldCount)
+			m.optField = OptField((int(m.optField) - 1 + fieldCount) % fieldCount)
 			return m, nil
 		case "backspace":
 			if len(m.branchName) > 0 {
@@ -59,12 +60,12 @@ func (m *TaskInput) updateOptionsPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch keyStr {
 	case "tab", "down", "j":
 		m.applyOptionInputValues()
-		m.optField = OptField((int(m.optField) + 1) % optFieldCount)
+		m.optField = OptField((int(m.optField) + 1) % fieldCount)
 		return m, nil
 
 	case "shift+tab", "up", "k":
 		m.applyOptionInputValues()
-		m.optField = OptField((int(m.optField) - 1 + optFieldCount) % optFieldCount)
+		m.optField = OptField((int(m.optField) - 1 + fieldCount) % fieldCount)
 		return m, nil
 
 	case "left", "h":
@@ -202,8 +203,8 @@ func (m *TaskInput) renderOptionsPanel() string {
 		lines = append(lines, padToWidth(modelLine, innerWidth))
 	}
 
-	// Branch name field
-	{
+	// Branch name field (only in git mode)
+	if m.isGitRepo {
 		isSelected := isFocused && m.optField == OptFieldBranchName
 		paddedLabel := fmt.Sprintf("%-12s", "Branch:")
 		label := labelStyle.Render(paddedLabel)

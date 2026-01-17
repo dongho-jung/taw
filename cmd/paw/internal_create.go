@@ -125,8 +125,8 @@ var newTaskCmd = &cobra.Command{
 		// Loop continuously for task creation
 		// History search (Ctrl+R) is handled via tmux popup, not inline
 		for {
-			// Use inline task input TUI with active task list
-			result, err := tui.RunTaskInputWithTasks(activeTasks)
+			// Use inline task input TUI with active task list and git mode flag
+			result, err := tui.RunTaskInputWithOptions(activeTasks, appCtx.IsGitRepo, "")
 			if err != nil {
 				fmt.Printf("Failed to get task input: %v\n", err)
 				continue
