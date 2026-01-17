@@ -340,5 +340,5 @@ func getShell() string {
 }
 
 func buildTaskInstruction(userPromptPath string) string {
-	return fmt.Sprintf("Read and execute the task from '%s'\nPAW task start", userPromptPath)
+	return fmt.Sprintf("Read and execute the task from '%s'", userPromptPath)
 }
