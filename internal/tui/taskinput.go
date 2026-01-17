@@ -30,9 +30,10 @@ type OptField int
 const (
 	OptFieldModel OptField = iota
 	OptFieldUltrathink
+	OptFieldBranchName
 )
 
-const optFieldCount = 2
+const optFieldCount = 3
 
 // cancelDoublePressTimeout is the time window for double-press cancel detection.
 const cancelDoublePressTimeout = 2 * time.Second
@@ -70,6 +71,7 @@ type TaskInput struct {
 	focusPanel FocusPanel
 	optField   OptField
 	modelIdx   int
+	branchName string // Custom branch name input (empty = auto)
 
 	mouseSelecting  bool
 	selectAnchorRow int

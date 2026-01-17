@@ -54,6 +54,9 @@ type TaskOptions struct {
 
 	// PreWorktreeHook overrides the project's pre-worktree hook for this task
 	PreWorktreeHook string `json:"pre_worktree_hook,omitempty"`
+
+	// BranchName specifies a custom branch name (default: auto-generated from task content)
+	BranchName string `json:"branch_name,omitempty"`
 }
 
 // DefaultTaskOptions returns the default task options.
@@ -123,14 +126,19 @@ func (o *TaskOptions) Merge(other *TaskOptions) {
 	if other.PreWorktreeHook != "" {
 		o.PreWorktreeHook = other.PreWorktreeHook
 	}
+
+	if other.BranchName != "" {
+		o.BranchName = other.BranchName
+	}
 }
 
 // Clone creates a deep copy of the task options.
 func (o *TaskOptions) Clone() *TaskOptions {
 	clone := &TaskOptions{
-		Model:        o.Model,
-		Ultrathink:   o.Ultrathink,
+		Model:           o.Model,
+		Ultrathink:      o.Ultrathink,
 		PreWorktreeHook: o.PreWorktreeHook,
+		BranchName:      o.BranchName,
 	}
 
 	if o.DependsOn != nil {

@@ -343,7 +343,15 @@ var spawnTaskCmd = &cobra.Command{
 
 		// Create task (loading screen shows while this runs)
 		mgr := task.NewManager(appCtx.AgentsDir, appCtx.ProjectDir, appCtx.PawDir, appCtx.IsGitRepo, appCtx.Config)
-		newTask, err := mgr.CreateTask(content)
+
+		// Pass custom branch name if provided in options
+		var customBranchName string
+		if taskOpts != nil && taskOpts.BranchName != "" {
+			customBranchName = taskOpts.BranchName
+			logging.Debug("Using custom branch name from options: %s", customBranchName)
+		}
+
+		newTask, err := mgr.CreateTask(content, customBranchName)
 		if err != nil {
 			logging.Error("Failed to create task: %v", err)
 			return fmt.Errorf("failed to create task: %w", err)

@@ -14,6 +14,44 @@ import (
 func (m *TaskInput) updateOptionsPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	keyStr := msg.String()
 
+	// Handle text input for branch name field
+	if m.optField == OptFieldBranchName {
+		switch keyStr {
+		case "tab", "down":
+			m.applyOptionInputValues()
+			m.optField = OptField((int(m.optField) + 1) % optFieldCount)
+			return m, nil
+		case "shift+tab", "up":
+			m.applyOptionInputValues()
+			m.optField = OptField((int(m.optField) - 1 + optFieldCount) % optFieldCount)
+			return m, nil
+		case "backspace":
+			if len(m.branchName) > 0 {
+				m.branchName = m.branchName[:len(m.branchName)-1]
+			}
+			return m, nil
+		case "delete", "ctrl+u":
+			m.branchName = ""
+			return m, nil
+		default:
+			// Accept printable characters for branch name
+			// Only allow valid branch name characters: a-z, 0-9, -, _
+			key := msg.Key()
+			if len(keyStr) == 1 && key.Mod == 0 {
+				r := rune(keyStr[0])
+				if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+					// Convert to lowercase for branch names
+					if r >= 'A' && r <= 'Z' {
+						r = r + 32
+					}
+					m.branchName += string(r)
+					return m, nil
+				}
+			}
+		}
+		return m, nil
+	}
+
 	switch keyStr {
 	case "tab", "down", "j":
 		m.applyOptionInputValues()
@@ -74,9 +112,9 @@ func (m *TaskInput) handleOptionRight() {
 }
 
 // applyOptionInputValues applies current selection values to options.
-// Currently a no-op since Model and Ultrathink are applied immediately.
 func (m *TaskInput) applyOptionInputValues() {
-	// No-op: Model and Ultrathink are applied directly when changed
+	// Apply branch name to options
+	m.options.BranchName = m.branchName
 }
 
 // renderOptionsPanel renders the options panel for the right side.
@@ -197,6 +235,38 @@ func (m *TaskInput) renderOptionsPanel() string {
 		}
 		ultraLine := label + onText + " " + offText
 		lines = append(lines, padToWidth(ultraLine, innerWidth))
+	}
+
+	// Branch name field
+	{
+		isSelected := isFocused && m.optField == OptFieldBranchName
+		paddedLabel := fmt.Sprintf("%-12s", "Branch:")
+		label := labelStyle.Render(paddedLabel)
+		if isSelected {
+			label = selectedLabelStyle.Render(paddedLabel)
+		}
+
+		// Show placeholder or actual value
+		var valueText string
+		if m.branchName == "" {
+			// Show placeholder
+			placeholderStyle := dimStyle.Italic(true)
+			valueText = placeholderStyle.Render("<auto>")
+		} else {
+			if isSelected {
+				valueText = selectedValueStyle.Render(m.branchName)
+			} else {
+				valueText = valueStyle.Render(m.branchName)
+			}
+		}
+
+		// Add cursor if focused
+		if isSelected {
+			valueText += selectedValueStyle.Render("_")
+		}
+
+		branchLine := label + valueText
+		lines = append(lines, padToWidth(branchLine, innerWidth))
 	}
 
 	// Fill remaining height with empty lines

@@ -101,6 +101,47 @@ func sanitizeWorktreeBase(base string) string {
 	return clean
 }
 
+// sanitizeCustomBranchName sanitizes a custom branch name to match git branch naming rules.
+// It converts to lowercase, replaces invalid characters with hyphens, and ensures valid format.
+func sanitizeCustomBranchName(name string) string {
+	// Convert to lowercase
+	name = strings.ToLower(name)
+
+	// Replace spaces and underscores with hyphens
+	name = strings.ReplaceAll(name, " ", "-")
+	name = strings.ReplaceAll(name, "_", "-")
+
+	// Remove any characters that aren't lowercase letters, numbers, or hyphens
+	var result strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			result.WriteRune(r)
+		}
+	}
+	name = result.String()
+
+	// Remove leading/trailing hyphens
+	name = strings.Trim(name, "-")
+
+	// Collapse multiple hyphens
+	for strings.Contains(name, "--") {
+		name = strings.ReplaceAll(name, "--", "-")
+	}
+
+	// Truncate if too long (max 32 chars for branch names)
+	if len(name) > 32 {
+		name = name[:32]
+		name = strings.TrimSuffix(name, "-")
+	}
+
+	// Ensure minimum length
+	if len(name) < 3 {
+		return ""
+	}
+
+	return name
+}
+
 func (m *Manager) projectDirHashSuffix() string {
 	path := m.projectDir
 	if resolved, err := filepath.EvalSymlinks(path); err == nil && resolved != "" {
@@ -115,24 +156,34 @@ func (m *Manager) projectDirHashSuffix() string {
 
 // CreateTask creates a new task with the given content.
 // It generates a task name using Claude and creates the task directory atomically.
-func (m *Manager) CreateTask(content string) (*Task, error) {
+// If customBranchName is non-empty, it uses that instead of generating a name.
+func (m *Manager) CreateTask(content string, customBranchName ...string) (*Task, error) {
 	logging.Debug("-> Manager.CreateTask(content_len=%d)", len(content))
 	defer logging.Debug("<- Manager.CreateTask")
 
-	// Generate task name using Claude
-	logging.Trace("Generating task name with Claude: content_length=%d", len(content))
-	timer := logging.StartTimer("task name generation")
+	var name string
 
-	name, err := m.claudeClient.GenerateTaskName(content)
-	if err != nil {
-		// Use fallback name if Claude fails
-		fallbackName := fmt.Sprintf("task-%d", os.Getpid())
-		timer.StopWithResult(false, fmt.Sprintf("error=%v, fallback=%s", err, fallbackName))
-		logging.Warn("Claude name generation failed, using fallback: error=%v, fallback=%s", err, fallbackName)
-		name = fallbackName
+	// Check for custom branch name
+	if len(customBranchName) > 0 && customBranchName[0] != "" {
+		name = sanitizeCustomBranchName(customBranchName[0])
+		logging.Debug("Using custom branch name: %s", name)
 	} else {
-		timer.StopWithResult(true, fmt.Sprintf("name=%s", name))
-		logging.Debug("Task name generated: %s", name)
+		// Generate task name using Claude
+		logging.Trace("Generating task name with Claude: content_length=%d", len(content))
+		timer := logging.StartTimer("task name generation")
+
+		var err error
+		name, err = m.claudeClient.GenerateTaskName(content)
+		if err != nil {
+			// Use fallback name if Claude fails
+			fallbackName := fmt.Sprintf("task-%d", os.Getpid())
+			timer.StopWithResult(false, fmt.Sprintf("error=%v, fallback=%s", err, fallbackName))
+			logging.Warn("Claude name generation failed, using fallback: error=%v, fallback=%s", err, fallbackName)
+			name = fallbackName
+		} else {
+			timer.StopWithResult(true, fmt.Sprintf("name=%s", name))
+			logging.Debug("Task name generated: %s", name)
+		}
 	}
 
 	// Create task directory atomically
