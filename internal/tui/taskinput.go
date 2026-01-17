@@ -29,9 +29,10 @@ type OptField int
 
 const (
 	OptFieldModel OptField = iota
+	OptFieldBranchName
 )
 
-const optFieldCount = 1
+const optFieldCount = 2
 
 // cancelDoublePressTimeout is the time window for double-press cancel detection.
 const cancelDoublePressTimeout = 2 * time.Second
@@ -186,6 +187,7 @@ func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
 		focusPanel:        FocusPanelLeft,
 		optField:          OptFieldModel,
 		modelIdx:          modelIdx,
+		branchName:        opts.BranchName,
 		kanban:            NewKanbanView(isDark),
 		currentTip:        GetTip(),
 		lastTipRefresh:    time.Now(),

@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/dongho-jung/paw/internal/config"
 )
@@ -43,6 +44,9 @@ func (m *TaskInput) updateOptionsPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					// Convert to lowercase for branch names
 					if r >= 'A' && r <= 'Z' {
 						r = r + 32
+					}
+					if len(m.branchName) >= 32 {
+						return m, nil
 					}
 					m.branchName += string(r)
 					return m, nil
@@ -99,10 +103,12 @@ func (m *TaskInput) handleOptionRight() {
 	}
 }
 
-// applyOptionInputValues applies current selection values to options.
-// Currently a no-op since Model is applied immediately.
+// applyOptionInputValues applies current input values to options.
 func (m *TaskInput) applyOptionInputValues() {
-	// No-op: Model is applied directly when changed
+	if m.options == nil {
+		return
+	}
+	m.options.BranchName = strings.TrimSpace(m.branchName)
 }
 
 // renderOptionsPanel renders the options panel for the right side.
@@ -194,6 +200,37 @@ func (m *TaskInput) renderOptionsPanel() string {
 		}
 		modelLine := label + strings.Join(parts, "")
 		lines = append(lines, padToWidth(modelLine, innerWidth))
+	}
+
+	// Branch name field
+	{
+		isSelected := isFocused && m.optField == OptFieldBranchName
+		paddedLabel := fmt.Sprintf("%-12s", "Branch:")
+		label := labelStyle.Render(paddedLabel)
+		if isSelected {
+			label = selectedLabelStyle.Render(paddedLabel)
+		}
+
+		branchValue := m.branchName
+		branchStyle := valueStyle
+		if branchValue == "" {
+			branchValue = "auto"
+			branchStyle = dimStyle
+		}
+		if isSelected {
+			branchStyle = selectedValueStyle
+		}
+
+		availableWidth := innerWidth - lipgloss.Width(paddedLabel)
+		if availableWidth < 0 {
+			availableWidth = 0
+		}
+		if availableWidth > 0 && lipgloss.Width(branchValue) > availableWidth {
+			branchValue = ansi.Truncate(branchValue, availableWidth, "")
+		}
+
+		branchLine := label + branchStyle.Render(branchValue)
+		lines = append(lines, padToWidth(branchLine, innerWidth))
 	}
 
 	// Fill remaining height with empty lines
