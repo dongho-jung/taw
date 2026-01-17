@@ -54,19 +54,19 @@ var doneTaskCmd = &cobra.Command{
 			return nil
 		}
 
-		// Show finish picker popup
+		// Show finish picker in top pane
 		pawBin, _ := os.Executable()
 		finishCmd := fmt.Sprintf("%s internal finish-picker-tui %s %s", pawBin, sessionName, windowID)
 
-		// Display popup - if user presses Ctrl+F again, popup closes automatically
-		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:    constants.PopupWidthFinishPicker,
-			Height:   constants.PopupHeightFinishPicker,
-			Title:    " Finish Task ",
-			Close:    true,
-			NoBorder: true,
-			Style:    "fg=terminal,bg=terminal",
-		}, finishCmd)
+		// Display in top pane - if user presses Ctrl+F again, pane closes automatically
+		result, err := displayTopPane(tm, "finish", finishCmd, "")
+		if err != nil {
+			logging.Debug("doneTaskCmd: displayTopPane failed: %v", err)
+			return err
+		}
+		if result == TopPaneBlocked {
+			logging.Debug("doneTaskCmd: blocked by another top pane")
+		}
 
 		return nil
 	},

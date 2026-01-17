@@ -9,7 +9,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 
-	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/tmux"
 	"github.com/dongho-jung/paw/internal/tui"
@@ -41,7 +40,7 @@ var loadingScreenCmd = &cobra.Command{
 
 var toggleCmdPaletteCmd = &cobra.Command{
 	Use:   "toggle-cmd-palette [session]",
-	Short: "Toggle command palette popup",
+	Short: "Toggle command palette top pane",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logging.Debug("-> toggleCmdPaletteCmd(session=%s)", args[0])
@@ -55,18 +54,17 @@ var toggleCmdPaletteCmd = &cobra.Command{
 			pawBin = "paw"
 		}
 
-		// Run command palette in popup
+		// Run command palette in top pane
 		paletteCmd := fmt.Sprintf("%s internal cmd-palette-tui %s", pawBin, sessionName)
 
-		// Ignore error - popup returns non-zero when closed with Esc/Ctrl+C
-		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:    constants.PopupWidthPalette,
-			Height:   constants.PopupHeightPalette,
-			Title:    "",
-			Close:    true,
-			NoBorder: true,
-			Style:    "fg=terminal,bg=terminal",
-		}, paletteCmd)
+		result, err := displayTopPane(tm, "palette", paletteCmd, "")
+		if err != nil {
+			logging.Debug("toggleCmdPaletteCmd: displayTopPane failed: %v", err)
+			return err
+		}
+		if result == TopPaneBlocked {
+			logging.Debug("toggleCmdPaletteCmd: blocked by another top pane")
+		}
 		return nil
 	},
 }

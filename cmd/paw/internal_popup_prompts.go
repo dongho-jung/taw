@@ -17,7 +17,7 @@ import (
 
 var togglePromptPickerCmd = &cobra.Command{
 	Use:   "toggle-prompt-picker [session]",
-	Short: "Toggle prompt picker popup",
+	Short: "Toggle prompt picker top pane",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logging.Debug("-> togglePromptPickerCmd(session=%s)", args[0])
@@ -31,18 +31,17 @@ var togglePromptPickerCmd = &cobra.Command{
 			pawBin = "paw"
 		}
 
-		// Run prompt picker in popup
+		// Run prompt picker in top pane
 		pickerCmd := fmt.Sprintf("%s internal prompt-picker-tui %s", pawBin, sessionName)
 
-		// Ignore error - popup returns non-zero when closed with Esc/Ctrl+C
-		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:    constants.PopupWidthPalette,
-			Height:   constants.PopupHeightPalette,
-			Title:    "",
-			Close:    true,
-			NoBorder: true,
-			Style:    "fg=terminal,bg=terminal",
-		}, pickerCmd)
+		result, err := displayTopPane(tm, "prompt", pickerCmd, "")
+		if err != nil {
+			logging.Debug("togglePromptPickerCmd: displayTopPane failed: %v", err)
+			return err
+		}
+		if result == TopPaneBlocked {
+			logging.Debug("togglePromptPickerCmd: blocked by another top pane")
+		}
 		return nil
 	},
 }

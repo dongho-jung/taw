@@ -17,9 +17,92 @@ import (
 	"github.com/dongho-jung/paw/internal/tui"
 )
 
+const (
+	// TopPaneSize is the maximum height for top panes (40% of window)
+	TopPaneSize = "40%"
+	// tmux option keys for tracking top pane state
+	topPaneIDKey   = "@paw_top_pane_id"
+	topPaneTypeKey = "@paw_top_pane_type"
+)
+
+// TopPaneResult represents the result of displayTopPane operation
+type TopPaneResult int
+
+const (
+	// TopPaneCreated indicates a new top pane was created
+	TopPaneCreated TopPaneResult = iota
+	// TopPaneClosed indicates the existing top pane was closed (toggle off)
+	TopPaneClosed
+	// TopPaneBlocked indicates another top pane is already open
+	TopPaneBlocked
+)
+
+// displayTopPane creates a top pane for TUI display with toggle and blocking behavior.
+// - If no top pane exists, creates one and runs the command
+// - If the same paneType is already open, closes it (toggle off)
+// - If a different paneType is already open, blocks (returns TopPaneBlocked)
+//
+// paneType should be a unique identifier for the TUI (e.g., "log", "help", "git")
+// command is the command to run in the pane
+// workDir is the working directory for the pane (can be empty)
+func displayTopPane(tm tmux.Client, paneType, command, workDir string) (TopPaneResult, error) {
+	logging.Debug("-> displayTopPane(type=%s, cmd=%s)", paneType, command)
+	defer logging.Debug("<- displayTopPane")
+
+	// Check if a top pane already exists
+	existingPaneID, _ := tm.GetOption(topPaneIDKey)
+	existingPaneID = strings.TrimSpace(existingPaneID)
+
+	if existingPaneID != "" && tm.HasPane(existingPaneID) {
+		// Top pane exists - check if it's the same type
+		existingType, _ := tm.GetOption(topPaneTypeKey)
+		existingType = strings.TrimSpace(existingType)
+
+		if existingType == paneType {
+			// Same type - toggle off (close the pane)
+			logging.Debug("displayTopPane: toggling off existing %s pane", paneType)
+			_ = tm.KillPane(existingPaneID)
+			_ = tm.SetOption(topPaneIDKey, "", true)
+			_ = tm.SetOption(topPaneTypeKey, "", true)
+			return TopPaneClosed, nil
+		}
+
+		// Different type - block
+		logging.Debug("displayTopPane: blocked by existing %s pane", existingType)
+		return TopPaneBlocked, nil
+	}
+
+	// Clean up stale options if pane doesn't exist
+	if existingPaneID != "" {
+		_ = tm.SetOption(topPaneIDKey, "", true)
+		_ = tm.SetOption(topPaneTypeKey, "", true)
+	}
+
+	// Create new top pane
+	newPaneID, err := tm.SplitWindowPane(tmux.SplitOpts{
+		Horizontal: false, // vertical split (top/bottom)
+		Size:       TopPaneSize,
+		StartDir:   workDir,
+		Command:    command,
+		Before:     true, // create pane above (top)
+		Full:       true, // span entire window width
+	})
+	if err != nil {
+		return TopPaneBlocked, fmt.Errorf("failed to create top pane: %w", err)
+	}
+
+	// Store pane info for toggle/blocking
+	newPaneID = strings.TrimSpace(newPaneID)
+	_ = tm.SetOption(topPaneIDKey, newPaneID, true)
+	_ = tm.SetOption(topPaneTypeKey, paneType, true)
+
+	logging.Debug("displayTopPane: created pane %s for type %s", newPaneID, paneType)
+	return TopPaneCreated, nil
+}
+
 var toggleLogCmd = &cobra.Command{
 	Use:   "toggle-log [session]",
-	Short: "Toggle log viewer popup",
+	Short: "Toggle log viewer top pane",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logging.Debug("-> toggleLogCmd(session=%s)", args[0])
@@ -41,17 +124,17 @@ var toggleLogCmd = &cobra.Command{
 			pawBin = "paw"
 		}
 
-		// Run log viewer in popup (closes with q/Esc/Ctrl+L)
+		// Run log viewer in top pane (closes with q/Esc/Ctrl+O)
 		logCmd := fmt.Sprintf("%s internal log-viewer %s", pawBin, logPath)
 
-		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:    constants.PopupWidthFull,
-			Height:   constants.PopupHeightFull,
-			Title:    " Log Viewer ",
-			Close:    true,
-			NoBorder: true,
-			Style:    "fg=terminal,bg=terminal",
-		}, logCmd)
+		result, err := displayTopPane(tm, "log", logCmd, "")
+		if err != nil {
+			logging.Debug("toggleLogCmd: displayTopPane failed: %v", err)
+			return err
+		}
+		if result == TopPaneBlocked {
+			logging.Debug("toggleLogCmd: blocked by another top pane")
+		}
 		return nil
 	},
 }
@@ -69,9 +152,12 @@ var logViewerCmd = &cobra.Command{
 
 var toggleHelpCmd = &cobra.Command{
 	Use:   "toggle-help [session]",
-	Short: "Toggle help popup",
+	Short: "Toggle help top pane",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Debug("-> toggleHelpCmd(session=%s)", args[0])
+		defer logging.Debug("<- toggleHelpCmd")
+
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
@@ -80,17 +166,17 @@ var toggleHelpCmd = &cobra.Command{
 			pawBin = "paw"
 		}
 
-		// Run help viewer in popup (closes with q/Esc/Ctrl+/)
+		// Run help viewer in top pane (closes with q/Esc/Ctrl+/)
 		helpCmd := fmt.Sprintf("%s internal help-viewer", pawBin)
 
-		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:    constants.PopupWidthHelp,
-			Height:   constants.PopupHeightHelp,
-			Title:    " Help ",
-			Close:    true,
-			NoBorder: true,
-			Style:    "fg=terminal,bg=terminal",
-		}, helpCmd)
+		result, err := displayTopPane(tm, "help", helpCmd, "")
+		if err != nil {
+			logging.Debug("toggleHelpCmd: displayTopPane failed: %v", err)
+			return err
+		}
+		if result == TopPaneBlocked {
+			logging.Debug("toggleHelpCmd: blocked by another top pane")
+		}
 		return nil
 	},
 }
@@ -125,9 +211,12 @@ var gitViewerCmd = &cobra.Command{
 
 var toggleGitStatusCmd = &cobra.Command{
 	Use:   "toggle-git-status [session]",
-	Short: "Show git viewer popup",
+	Short: "Toggle git viewer top pane",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Debug("-> toggleGitStatusCmd(session=%s)", args[0])
+		defer logging.Debug("<- toggleGitStatusCmd")
+
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
@@ -158,27 +247,29 @@ var toggleGitStatusCmd = &cobra.Command{
 			pawBin = "paw"
 		}
 
-		// Run git viewer in popup (closes with q/Esc/Ctrl+G)
+		// Run git viewer in top pane (closes with q/Esc/Ctrl+G)
 		gitCmd := fmt.Sprintf("%s internal git-viewer %s %s", pawBin, panePath, mainBranch)
 
-		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:     constants.PopupWidthFull,
-			Height:    constants.PopupHeightFull,
-			Title:     " Git ",
-			Close:     true,
-			NoBorder:  true,
-			Style:     "fg=terminal,bg=terminal",
-			Directory: panePath,
-		}, gitCmd)
+		result, err := displayTopPane(tm, "git", gitCmd, panePath)
+		if err != nil {
+			logging.Debug("toggleGitStatusCmd: displayTopPane failed: %v", err)
+			return err
+		}
+		if result == TopPaneBlocked {
+			logging.Debug("toggleGitStatusCmd: blocked by another top pane")
+		}
 		return nil
 	},
 }
 
 var toggleShowDiffCmd = &cobra.Command{
 	Use:   "toggle-show-diff [session]",
-	Short: "Show diff between task branch and main",
+	Short: "Toggle diff viewer top pane",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Debug("-> toggleShowDiffCmd(session=%s)", args[0])
+		defer logging.Debug("<- toggleShowDiffCmd")
+
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
@@ -209,18 +300,17 @@ var toggleShowDiffCmd = &cobra.Command{
 			pawBin = "paw"
 		}
 
-		// Run diff viewer in popup (closes with q/Esc/Ctrl+D)
+		// Run diff viewer in top pane (closes with q/Esc/Ctrl+D)
 		diffCmd := fmt.Sprintf("%s internal diff-viewer %s %s", pawBin, panePath, mainBranch)
 
-		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:     constants.PopupWidthFull,
-			Height:    constants.PopupHeightFull,
-			Title:     fmt.Sprintf(" Diff (%s...HEAD) ", mainBranch),
-			Close:     true,
-			NoBorder:  true,
-			Style:     "fg=terminal,bg=terminal",
-			Directory: panePath,
-		}, diffCmd)
+		result, err := displayTopPane(tm, "diff", diffCmd, panePath)
+		if err != nil {
+			logging.Debug("toggleShowDiffCmd: displayTopPane failed: %v", err)
+			return err
+		}
+		if result == TopPaneBlocked {
+			logging.Debug("toggleShowDiffCmd: blocked by another top pane")
+		}
 		return nil
 	},
 }
@@ -239,9 +329,12 @@ var diffViewerCmd = &cobra.Command{
 
 var toggleHistoryCmd = &cobra.Command{
 	Use:   "toggle-history [session]",
-	Short: "Toggle history picker popup",
+	Short: "Toggle history picker top pane",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Debug("-> toggleHistoryCmd(session=%s)", args[0])
+		defer logging.Debug("<- toggleHistoryCmd")
+
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
@@ -255,18 +348,17 @@ var toggleHistoryCmd = &cobra.Command{
 			pawBin = "paw"
 		}
 
-		// Run history picker in popup
+		// Run history picker in top pane
 		historyCmd := fmt.Sprintf("%s internal history-picker %s", pawBin, sessionName)
 
-		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:     constants.PopupWidthHistory,
-			Height:    constants.PopupHeightHistory,
-			Title:     " Task History (⌃R) ",
-			Close:     true,
-			NoBorder:  true,
-			Style:     "fg=terminal,bg=terminal",
-			Directory: appCtx.ProjectDir,
-		}, historyCmd)
+		result, err := displayTopPane(tm, "history", historyCmd, appCtx.ProjectDir)
+		if err != nil {
+			logging.Debug("toggleHistoryCmd: displayTopPane failed: %v", err)
+			return err
+		}
+		if result == TopPaneBlocked {
+			logging.Debug("toggleHistoryCmd: blocked by another top pane")
+		}
 		return nil
 	},
 }
@@ -337,9 +429,12 @@ var historyPickerCmd = &cobra.Command{
 
 var toggleTemplateCmd = &cobra.Command{
 	Use:   "toggle-template [session]",
-	Short: "Toggle template picker popup",
+	Short: "Toggle template picker top pane",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Debug("-> toggleTemplateCmd(session=%s)", args[0])
+		defer logging.Debug("<- toggleTemplateCmd")
+
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
@@ -355,15 +450,14 @@ var toggleTemplateCmd = &cobra.Command{
 
 		templateCmd := fmt.Sprintf("%s internal template-picker %s", pawBin, sessionName)
 
-		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:     constants.PopupWidthTemplate,
-			Height:    constants.PopupHeightTemplate,
-			Title:     " Templates (⌃T) ",
-			Close:     true,
-			NoBorder:  true,
-			Style:     "fg=terminal,bg=terminal",
-			Directory: appCtx.ProjectDir,
-		}, templateCmd)
+		result, err := displayTopPane(tm, "template", templateCmd, appCtx.ProjectDir)
+		if err != nil {
+			logging.Debug("toggleTemplateCmd: displayTopPane failed: %v", err)
+			return err
+		}
+		if result == TopPaneBlocked {
+			logging.Debug("toggleTemplateCmd: blocked by another top pane")
+		}
 		return nil
 	},
 }
@@ -435,9 +529,12 @@ var templatePickerCmd = &cobra.Command{
 
 var toggleProjectPickerCmd = &cobra.Command{
 	Use:   "toggle-project-picker [session]",
-	Short: "Toggle project picker popup to switch between PAW sessions",
+	Short: "Toggle project picker top pane to switch between PAW sessions",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.Debug("-> toggleProjectPickerCmd(session=%s)", args[0])
+		defer logging.Debug("<- toggleProjectPickerCmd")
+
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
@@ -452,44 +549,25 @@ var toggleProjectPickerCmd = &cobra.Command{
 			pawBin = "paw"
 		}
 
-		// Clean up any stale switch target file before showing popup
+		// Clean up any stale switch target file before showing top pane
 		switchPath := filepath.Join(appCtx.PawDir, constants.ProjectSwitchFileName)
 		_ = os.Remove(switchPath)
 
-		// Run project picker in popup
-		pickerCmd := fmt.Sprintf("%s internal project-picker %s", pawBin, sessionName)
+		// Run project picker in top pane
+		// Note: The picker writes to switchPath when user selects, and we check it after
+		// Since this is async (pane runs independently), we use a wrapper command
+		// that handles the switch after the picker exits
+		pickerCmd := fmt.Sprintf("%s internal project-picker-wrapper %s", pawBin, sessionName)
 
-		_ = tm.DisplayPopup(tmux.PopupOpts{
-			Width:    constants.PopupWidthProjectPicker,
-			Height:   constants.PopupHeightProjectPicker,
-			Title:    " Switch Project (⌃J) ",
-			Close:    true,
-			NoBorder: true,
-			Style:    "fg=terminal,bg=terminal",
-		}, pickerCmd)
-
-		// Check if a switch target was written by the project picker
-		targetData, err := os.ReadFile(switchPath)
+		result, err := displayTopPane(tm, "project", pickerCmd, "")
 		if err != nil {
-			// No switch target - user cancelled or closed popup
-			return nil
+			logging.Debug("toggleProjectPickerCmd: displayTopPane failed: %v", err)
+			return err
 		}
-
-		// Clean up the switch file
-		_ = os.Remove(switchPath)
-
-		targetSession := strings.TrimSpace(string(targetData))
-		if targetSession == "" {
-			return nil
+		if result == TopPaneBlocked {
+			logging.Debug("toggleProjectPickerCmd: blocked by another top pane")
 		}
-
-		logging.Debug("toggleProjectPickerCmd: switching to session %s", targetSession)
-
-		// Use detach-client -E to replace the current client with a new attachment
-		// to the target session. This works across different tmux sockets.
-		targetSocket := constants.TmuxSocketPrefix + targetSession
-		switchCmd := fmt.Sprintf("tmux -L %s attach-session -t %s", targetSocket, targetSession)
-		return tm.Run("detach-client", "-E", switchCmd)
+		return nil
 	},
 }
 
@@ -547,6 +625,74 @@ var projectPickerCmd = &cobra.Command{
 				return nil
 			}
 			logging.Debug("projectPickerCmd: wrote switch target to %s: %s", switchPath, selected.Name)
+		}
+
+		return nil
+	},
+}
+
+var projectPickerWrapperCmd = &cobra.Command{
+	Use:    "project-picker-wrapper [session]",
+	Short:  "Run project picker and handle session switch",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		currentSession := args[0]
+
+		appCtx, err := getAppFromSession(currentSession)
+		if err != nil {
+			logging.Debug("projectPickerWrapperCmd: getAppFromSession failed: %v", err)
+			return err
+		}
+
+		// Setup logging
+		_, cleanup := setupLoggerFromApp(appCtx, "project-picker-wrapper", "")
+		defer cleanup()
+
+		logging.Debug("-> projectPickerWrapperCmd(session=%s)", currentSession)
+		defer logging.Debug("<- projectPickerWrapperCmd")
+
+		// Find all PAW sessions
+		sessions, err := findPawSessions()
+		if err != nil {
+			fmt.Println("Failed to find PAW sessions.")
+			return nil
+		}
+
+		// Filter out current session
+		var projects []tui.ProjectPickerItem
+		for _, s := range sessions {
+			if s.Name != currentSession {
+				projects = append(projects, tui.ProjectPickerItem{
+					Name:       s.Name,
+					SocketPath: s.SocketPath,
+				})
+			}
+		}
+
+		if len(projects) == 0 {
+			fmt.Println("No other PAW projects running.")
+			return nil
+		}
+
+		// Run project picker
+		action, selected, err := tui.RunProjectPicker(projects)
+		if err != nil {
+			fmt.Printf("Failed to run project picker: %v\n", err)
+			return nil
+		}
+
+		// If user selected a project, perform the switch
+		if action == tui.ProjectPickerSelect && selected != nil {
+			logging.Debug("projectPickerWrapperCmd: switching to session %s", selected.Name)
+
+			tm := tmux.New(currentSession)
+
+			// Use detach-client -E to replace the current client with a new attachment
+			// to the target session. This works across different tmux sockets.
+			targetSocket := constants.TmuxSocketPrefix + selected.Name
+			switchCmd := fmt.Sprintf("tmux -L %s attach-session -t %s", targetSocket, selected.Name)
+			return tm.Run("detach-client", "-E", switchCmd)
 		}
 
 		return nil

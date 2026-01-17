@@ -49,6 +49,7 @@ func init() {
 	internalCmd.AddCommand(templatePickerCmd)
 	internalCmd.AddCommand(toggleProjectPickerCmd)
 	internalCmd.AddCommand(projectPickerCmd)
+	internalCmd.AddCommand(projectPickerWrapperCmd)
 	internalCmd.AddCommand(loadingScreenCmd)
 	internalCmd.AddCommand(toggleCmdPaletteCmd)
 	internalCmd.AddCommand(cmdPaletteTUICmd)

@@ -381,29 +381,7 @@ const (
 	PopupWidthFull  = "100%"
 	PopupHeightFull = "100%"
 
-	// Full-screen size for help viewer.
-	PopupWidthHelp  = PopupWidthFull
-	PopupHeightHelp = PopupHeightFull
-
-	// Full-screen size for command palette.
-	PopupWidthPalette  = PopupWidthFull
-	PopupHeightPalette = PopupHeightFull
-
-	// Full-screen size for history/template pickers.
-	PopupWidthHistory   = PopupWidthFull
-	PopupHeightHistory  = PopupHeightFull
-	PopupWidthTemplate  = PopupWidthFull
-	PopupHeightTemplate = PopupHeightFull
-
-	// Full-screen size for project picker.
-	PopupWidthProjectPicker  = PopupWidthFull
-	PopupHeightProjectPicker = PopupHeightFull
-
-	// Full-screen size for finish picker.
-	PopupWidthFinishPicker  = PopupWidthFull
-	PopupHeightFinishPicker = PopupHeightFull
-
-	// Full-screen size for PR popup.
+	// Full-screen size for PR popup (shown after PR creation).
 	PopupWidthPR  = PopupWidthFull
 	PopupHeightPR = PopupHeightFull
 )
