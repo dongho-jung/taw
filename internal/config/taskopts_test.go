@@ -14,10 +14,6 @@ func TestDefaultTaskOptions(t *testing.T) {
 		t.Errorf("Expected model %s, got %s", DefaultModel, opts.Model)
 	}
 
-	if !opts.Ultrathink {
-		t.Error("Expected ultrathink to be true by default")
-	}
-
 	if opts.DependsOn != nil {
 		t.Error("Expected DependsOn to be nil by default")
 	}
@@ -51,8 +47,7 @@ func TestTaskOptionsSaveLoad(t *testing.T) {
 
 	// Create task options with custom values
 	opts := &TaskOptions{
-		Model:      ModelHaiku,
-		Ultrathink: false,
+		Model: ModelHaiku,
 		DependsOn: &TaskDependency{
 			TaskName:  "other-task",
 			Condition: DependsOnSuccess,
@@ -80,10 +75,6 @@ func TestTaskOptionsSaveLoad(t *testing.T) {
 	// Verify loaded values
 	if loaded.Model != opts.Model {
 		t.Errorf("Expected model %s, got %s", opts.Model, loaded.Model)
-	}
-
-	if loaded.Ultrathink != opts.Ultrathink {
-		t.Errorf("Expected ultrathink %v, got %v", opts.Ultrathink, loaded.Ultrathink)
 	}
 
 	if loaded.DependsOn == nil {
@@ -144,8 +135,7 @@ func TestLoadTaskOptionsInvalidJSON(t *testing.T) {
 func TestTaskOptionsMerge(t *testing.T) {
 	base := DefaultTaskOptions()
 	other := &TaskOptions{
-		Model:        ModelHaiku,
-		Ultrathink:   false,
+		Model:           ModelHaiku,
 		PreWorktreeHook: "make build",
 	}
 
@@ -153,10 +143,6 @@ func TestTaskOptionsMerge(t *testing.T) {
 
 	if base.Model != ModelHaiku {
 		t.Errorf("Expected model %s after merge, got %s", ModelHaiku, base.Model)
-	}
-
-	if base.Ultrathink {
-		t.Error("Expected ultrathink to be false after merge")
 	}
 
 	if base.PreWorktreeHook != "make build" {
@@ -177,8 +163,7 @@ func TestTaskOptionsMergeNil(t *testing.T) {
 
 func TestTaskOptionsClone(t *testing.T) {
 	original := &TaskOptions{
-		Model:      ModelSonnet,
-		Ultrathink: true,
+		Model: ModelSonnet,
 		DependsOn: &TaskDependency{
 			TaskName:  "task-1",
 			Condition: DependsOnFailure,
@@ -191,10 +176,6 @@ func TestTaskOptionsClone(t *testing.T) {
 	// Verify values are the same
 	if clone.Model != original.Model {
 		t.Errorf("Clone model mismatch: %s vs %s", clone.Model, original.Model)
-	}
-
-	if clone.Ultrathink != original.Ultrathink {
-		t.Errorf("Clone ultrathink mismatch: %v vs %v", clone.Ultrathink, original.Ultrathink)
 	}
 
 	// Verify DependsOn is a separate object
@@ -230,8 +211,7 @@ func TestGetOptionsPath(t *testing.T) {
 
 func TestTaskOptionsJSONMarshal(t *testing.T) {
 	opts := &TaskOptions{
-		Model:      ModelSonnet,
-		Ultrathink: true,
+		Model: ModelSonnet,
 		DependsOn: &TaskDependency{
 			TaskName:  "my-task",
 			Condition: DependsOnAlways,
@@ -252,9 +232,5 @@ func TestTaskOptionsJSONMarshal(t *testing.T) {
 
 	if parsed["model"] != "sonnet" {
 		t.Errorf("Expected model 'sonnet' in JSON, got %v", parsed["model"])
-	}
-
-	if parsed["ultrathink"] != true {
-		t.Errorf("Expected ultrathink true in JSON, got %v", parsed["ultrathink"])
 	}
 }

@@ -71,12 +71,6 @@ func (m *TaskInput) updateOptionsPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.handleOptionRight()
 		return m, nil
 
-	case " ":
-		// Space toggles for ultrathink
-		if m.optField == OptFieldUltrathink {
-			m.options.Ultrathink = !m.options.Ultrathink
-			return m, nil
-		}
 	}
 
 	return m, nil
@@ -90,9 +84,6 @@ func (m *TaskInput) handleOptionLeft() {
 			m.modelIdx--
 			m.options.Model = config.ValidModels()[m.modelIdx]
 		}
-	case OptFieldUltrathink:
-		// Left moves to [on] which is visually on the left
-		m.options.Ultrathink = true
 	}
 }
 
@@ -105,16 +96,13 @@ func (m *TaskInput) handleOptionRight() {
 			m.modelIdx++
 			m.options.Model = models[m.modelIdx]
 		}
-	case OptFieldUltrathink:
-		// Right moves to [off] which is visually on the right
-		m.options.Ultrathink = false
 	}
 }
 
 // applyOptionInputValues applies current selection values to options.
+// Currently a no-op since Model is applied immediately.
 func (m *TaskInput) applyOptionInputValues() {
-	// Apply branch name to options
-	m.options.BranchName = m.branchName
+	// No-op: Model is applied directly when changed
 }
 
 // renderOptionsPanel renders the options panel for the right side.
@@ -206,67 +194,6 @@ func (m *TaskInput) renderOptionsPanel() string {
 		}
 		modelLine := label + strings.Join(parts, "")
 		lines = append(lines, padToWidth(modelLine, innerWidth))
-	}
-
-	// Ultrathink field
-	{
-		isSelected := isFocused && m.optField == OptFieldUltrathink
-		paddedLabel := fmt.Sprintf("%-12s", "Ultrathink:")
-		label := labelStyle.Render(paddedLabel)
-		if isSelected {
-			label = selectedLabelStyle.Render(paddedLabel)
-		}
-
-		var onText, offText string
-		if m.options.Ultrathink {
-			if isSelected {
-				onText = selectedValueStyle.Render("[on]")
-			} else {
-				onText = valueStyle.Render("[on]")
-			}
-			offText = dimStyle.Render(" off ")
-		} else {
-			onText = dimStyle.Render(" on ")
-			if isSelected {
-				offText = selectedValueStyle.Render("[off]")
-			} else {
-				offText = valueStyle.Render("[off]")
-			}
-		}
-		ultraLine := label + onText + " " + offText
-		lines = append(lines, padToWidth(ultraLine, innerWidth))
-	}
-
-	// Branch name field
-	{
-		isSelected := isFocused && m.optField == OptFieldBranchName
-		paddedLabel := fmt.Sprintf("%-12s", "Branch:")
-		label := labelStyle.Render(paddedLabel)
-		if isSelected {
-			label = selectedLabelStyle.Render(paddedLabel)
-		}
-
-		// Show placeholder or actual value
-		var valueText string
-		if m.branchName == "" {
-			// Show placeholder
-			placeholderStyle := dimStyle.Italic(true)
-			valueText = placeholderStyle.Render("<auto>")
-		} else {
-			if isSelected {
-				valueText = selectedValueStyle.Render(m.branchName)
-			} else {
-				valueText = valueStyle.Render(m.branchName)
-			}
-		}
-
-		// Add cursor if focused
-		if isSelected {
-			valueText += selectedValueStyle.Render("_")
-		}
-
-		branchLine := label + valueText
-		lines = append(lines, padToWidth(branchLine, innerWidth))
 	}
 
 	// Fill remaining height with empty lines

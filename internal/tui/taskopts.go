@@ -15,10 +15,9 @@ type TaskOptsField int
 
 const (
 	TaskOptsFieldModel TaskOptsField = iota
-	TaskOptsFieldUltrathink
 )
 
-const taskOptsFieldCount = 2
+const taskOptsFieldCount = 1
 
 // TaskOptsUI provides an interactive task options form.
 type TaskOptsUI struct {
@@ -110,12 +109,6 @@ func (m *TaskOptsUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.handleRight()
 			return m, nil
 
-		case " ":
-			// Space toggles for toggle fields
-			if m.field == TaskOptsFieldUltrathink {
-				m.options.Ultrathink = !m.options.Ultrathink
-				return m, nil
-			}
 		}
 	}
 
@@ -129,9 +122,6 @@ func (m *TaskOptsUI) handleLeft() {
 			m.modelIdx--
 			m.options.Model = config.ValidModels()[m.modelIdx]
 		}
-	case TaskOptsFieldUltrathink:
-		// Left moves to [on] which is visually on the left
-		m.options.Ultrathink = true
 	}
 }
 
@@ -143,9 +133,6 @@ func (m *TaskOptsUI) handleRight() {
 			m.modelIdx++
 			m.options.Model = models[m.modelIdx]
 		}
-	case TaskOptsFieldUltrathink:
-		// Right moves to [off] which is visually on the right
-		m.options.Ultrathink = false
 	}
 }
 
@@ -213,33 +200,6 @@ func (m *TaskOptsUI) View() tea.View {
 			}
 		}
 		sb.WriteString(label + strings.Join(modelParts, ""))
-		sb.WriteString("\n")
-	}
-
-	// Ultrathink field
-	{
-		label := labelStyle.Render("Ultrathink: ")
-		if m.field == TaskOptsFieldUltrathink {
-			label = selectedLabelStyle.Render("Ultrathink: ")
-		}
-
-		var onText, offText string
-		if m.options.Ultrathink {
-			if m.field == TaskOptsFieldUltrathink {
-				onText = selectedValueStyle.Render("[on]")
-			} else {
-				onText = valueStyle.Render("[on]")
-			}
-			offText = dimStyle.Render(" off ")
-		} else {
-			onText = dimStyle.Render(" on ")
-			if m.field == TaskOptsFieldUltrathink {
-				offText = selectedValueStyle.Render("[off]")
-			} else {
-				offText = valueStyle.Render("[off]")
-			}
-		}
-		sb.WriteString(label + onText + " " + offText)
 		sb.WriteString("\n")
 	}
 

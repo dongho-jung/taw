@@ -107,7 +107,6 @@ Claude Code-based autonomous agent work environment
 Configure per-task settings before submission:
 
   Model         Claude model (opus/sonnet/haiku)
-  Ultrathink    Extended thinking mode (on/off)
   Depends on    Run after another task (success/failure/always)
   Worktree hook Override project hook for this task
 

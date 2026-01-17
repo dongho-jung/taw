@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/dongho-jung/paw/internal/claude"
-	"github.com/dongho-jung/paw/internal/config"
 	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/task"
@@ -249,17 +248,10 @@ func checkAndRecoverStdinInjection(tm tmux.Client, t *task.Task, windowID, agent
 	// Claude is running but session marker doesn't exist - stdin injection likely failed
 	logging.Log("Detected failed stdin injection for task %s, recovering...", t.Name)
 
-	// Load task options to get ultrathink setting
-	taskOpts, err := config.LoadTaskOptions(agentDir)
-	if err != nil {
-		logging.Warn("Failed to load task options: %v", err)
-		taskOpts = config.DefaultTaskOptions()
-	}
-
 	// Build and send task instruction
-	taskInstruction := buildTaskInstruction(userPromptPath, taskOpts.Ultrathink)
+	taskInstruction := buildTaskInstruction(userPromptPath)
 
-	logging.Debug("Sending task instruction: ultrathink=%v", taskOpts.Ultrathink)
+	logging.Debug("Sending task instruction")
 
 	if err := claudeClient.SendInputWithRetry(tm, agentPane, taskInstruction, 5); err != nil {
 		// Try basic send as last resort

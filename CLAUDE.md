@@ -187,7 +187,7 @@ paw/                           # This repository
         ├── .session-started   # Session marker (for resume on reopen)
         ├── .status            # Task status (working/waiting/done, persisted for resume)
         ├── .status-signal     # Temp file for Claude to signal status (deleted after read)
-        ├── .options.json      # Task options (model, ultrathink, depends_on, pre_worktree_hook)
+        ├── .options.json      # Task options (model, depends_on, pre_worktree_hook)
         └── .pr                # PR number (when created)
 
 $HOME/.local/share/paw/            # Global PAW data (auto mode for git projects)

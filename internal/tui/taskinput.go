@@ -29,11 +29,9 @@ type OptField int
 
 const (
 	OptFieldModel OptField = iota
-	OptFieldUltrathink
-	OptFieldBranchName
 )
 
-const optFieldCount = 3
+const optFieldCount = 1
 
 // cancelDoublePressTimeout is the time window for double-press cancel detection.
 const cancelDoublePressTimeout = 2 * time.Second

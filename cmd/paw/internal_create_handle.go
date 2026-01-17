@@ -62,7 +62,7 @@ var handleTaskCmd = &cobra.Command{
 			logging.Warn("Failed to load task options: %v", err)
 			taskOpts = config.DefaultTaskOptions()
 		}
-		logging.Debug("Task options: model=%s, ultrathink=%v", taskOpts.Model, taskOpts.Ultrathink)
+		logging.Debug("Task options: model=%s", taskOpts.Model)
 
 		// Create tab-lock atomically
 		created, err := t.CreateTabLock()
@@ -439,8 +439,8 @@ func startNewTaskSession(tm tmux.Client, claudeClient claude.Client, agentPane s
 	time.Sleep(200 * time.Millisecond)
 
 	// Send task instruction - tell Claude to read from file
-	taskInstruction := buildTaskInstruction(t.GetUserPromptPath(), taskOpts.Ultrathink)
-	logging.Trace("Sending task instruction: length=%d, ultrathink=%v", len(taskInstruction), taskOpts.Ultrathink)
+	taskInstruction := buildTaskInstruction(t.GetUserPromptPath())
+	logging.Trace("Sending task instruction: length=%d", len(taskInstruction))
 	if err := claudeClient.SendInputWithRetry(tm, agentPane, taskInstruction, 5); err != nil {
 		logging.Warn("Failed to send task instruction: %v", err)
 		// As a last resort, try the basic send

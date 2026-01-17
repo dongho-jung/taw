@@ -339,10 +339,6 @@ func getShell() string {
 	return shell
 }
 
-func buildTaskInstruction(userPromptPath string, ultrathink bool) string {
-	base := fmt.Sprintf("Read and execute the task from '%s'", userPromptPath)
-	if ultrathink {
-		base = "ultrathink " + base
-	}
-	return fmt.Sprintf("<private>%s</private>\nPAW task start", base)
+func buildTaskInstruction(userPromptPath string) string {
+	return fmt.Sprintf("Read and execute the task from '%s'\nPAW task start", userPromptPath)
 }

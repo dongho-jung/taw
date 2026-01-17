@@ -21,16 +21,16 @@ import (
 )
 
 // resolveConflictsWithClaude attempts to resolve merge conflicts using Claude.
-// It runs Claude with opus model and ultrathink enabled for better conflict resolution.
+// It runs Claude with opus model for better conflict resolution.
 // Returns nil if conflicts were resolved, error otherwise.
 func resolveConflictsWithClaude(projectDir, taskName, taskContent string, conflictFiles []string) error {
 	if len(conflictFiles) == 0 {
 		return nil
 	}
 
-	// Build the prompt for Claude with ultrathink prefix
+	// Build the prompt for Claude
 	filesStr := strings.Join(conflictFiles, "\n  - ")
-	prompt := fmt.Sprintf(`ultrathink You are resolving merge conflicts in a git repository.
+	prompt := fmt.Sprintf(`You are resolving merge conflicts in a git repository.
 
 ## Conflicting Files
   - %s
@@ -55,14 +55,14 @@ IMPORTANT:
 
 Start resolving the conflicts now.`, filesStr, taskName, taskContent)
 
-	logging.Debug("resolveConflictsWithClaude: starting conflict resolution for %d files with opus ultrathink", len(conflictFiles))
+	logging.Debug("resolveConflictsWithClaude: starting conflict resolution for %d files with opus", len(conflictFiles))
 	logging.Trace("resolveConflictsWithClaude: prompt=%s", prompt)
 
-	// Set a timeout for conflict resolution (10 minutes for ultrathink)
+	// Set a timeout for conflict resolution (10 minutes)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	// Run claude with opus model and ultrathink-enabled prompt
+	// Run claude with opus model
 	cmd := exec.CommandContext(ctx, "claude", "-p", "--model", "opus", "--dangerously-skip-permissions")
 	cmd.Dir = projectDir
 	cmd.Stdin = strings.NewReader(prompt)
@@ -80,14 +80,14 @@ Start resolving the conflicts now.`, filesStr, taskName, taskContent)
 
 // autoResolveMergeFailure attempts to resolve a general merge failure using Claude.
 // This is called when merge fails but no explicit conflicts are detected, or when
-// conflict resolution has failed. It uses opus model with ultrathink for comprehensive analysis.
+// conflict resolution has failed. It uses opus model for comprehensive analysis.
 // Returns nil if the issue was resolved, error otherwise.
 func autoResolveMergeFailure(projectDir, taskName, taskContent, branchToMerge, mainBranch string, gitClient git.Client) error {
 	// Get current git status for context
 	statusOutput, _ := exec.Command("git", "-C", projectDir, "status").Output()
 
-	// Build a comprehensive prompt for Claude with ultrathink prefix
-	prompt := fmt.Sprintf(`ultrathink You are an expert at resolving git merge issues. A merge operation has failed and needs your help.
+	// Build a comprehensive prompt for Claude
+	prompt := fmt.Sprintf(`You are an expert at resolving git merge issues. A merge operation has failed and needs your help.
 
 ## Current Situation
 - Project directory: %s
@@ -121,14 +121,14 @@ IMPORTANT:
 
 Start analyzing and resolving the merge issue now.`, projectDir, branchToMerge, mainBranch, taskName, taskContent, string(statusOutput))
 
-	logging.Debug("autoResolveMergeFailure: starting auto-resolution for task %s with opus ultrathink", taskName)
+	logging.Debug("autoResolveMergeFailure: starting auto-resolution for task %s with opus", taskName)
 	logging.Trace("autoResolveMergeFailure: prompt length=%d", len(prompt))
 
-	// Set a timeout for auto-resolution (10 minutes for ultrathink)
+	// Set a timeout for auto-resolution (10 minutes)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	// Run claude with opus model and ultrathink-enabled prompt
+	// Run claude with opus model
 	cmd := exec.CommandContext(ctx, "claude", "-p", "--model", "opus", "--dangerously-skip-permissions")
 	cmd.Dir = projectDir
 	cmd.Stdin = strings.NewReader(prompt)

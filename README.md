@@ -76,7 +76,7 @@ The first launch automatically opens the task editor.
 To add another task inside the tmux session, press `⌃N`:
 - The inline task input UI opens in the `⭐️main` window.
 - Submit with `Alt+Enter` (or `F5`) to launch the agent; `Esc` cancels.
-- Use `⌥Tab` to edit per-task options (model, ultrathink, dependencies, worktree hook) before submitting.
+- Use `⌥Tab` to edit per-task options (model, dependencies, worktree hook) before submitting.
 
 **Task completion**:
 - Press `⌃F` twice to finish. PAW commits changes and cleans up. In `auto-pr` mode, it also pushes and creates a PR. In `auto-merge` mode, it pushes and auto-merges to main.

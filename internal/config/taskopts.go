@@ -46,9 +46,6 @@ type TaskOptions struct {
 	// Model specifies which Claude model to use (haiku, sonnet, opus)
 	Model Model `json:"model,omitempty"`
 
-	// Ultrathink enables extended thinking mode
-	Ultrathink bool `json:"ultrathink"`
-
 	// DependsOn specifies a task dependency
 	DependsOn *TaskDependency `json:"depends_on,omitempty"`
 
@@ -62,8 +59,7 @@ type TaskOptions struct {
 // DefaultTaskOptions returns the default task options.
 func DefaultTaskOptions() *TaskOptions {
 	return &TaskOptions{
-		Model:      DefaultModel,
-		Ultrathink: true,
+		Model: DefaultModel,
 	}
 }
 
@@ -116,8 +112,6 @@ func (o *TaskOptions) Merge(other *TaskOptions) {
 	if other.Model != "" {
 		o.Model = other.Model
 	}
-	// Ultrathink is always applied (even if false)
-	o.Ultrathink = other.Ultrathink
 
 	if other.DependsOn != nil {
 		o.DependsOn = other.DependsOn
@@ -136,7 +130,6 @@ func (o *TaskOptions) Merge(other *TaskOptions) {
 func (o *TaskOptions) Clone() *TaskOptions {
 	clone := &TaskOptions{
 		Model:           o.Model,
-		Ultrathink:      o.Ultrathink,
 		PreWorktreeHook: o.PreWorktreeHook,
 		BranchName:      o.BranchName,
 	}

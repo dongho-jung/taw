@@ -23,7 +23,6 @@ func TestTaskInput_RenderOptionsPanel_Actual(t *testing.T) {
 		{"Focused on Model, opus selected", FocusPanelRight, OptFieldModel, 0},
 		{"Focused on Model, sonnet selected", FocusPanelRight, OptFieldModel, 1},
 		{"Focused on Model, haiku selected", FocusPanelRight, OptFieldModel, 2},
-		{"Focused on Ultrathink", FocusPanelRight, OptFieldUltrathink, 0},
 		{"Not focused", FocusPanelLeft, OptFieldModel, 0},
 	}
 

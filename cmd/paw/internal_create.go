@@ -364,7 +364,7 @@ var spawnTaskCmd = &cobra.Command{
 			if err := taskOpts.Save(newTask.AgentDir); err != nil {
 				logging.Warn("Failed to save task options: %v", err)
 			} else {
-				logging.Debug("Task options saved: model=%s, ultrathink=%v", taskOpts.Model, taskOpts.Ultrathink)
+				logging.Debug("Task options saved: model=%s", taskOpts.Model)
 			}
 		}
 
