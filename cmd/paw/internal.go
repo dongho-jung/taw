@@ -53,6 +53,7 @@ func init() {
 	internalCmd.AddCommand(toggleCmdPaletteCmd)
 	internalCmd.AddCommand(cmdPaletteTUICmd)
 	internalCmd.AddCommand(restorePanesCmd)
+	internalCmd.AddCommand(showCurrentTaskCmd)
 	internalCmd.AddCommand(finishPickerTUICmd)
 	internalCmd.AddCommand(prPopupTUICmd)
 	internalCmd.AddCommand(togglePromptPickerCmd)

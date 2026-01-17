@@ -94,6 +94,11 @@ var cmdPaletteTUICmd = &cobra.Command{
 		// Define available commands
 		commands := []tui.Command{
 			{
+				Name:        "Show Current Task",
+				Description: "Display current task content in shell pane",
+				ID:          "show-current-task",
+			},
+			{
 				Name:        "Restore Panes",
 				Description: "Restore missing panes in current task window",
 				ID:          "restore-panes",
@@ -120,6 +125,10 @@ var cmdPaletteTUICmd = &cobra.Command{
 		}
 
 		switch selected.ID {
+		case "show-current-task":
+			logging.Debug("cmdPaletteTUICmd: executing show-current-task")
+			showTaskCmd := exec.Command(pawBin, "internal", "show-current-task", sessionName)
+			return showTaskCmd.Run()
 		case "restore-panes":
 			logging.Debug("cmdPaletteTUICmd: executing restore-panes")
 			restoreCmd := exec.Command(pawBin, "internal", "restore-panes", sessionName)

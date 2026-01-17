@@ -60,6 +60,89 @@ var popupShellCmd = &cobra.Command{
 	},
 }
 
+var showCurrentTaskCmd = &cobra.Command{
+	Use:    "show-current-task [session]",
+	Short:  "Display current task content in shell pane",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		appCtx, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		_, cleanup := setupLoggerFromApp(appCtx, "show-current-task", "")
+		defer cleanup()
+
+		logging.Debug("-> showCurrentTaskCmd(session=%s)", sessionName)
+		defer logging.Debug("<- showCurrentTaskCmd")
+
+		tm := tmux.New(sessionName)
+
+		// Get current window info
+		windowName, err := tm.Display("#{window_name}")
+		if err != nil {
+			return fmt.Errorf("failed to get window name: %w", err)
+		}
+		windowName = strings.TrimSpace(windowName)
+
+		windowID, err := tm.Display("#{window_id}")
+		if err != nil {
+			return fmt.Errorf("failed to get window ID: %w", err)
+		}
+		windowID = strings.TrimSpace(windowID)
+
+		logging.Debug("Current window: name=%s, id=%s", windowName, windowID)
+
+		// Check if this is a task window (has task emoji prefix)
+		taskName, isTaskWindow := constants.ExtractTaskName(windowName)
+		if !isTaskWindow {
+			_ = tm.DisplayMessage("Not a task window", 2000)
+			return nil
+		}
+
+		logging.Debug("Task name (may be truncated): %s", taskName)
+
+		// Find task using truncated name (window names are limited to MaxWindowNameLen chars)
+		mgr := task.NewManager(appCtx.AgentsDir, appCtx.ProjectDir, appCtx.PawDir, appCtx.IsGitRepo, appCtx.Config)
+		t, err := mgr.FindTaskByTruncatedName(taskName)
+		if err != nil {
+			_ = tm.DisplayMessage(fmt.Sprintf("Task not found: %s", taskName), 2000)
+			logging.Debug("Task not found for truncated name: %s", taskName)
+			return nil
+		}
+
+		logging.Debug("Found task: name=%s, agentDir=%s", t.Name, t.AgentDir)
+
+		// Get task file path
+		taskFilePath := t.GetTaskFilePath()
+		if _, err := os.Stat(taskFilePath); os.IsNotExist(err) {
+			_ = tm.DisplayMessage("Task file not found", 2000)
+			return nil
+		}
+
+		// Send cat command to the user pane (pane .1)
+		userPane := windowID + ".1"
+		if !tm.HasPane(userPane) {
+			_ = tm.DisplayMessage("User pane not found", 2000)
+			return nil
+		}
+
+		// Send the cat command to display task content
+		catCmd := fmt.Sprintf("cat '%s'", taskFilePath)
+		if err := tm.SendKeys(userPane, catCmd, "Enter"); err != nil {
+			logging.Debug("Failed to send cat command: %v", err)
+			return fmt.Errorf("failed to send command to pane: %w", err)
+		}
+
+		logging.Log("Displayed task content for: %s", t.Name)
+		return nil
+	},
+}
+
 var restorePanesCmd = &cobra.Command{
 	Use:    "restore-panes [session]",
 	Short:  "Restore missing panes in current task window",
