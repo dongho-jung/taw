@@ -47,14 +47,15 @@ func (s *InputHistoryService) SaveInput(content string) error {
 
 	entries, err := s.LoadHistory()
 	if err != nil {
-		// If file doesn't exist, start fresh
+		// If history can't be loaded, start fresh.
 		entries = nil
 	}
 
+	now := time.Now()
 	// Check if the same content already exists at the top (avoid duplicates)
 	if len(entries) > 0 && entries[0].Content == content {
 		// Update timestamp only
-		entries[0].Timestamp = time.Now()
+		entries[0].Timestamp = now
 	} else {
 		// Remove any existing entry with the same content
 		filtered := make([]InputHistoryEntry, 0, len(entries))
@@ -67,7 +68,7 @@ func (s *InputHistoryService) SaveInput(content string) error {
 		// Add new entry at the beginning
 		newEntry := InputHistoryEntry{
 			Content:   content,
-			Timestamp: time.Now(),
+			Timestamp: now,
 		}
 		entries = append([]InputHistoryEntry{newEntry}, filtered...)
 	}
@@ -123,6 +124,9 @@ func (s *InputHistoryService) GetAllContents() ([]string, error) {
 // saveEntries saves entries to the history file.
 func (s *InputHistoryService) saveEntries(entries []InputHistoryEntry) error {
 	historyPath := s.getHistoryPath()
+	if err := os.MkdirAll(filepath.Dir(historyPath), 0755); err != nil {
+		return err
+	}
 
 	data, err := json.MarshalIndent(entries, "", "  ")
 	if err != nil {

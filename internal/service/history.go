@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -176,7 +177,13 @@ func (s *HistoryService) save(taskName, taskContent, paneContent string, cancell
 
 	if len(hookOutputs) > 0 {
 		historyContent.WriteString("\n---hooks---\n")
-		for name, output := range hookOutputs {
+		hookNames := make([]string, 0, len(hookOutputs))
+		for name := range hookOutputs {
+			hookNames = append(hookNames, name)
+		}
+		sort.Strings(hookNames)
+		for _, name := range hookNames {
+			output := hookOutputs[name]
 			historyContent.WriteString(fmt.Sprintf("## %s\n", name))
 			historyContent.WriteString(output)
 			if !strings.HasSuffix(output, "\n") {
@@ -275,8 +282,7 @@ func ExtractTaskName(historyFile string) string {
 	base = strings.TrimSuffix(base, ".cancelled")
 
 	// Format: YYMMDD_HHMMSS_taskname
-	// Timestamp is 14 chars (060102_150405) + 1 underscore = 14 chars before task name
-	// So task name starts at index 14
+	// Timestamp format is "060102_150405" (13 chars) plus "_" separator.
 	const timestampPrefixLen = 14 // YYMMDD_HHMMSS_
 	if len(base) > timestampPrefixLen {
 		return base[timestampPrefixLen:]

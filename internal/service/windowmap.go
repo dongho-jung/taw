@@ -14,6 +14,9 @@ import (
 func UpdateWindowMap(pawDir, taskName string) (string, error) {
 	token := constants.TruncateForWindowName(taskName)
 	mapPath := filepath.Join(pawDir, constants.WindowMapFileName)
+	if err := os.MkdirAll(filepath.Dir(mapPath), 0755); err != nil {
+		return token, fmt.Errorf("failed to create window map directory: %w", err)
+	}
 
 	mapping := map[string]string{}
 	if data, err := os.ReadFile(mapPath); err == nil {
