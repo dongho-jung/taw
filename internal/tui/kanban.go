@@ -1025,6 +1025,10 @@ func normalizePreviewLine(line string) string {
 	if isKeyboardHintLine(trimmed) {
 		return ""
 	}
+	// Filter out separator lines (lines consisting only of dash-like characters)
+	if isSeparatorLine(trimmed) {
+		return ""
+	}
 	return strings.TrimSpace(trimmed)
 }
 
@@ -1054,6 +1058,24 @@ func isKeyboardHintLine(line string) bool {
 		}
 	}
 	return false
+}
+
+// isSeparatorLine checks if a line consists only of separator/dash-like characters.
+// These are horizontal rule lines used in Claude's terminal output (e.g., "─────────").
+func isSeparatorLine(line string) bool {
+	if len(line) < 3 {
+		return false // Too short to be a meaningful separator
+	}
+	for _, r := range line {
+		// Check for common separator characters: box drawing horizontal, dashes, underscores
+		switch r {
+		case '─', '━', '-', '—', '–', '_', '═':
+			// These are separator characters, continue checking
+		default:
+			return false // Found a non-separator character
+		}
+	}
+	return true
 }
 
 func wrapByWidth(text string, width int) []string {
