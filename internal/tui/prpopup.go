@@ -144,8 +144,7 @@ func (m *PRPopup) View() tea.View {
 	helpStyle := lipgloss.NewStyle().
 		Foreground(c.TextDim)
 
-	noLabel := "No"
-	yesLabel := "Yes"
+	var noLabel, yesLabel string
 	if m.cursor == 0 {
 		noLabel = selectedStyle.Render("No")
 		yesLabel = choiceStyle.Render("Yes")
