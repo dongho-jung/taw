@@ -25,6 +25,17 @@ const (
 	topPaneTypeKey = "@paw_top_pane_type"
 )
 
+// topPaneShortcuts maps pane types to their toggle shortcuts for user feedback
+var topPaneShortcuts = map[string]string{
+	"log":      "⌃O",
+	"help":     "⌃/",
+	"git":      "⌃G",
+	"diff":     "⌃D",
+	"history":  "⌃R",
+	"template": "⌃T",
+	"project":  "⌃J",
+}
+
 // TopPaneResult represents the result of displayTopPane operation
 type TopPaneResult int
 
@@ -67,8 +78,15 @@ func displayTopPane(tm tmux.Client, paneType, command, workDir string) (TopPaneR
 			return TopPaneClosed, nil
 		}
 
-		// Different type - block
+		// Different type - block and notify user
 		logging.Debug("displayTopPane: blocked by existing %s pane", existingType)
+		// Show user-friendly message with shortcut to close existing pane
+		shortcut := topPaneShortcuts[existingType]
+		if shortcut != "" {
+			_ = tm.DisplayMessage(fmt.Sprintf("Close %s viewer first (%s)", existingType, shortcut), 2000)
+		} else {
+			_ = tm.DisplayMessage(fmt.Sprintf("Close %s viewer first", existingType), 2000)
+		}
 		return TopPaneBlocked, nil
 	}
 
