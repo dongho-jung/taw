@@ -181,6 +181,8 @@ var finishPickerTUICmd = &cobra.Command{
 		// Map TUI action to end-task action flag
 		var endAction string
 		switch action {
+		case tui.FinishActionMergePush:
+			endAction = "merge-push"
 		case tui.FinishActionMerge:
 			endAction = "merge"
 		case tui.FinishActionPR:
