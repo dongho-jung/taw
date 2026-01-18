@@ -178,8 +178,8 @@ var endTaskCmd = &cobra.Command{
 					return nil
 				}
 
-			case "merge":
-				// Auto-merge
+			case "merge-push", "merge":
+				// Auto-merge (with optional push for "merge-push")
 				if !appCtx.IsWorktreeMode() {
 					logging.Warn("merge requested in non-worktree mode; skipping merge")
 					fmt.Println()
@@ -188,6 +188,23 @@ var endTaskCmd = &cobra.Command{
 					mergeSuccess := runAutoMerge(appCtx, targetTask, windowID, workDir, gitClient, tm)
 					if !mergeSuccess {
 						return nil // Exit without cleanup - keep worktree and branch
+					}
+
+					// Push main to remote if "merge-push" action
+					if endTaskAction == "merge-push" {
+						mainBranch := gitClient.GetMainBranch(appCtx.ProjectDir)
+						pushSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s to remote", mainBranch))
+						pushSpinner.Start()
+
+						if err := gitClient.Push(appCtx.ProjectDir, "origin", mainBranch, false); err != nil {
+							pushSpinner.Stop(false, err.Error())
+							logging.Warn("Failed to push main branch: %v", err)
+							fmt.Printf("  ⚠️  Failed to push %s: %v\n", mainBranch, err)
+							fmt.Println("  Note: Merge was successful, but push failed. You can push manually.")
+						} else {
+							pushSpinner.Stop(true, mainBranch)
+							fmt.Printf("  ✓ Pushed %s to remote\n", mainBranch)
+						}
 					}
 				}
 

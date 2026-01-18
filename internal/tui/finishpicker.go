@@ -13,11 +13,12 @@ import (
 type FinishAction string
 
 const (
-	FinishActionCancel FinishAction = "cancel"
-	FinishActionMerge  FinishAction = "merge"
-	FinishActionPR     FinishAction = "pr"
-	FinishActionKeep   FinishAction = "keep"
-	FinishActionDrop   FinishAction = "drop"
+	FinishActionCancel    FinishAction = "cancel"
+	FinishActionMergePush FinishAction = "merge-push"
+	FinishActionMerge     FinishAction = "merge"
+	FinishActionPR        FinishAction = "pr"
+	FinishActionKeep      FinishAction = "keep"
+	FinishActionDrop      FinishAction = "drop"
 )
 
 // FinishOption represents an option in the finish picker.
@@ -42,7 +43,8 @@ type FinishPicker struct {
 // gitOptions returns the options for git mode.
 func gitOptions() []FinishOption {
 	return []FinishOption{
-		{Action: FinishActionMerge, Name: "Merge", Description: "Merge branch to main and clean up"},
+		{Action: FinishActionMergePush, Name: "Merge & Push", Description: "Merge to main, push to remote, and clean up"},
+		{Action: FinishActionMerge, Name: "Merge", Description: "Merge branch to main (local only) and clean up"},
 		{Action: FinishActionPR, Name: "PR", Description: "Push branch and create a pull request"},
 		{Action: FinishActionDrop, Name: "Drop", Description: "Discard all changes and clean up", Warning: true},
 	}
@@ -160,6 +162,14 @@ func (m *FinishPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		// Quick selection keys
+		case "u", "U":
+			for i, opt := range m.options {
+				if opt.Action == FinishActionMergePush {
+					m.cursor = i
+					m.selected = opt.Action
+					return m, tea.Quit
+				}
+			}
 		case "m", "M":
 			for i, opt := range m.options {
 				if opt.Action == FinishActionMerge {
