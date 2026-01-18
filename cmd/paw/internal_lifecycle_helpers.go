@@ -166,6 +166,25 @@ func loadTaskOptions(agentDir string) *config.TaskOptions {
 	return opts
 }
 
+func addAllWithClaudeGuard(gitClient git.Client, workDir, context string) {
+	if workDir == "" || gitClient == nil {
+		return
+	}
+
+	if err := git.AddToExcludeFile(workDir, constants.ClaudeLink); err != nil {
+		logging.Warn("%s: failed to add .claude to exclude file: %v", context, err)
+	}
+
+	if err := gitClient.AddAll(workDir); err != nil {
+		logging.Warn("%s: failed to add changes: %v", context, err)
+	}
+
+	// Ensure .claude never makes it into the commit, even in edge cases.
+	if err := gitClient.ResetPath(workDir, constants.ClaudeLink); err != nil {
+		logging.Warn("%s: failed to unstage .claude: %v", context, err)
+	}
+}
+
 // commitChangesIfNeeded commits any pending changes in the working directory.
 // Returns true if changes were committed, false otherwise.
 func commitChangesIfNeeded(gitClient git.Client, workDir string) bool {
@@ -181,22 +200,7 @@ func commitChangesIfNeeded(gitClient git.Client, workDir string) bool {
 	spinner.Start()
 
 	commitTimer := logging.StartTimer("git commit")
-	if err := gitClient.AddAll(workDir); err != nil {
-		logging.Warn("Failed to add changes: %v", err)
-	}
-
-	// Layer 3: Prevent .claude symlink from being committed (final safety check)
-	claudeStaged, err := gitClient.IsFileStaged(workDir, constants.ClaudeLink)
-	if err != nil {
-		logging.Warn("Failed to check if .claude is staged: %v", err)
-	} else if claudeStaged {
-		logging.Warn("Detected .claude in staging area, unstaging it to prevent commit")
-		if err := gitClient.ResetPath(workDir, constants.ClaudeLink); err != nil {
-			logging.Warn("Failed to unstage .claude: %v", err)
-		} else {
-			logging.Debug("Successfully unstaged .claude")
-		}
-	}
+	addAllWithClaudeGuard(gitClient, workDir, "commitChangesIfNeeded")
 
 	diffStat, _ := gitClient.GetDiffStat(workDir)
 	logging.Trace("Changes: %s", strings.ReplaceAll(diffStat, "\n", ", "))

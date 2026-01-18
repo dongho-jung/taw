@@ -663,22 +663,7 @@ func handleMergeConflicts(appCtx *app.App, targetTask *task.Task, mainBranch, me
 		resolveSpinner.Stop(true, "resolved")
 		logging.Log("Conflicts resolved by Claude, completing merge")
 
-		if addErr := gitClient.AddAll(appCtx.ProjectDir); addErr != nil {
-			logging.Warn("Failed to stage resolved files: %v", addErr)
-		}
-
-		// Layer 3: Prevent .claude symlink from being committed (final safety check)
-		claudeStaged, err := gitClient.IsFileStaged(appCtx.ProjectDir, constants.ClaudeLink)
-		if err != nil {
-			logging.Warn("Failed to check if .claude is staged: %v", err)
-		} else if claudeStaged {
-			logging.Warn("Detected .claude in staging area (project dir), unstaging it to prevent commit")
-			if err := gitClient.ResetPath(appCtx.ProjectDir, constants.ClaudeLink); err != nil {
-				logging.Warn("Failed to unstage .claude: %v", err)
-			} else {
-				logging.Debug("Successfully unstaged .claude from project dir")
-			}
-		}
+		addAllWithClaudeGuard(gitClient, appCtx.ProjectDir, "end-task conflict resolution")
 
 		if commitErr := gitClient.Commit(appCtx.ProjectDir, mergeMsg); commitErr != nil {
 			logging.Warn("Failed to commit merge: %v", commitErr)
