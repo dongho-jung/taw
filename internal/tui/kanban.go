@@ -926,6 +926,26 @@ func buildMetadataString(duration, tokens string) string {
 	return duration + " · " + tokens
 }
 
+// extractLastSegment extracts only the last segment from a preview string.
+// Segments are separated by ⏺ markers in Claude's output.
+// This allows the kanban view to show only the most recent activity.
+func extractLastSegment(preview string) string {
+	lines := strings.Split(preview, "\n")
+	lastSegmentStart := 0
+
+	// Find the last segment start (line starting with ⏺)
+	for i := len(lines) - 1; i >= 0; i-- {
+		trimmed := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(trimmed, "⏺") {
+			lastSegmentStart = i
+			break
+		}
+	}
+
+	// Return everything from the last segment start
+	return strings.Join(lines[lastSegmentStart:], "\n")
+}
+
 func buildTaskDetailLines(task *service.DiscoveredTask, maxLines, availableWidth int) []string {
 	if maxLines <= 0 || availableWidth <= kanbanTaskIndent {
 		return nil
@@ -935,7 +955,9 @@ func buildTaskDetailLines(task *service.DiscoveredTask, maxLines, availableWidth
 	var baseLines []string
 
 	if task.Preview != "" {
-		for _, line := range strings.Split(task.Preview, "\n") {
+		// Extract only the last segment (starting from the last ⏺ marker)
+		lastSegment := extractLastSegment(task.Preview)
+		for _, line := range strings.Split(lastSegment, "\n") {
 			cleaned := normalizePreviewLine(line)
 			if cleaned != "" {
 				baseLines = append(baseLines, cleaned)
@@ -1027,6 +1049,10 @@ func normalizePreviewLine(line string) string {
 	}
 	// Filter out separator lines (lines consisting only of dash-like characters)
 	if isSeparatorLine(trimmed) {
+		return ""
+	}
+	// Filter out prompt lines (❯ character)
+	if strings.HasPrefix(trimmed, "❯") {
 		return ""
 	}
 	return strings.TrimSpace(trimmed)
