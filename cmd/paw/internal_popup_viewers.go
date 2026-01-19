@@ -93,16 +93,22 @@ func displayTopPane(tm tmux.Client, paneType, command, workDir string) (TopPaneR
 			return TopPaneClosed, nil
 		}
 
-		// Different type - block and notify user
-		logging.Debug("displayTopPane: blocked by existing %s pane", existingType)
-		// Show user-friendly message with shortcut to close existing pane
-		shortcut := topPaneShortcuts[existingType]
-		if shortcut != "" {
-			_ = tm.DisplayMessage(fmt.Sprintf("Close %s viewer first (%s)", existingType, shortcut), 2000)
-		} else {
-			_ = tm.DisplayMessage(fmt.Sprintf("Close %s viewer first", existingType), 2000)
+		// Different type - check if existing is "finish" (block) or auto-close
+		if existingType == "finish" {
+			// Block when finish picker is open - user is in the middle of finishing a task
+			logging.Debug("displayTopPane: blocked by finish picker")
+			shortcut := topPaneShortcuts[existingType]
+			_ = tm.DisplayMessage(fmt.Sprintf("Finish action in progress (%s to close)", shortcut), 2000)
+			return TopPaneBlocked, nil
 		}
-		return TopPaneBlocked, nil
+
+		// Auto-close existing pane and create new one
+		logging.Debug("displayTopPane: auto-closing %s pane to open %s", existingType, paneType)
+		_ = tm.KillPane(existingPaneID)
+		_ = tm.SetOption(topPaneIDKey, "", true)
+		_ = tm.SetOption(topPaneTypeKey, "", true)
+		_ = tm.SetOption(topPaneWindowKey, "", true)
+		// Fall through to create new pane
 	}
 
 	// Clean up stale options if pane doesn't exist or is in a different window
