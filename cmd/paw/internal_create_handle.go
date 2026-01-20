@@ -197,8 +197,7 @@ var handleTaskCmd = &cobra.Command{
 		}
 
 		// Split window for user pane (error is non-fatal)
-		taskFilePath := t.GetTaskFilePath()
-		userPaneCmd := fmt.Sprintf("sh -c 'cat %s; echo; exec %s'", taskFilePath, getShell())
+		userPaneCmd := fmt.Sprintf("sh -c 'exec %s'", getShell())
 		if err := tm.SplitWindow(windowID, true, workDir, userPaneCmd); err != nil {
 			logging.Warn("Failed to split window: %v", err)
 		} else {
@@ -215,8 +214,16 @@ var handleTaskCmd = &cobra.Command{
 		// Use symlink path for PAW_BIN so running agents can use updated binary
 		pawBinSymlink := filepath.Join(appCtx.PawDir, constants.BinSymlinkName)
 
-		// Build user prompt with context
-		userPrompt := buildUserPrompt(appCtx, t, taskName, workDir)
+		// Build task context and user prompt (context stored separately, referenced via @path)
+		taskContext := buildTaskContextPrompt(appCtx, taskName, workDir)
+		contextPath := t.GetTaskContextPath()
+		contextRef := ""
+		if err := os.WriteFile(contextPath, []byte(taskContext), 0644); err != nil {
+			logging.Warn("Failed to save task context: %v", err)
+		} else {
+			contextRef = contextPath
+		}
+		userPrompt := buildUserPrompt(t.Content, contextRef)
 
 		// Save prompts (errors are non-fatal but should be logged)
 		if err := os.WriteFile(t.GetSystemPromptPath(), []byte(systemPrompt), 0644); err != nil {
@@ -337,8 +344,8 @@ exec "%s" internal end-task "%s" "%s"
 	},
 }
 
-// buildUserPrompt constructs the user prompt for a task.
-func buildUserPrompt(appCtx *app.App, t *task.Task, taskName, workDir string) string {
+// buildTaskContextPrompt constructs the task preamble stored separately.
+func buildTaskContextPrompt(appCtx *app.App, taskName, workDir string) string {
 	var userPrompt strings.Builder
 	userPrompt.WriteString(fmt.Sprintf("# Task: %s\n\n", taskName))
 	if appCtx.IsWorktreeMode() {
@@ -362,8 +369,15 @@ func buildUserPrompt(appCtx *app.App, t *task.Task, taskName, workDir string) st
 	userPrompt.WriteString("3. Start implementation after the plan is ready.\n\n")
 
 	userPrompt.WriteString("---\n\n")
-	userPrompt.WriteString(t.Content)
+	return userPrompt.String()
+}
 
+func buildUserPrompt(taskContent, contextPath string) string {
+	var userPrompt strings.Builder
+	if contextPath != "" {
+		userPrompt.WriteString(fmt.Sprintf("@%s\n\n", contextPath))
+	}
+	userPrompt.WriteString(taskContent)
 	return userPrompt.String()
 }
 

@@ -39,6 +39,12 @@ func TestTaskGetPaths(t *testing.T) {
 		t.Errorf("GetTaskFilePath() = %q, want %q", task.GetTaskFilePath(), expectedTaskFile)
 	}
 
+	// Test GetTaskContextPath
+	expectedTaskContext := filepath.Join(agentDir, constants.TaskContextFileName)
+	if task.GetTaskContextPath() != expectedTaskContext {
+		t.Errorf("GetTaskContextPath() = %q, want %q", task.GetTaskContextPath(), expectedTaskContext)
+	}
+
 	// Test GetTabLockDir
 	expectedTabLock := filepath.Join(agentDir, constants.TabLockDirName)
 	if task.GetTabLockDir() != expectedTabLock {

@@ -174,6 +174,7 @@ const (
 	LogFileName           = "log"
 	PromptFileName        = "PROMPT.md"
 	TaskFileName          = "task"
+	TaskContextFileName   = ".task-context"
 	TabLockDirName        = ".tab-lock"
 	WindowIDFileName      = "window_id"
 	PRFileName            = ".pr"

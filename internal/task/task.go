@@ -94,6 +94,11 @@ func (t *Task) GetTaskFilePath() string {
 	return filepath.Join(t.AgentDir, constants.TaskFileName)
 }
 
+// GetTaskContextPath returns the path to the task context file.
+func (t *Task) GetTaskContextPath() string {
+	return filepath.Join(t.AgentDir, constants.TaskContextFileName)
+}
+
 // GetTabLockDir returns the path to the tab-lock directory.
 func (t *Task) GetTabLockDir() string {
 	return filepath.Join(t.AgentDir, constants.TabLockDirName)
