@@ -287,3 +287,150 @@ func TestWritePawHelpFileOverwrites(t *testing.T) {
 		t.Fatalf("Second WritePawHelpFile() error = %v", err)
 	}
 }
+
+func TestGetPreCommitHook(t *testing.T) {
+	content, err := GetPreCommitHook()
+	if err != nil {
+		t.Fatalf("GetPreCommitHook() error = %v", err)
+	}
+
+	if len(content) == 0 {
+		t.Error("GetPreCommitHook() returned empty content")
+	}
+
+	// Hook should contain expected content
+	if !strings.Contains(string(content), "PAW pre-commit hook") {
+		t.Error("pre-commit hook should contain PAW identifier")
+	}
+
+	if !strings.Contains(string(content), ".claude") {
+		t.Error("pre-commit hook should mention .claude")
+	}
+
+	// Hook should be a valid shell script
+	if !strings.HasPrefix(string(content), "#!/bin/sh") {
+		t.Error("pre-commit hook should start with shebang")
+	}
+}
+
+func TestInstallPreCommitHook(t *testing.T) {
+	tempDir := t.TempDir()
+	hooksDir := filepath.Join(tempDir, "hooks")
+
+	if err := InstallPreCommitHook(hooksDir); err != nil {
+		t.Fatalf("InstallPreCommitHook() error = %v", err)
+	}
+
+	// Check that hooks directory was created
+	if _, err := os.Stat(hooksDir); err != nil {
+		t.Errorf("Hooks directory not created: %v", err)
+	}
+
+	// Check that pre-commit hook exists
+	hookPath := filepath.Join(hooksDir, "pre-commit")
+	info, err := os.Stat(hookPath)
+	if err != nil {
+		t.Fatalf("pre-commit hook not created: %v", err)
+	}
+
+	// Check file permissions (should be executable)
+	if info.Mode()&0111 == 0 {
+		t.Error("pre-commit hook should be executable")
+	}
+
+	// Check content
+	content, err := os.ReadFile(hookPath)
+	if err != nil {
+		t.Fatalf("Failed to read pre-commit hook: %v", err)
+	}
+
+	if !strings.Contains(string(content), "PAW pre-commit hook") {
+		t.Error("pre-commit hook content should contain PAW identifier")
+	}
+}
+
+func TestInstallPreCommitHookIdempotent(t *testing.T) {
+	tempDir := t.TempDir()
+	hooksDir := filepath.Join(tempDir, "hooks")
+
+	// First install
+	if err := InstallPreCommitHook(hooksDir); err != nil {
+		t.Fatalf("First InstallPreCommitHook() error = %v", err)
+	}
+
+	hookPath := filepath.Join(hooksDir, "pre-commit")
+	firstContent, err := os.ReadFile(hookPath)
+	if err != nil {
+		t.Fatalf("Failed to read pre-commit hook: %v", err)
+	}
+
+	// Second install (should be idempotent)
+	if err := InstallPreCommitHook(hooksDir); err != nil {
+		t.Fatalf("Second InstallPreCommitHook() error = %v", err)
+	}
+
+	secondContent, err := os.ReadFile(hookPath)
+	if err != nil {
+		t.Fatalf("Failed to read pre-commit hook: %v", err)
+	}
+
+	// Content should be the same (not duplicated)
+	if string(firstContent) != string(secondContent) {
+		t.Error("InstallPreCommitHook should be idempotent, content should not be duplicated")
+	}
+}
+
+func TestInstallPreCommitHookAppendsToExisting(t *testing.T) {
+	tempDir := t.TempDir()
+	hooksDir := filepath.Join(tempDir, "hooks")
+	hookPath := filepath.Join(hooksDir, "pre-commit")
+
+	// Create hooks directory
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		t.Fatalf("Failed to create hooks directory: %v", err)
+	}
+
+	// Create existing hook
+	existingContent := "#!/bin/sh\necho 'existing hook'\n"
+	if err := os.WriteFile(hookPath, []byte(existingContent), 0755); err != nil {
+		t.Fatalf("Failed to create existing hook: %v", err)
+	}
+
+	// Install PAW hook
+	if err := InstallPreCommitHook(hooksDir); err != nil {
+		t.Fatalf("InstallPreCommitHook() error = %v", err)
+	}
+
+	// Check that both hooks are present
+	content, err := os.ReadFile(hookPath)
+	if err != nil {
+		t.Fatalf("Failed to read pre-commit hook: %v", err)
+	}
+
+	if !strings.Contains(string(content), "existing hook") {
+		t.Error("Existing hook content should be preserved")
+	}
+
+	if !strings.Contains(string(content), "PAW pre-commit hook") {
+		t.Error("PAW hook should be appended")
+	}
+}
+
+func TestAssetsContainsHooksDir(t *testing.T) {
+	entries, err := Assets.ReadDir("assets")
+	if err != nil {
+		t.Fatalf("Failed to read assets directory: %v", err)
+	}
+
+	found := false
+	for _, entry := range entries {
+		if entry.Name() == "hooks" && entry.IsDir() {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Error("Assets should contain 'hooks' directory")
+	}
+}

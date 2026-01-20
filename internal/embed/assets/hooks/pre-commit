@@ -1,0 +1,27 @@
+#!/bin/sh
+# PAW pre-commit hook: Prevent .claude symlink from being committed
+#
+# The .claude symlink points to PAW internal settings and must not be in version control.
+# This hook automatically unstages .claude if it was accidentally staged.
+
+# Check if .claude is staged
+if git diff --cached --name-only | grep -q "^\.claude$"; then
+    # Automatically unstage .claude
+    git reset HEAD -- .claude 2>/dev/null
+
+    # Warn the user
+    echo "PAW: Automatically unstaged .claude (worktree-local symlink)"
+    echo "PAW: Re-running commit without .claude..."
+
+    # Check if there are still staged changes
+    if ! git diff --cached --quiet; then
+        # There are still changes to commit, continue
+        exit 0
+    else
+        # No changes left after removing .claude
+        echo "PAW: No changes to commit after removing .claude"
+        exit 1
+    fi
+fi
+
+exit 0

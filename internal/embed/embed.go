@@ -163,3 +163,62 @@ func WriteDefaultPrompt(promptsDir, name string) (string, error) {
 
 	return targetPath, nil
 }
+
+// GetPreCommitHook returns the pre-commit hook content.
+// This hook prevents .claude symlink from being committed.
+func GetPreCommitHook() ([]byte, error) {
+	return Assets.ReadFile("assets/hooks/pre-commit")
+}
+
+// InstallPreCommitHook installs the pre-commit hook to the target git hooks directory.
+// If a pre-commit hook already exists, it appends the PAW hook content.
+func InstallPreCommitHook(hooksDir string) error {
+	hookPath := filepath.Join(hooksDir, "pre-commit")
+
+	// Get PAW hook content
+	pawHook, err := GetPreCommitHook()
+	if err != nil {
+		return err
+	}
+
+	// Create hooks directory if needed
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		return err
+	}
+
+	// Check if pre-commit hook already exists
+	existingContent, err := os.ReadFile(hookPath)
+	if err == nil {
+		// Check if PAW hook is already installed
+		if containsPawHook(existingContent) {
+			return nil // Already installed
+		}
+		// Append PAW hook to existing hook
+		newContent := append(existingContent, '\n')
+		newContent = append(newContent, pawHook...)
+		return os.WriteFile(hookPath, newContent, 0755)
+	}
+
+	// No existing hook, write PAW hook directly
+	return os.WriteFile(hookPath, pawHook, 0755)
+}
+
+// containsPawHook checks if the PAW pre-commit hook is already in the content.
+func containsPawHook(content []byte) bool {
+	return len(content) > 0 && (contains(content, []byte("PAW pre-commit hook")) || contains(content, []byte("PAW: Automatically unstaged .claude")))
+}
+
+// contains checks if b contains subslice.
+func contains(b, subslice []byte) bool {
+	return len(b) >= len(subslice) && string(b) != "" && len(subslice) > 0 && indexBytes(b, subslice) >= 0
+}
+
+// indexBytes returns the index of subslice in b, or -1 if not found.
+func indexBytes(b, subslice []byte) int {
+	for i := 0; i <= len(b)-len(subslice); i++ {
+		if string(b[i:i+len(subslice)]) == string(subslice) {
+			return i
+		}
+	}
+	return -1
+}

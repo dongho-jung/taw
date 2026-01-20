@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/dongho-jung/paw/internal/constants"
+	"github.com/dongho-jung/paw/internal/embed"
 	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/logging"
 )
@@ -186,6 +187,17 @@ func (m *Manager) SetupWorktree(task *Task) error {
 				logging.Debug("SetupWorktree: marked .claude as assume-unchanged")
 			}
 		}
+
+		// Layer 3: Install pre-commit hook (final safety net)
+		// This automatically unstages .claude if it was accidentally staged
+		hooksDir := m.getWorktreeHooksDir(worktreeDir)
+		if hooksDir != "" {
+			if err := embed.InstallPreCommitHook(hooksDir); err != nil {
+				logging.Warn("SetupWorktree: failed to install pre-commit hook: %v", err)
+			} else {
+				logging.Debug("SetupWorktree: installed pre-commit hook")
+			}
+		}
 	}
 
 	// Execute pre-worktree hook if configured (error is non-fatal)
@@ -226,4 +238,26 @@ func (m *Manager) GetWorkingDirectory(task *Task) string {
 	}
 	// Non-worktree mode: Claude runs in the project directory.
 	return m.projectDir
+}
+
+// getWorktreeHooksDir returns the hooks directory for a worktree.
+// In a worktree, .git is a file pointing to the actual git directory,
+// so we need to resolve it first.
+func (m *Manager) getWorktreeHooksDir(worktreeDir string) string {
+	// Get the actual git directory for this worktree
+	cmd := exec.Command("git", "-C", worktreeDir, "rev-parse", "--git-dir")
+	output, err := cmd.Output()
+	if err != nil {
+		logging.Warn("getWorktreeHooksDir: failed to get git directory: %v", err)
+		return ""
+	}
+
+	gitDir := filepath.Clean(string(output[:len(output)-1])) // Remove trailing newline
+
+	// Make gitDir absolute if it's relative
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(worktreeDir, gitDir)
+	}
+
+	return filepath.Join(gitDir, "hooks")
 }

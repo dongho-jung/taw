@@ -202,13 +202,6 @@ Change → run tests → fix failures → commit when successful
 - Stage only the files for that commit, show the staged summary, run tests if applicable, then commit.
 - If commit grouping is unclear, ask the user via AskUserQuestion before committing.
 
-### Git safety: Never commit .claude (CRITICAL)
-- **NEVER commit the `.claude` symlink** - it's a local worktree-only file
-- Before every commit, check: `git status` should NOT show `.claude` as staged
-- If `.claude` appears in staged files, unstage it: `git reset HEAD .claude`
-- After `git add -A`, always run: `git reset HEAD .claude 2>/dev/null || true`
-- This symlink points to PAW internal settings and must not be in version control
-
 ### On task completion
 
 **Always commit your changes and let the user decide how to finish via the action picker (⌃F).**

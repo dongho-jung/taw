@@ -126,6 +126,8 @@ paw/                           # This repository
 │   │       ├── PROMPT.md      # System prompt (git mode)
 │   │       ├── PROMPT-nogit.md # System prompt (non-git mode)
 │   │       ├── tmux.conf      # Base tmux configuration
+│   │       ├── hooks/         # Git hooks
+│   │       │   └── pre-commit # Pre-commit hook to prevent .claude commits
 │   │       ├── prompts/       # Default prompt templates
 │   │       │   ├── task-name.md      # Task name generation rules
 │   │       │   ├── merge-conflict.md # Merge conflict resolution prompt
