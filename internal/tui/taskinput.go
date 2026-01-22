@@ -347,6 +347,8 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Refresh Kanban data on tick (expensive I/O is done here, not in View)
 		m.kanban.Refresh()
+		// Persist template draft on tick (debounced, not on every keystroke)
+		m.persistTemplateDraft()
 		// Refresh tip every minute
 		if time.Since(m.lastTipRefresh) >= time.Minute {
 			m.currentTip = GetTip()
@@ -665,7 +667,8 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update textarea height dynamically based on content
 		m.updateTextareaHeight()
-		m.persistTemplateDraft()
+		// Note: persistTemplateDraft() is called on tick (every 1s) for performance
+		// instead of on every keystroke to avoid disk I/O stuttering
 	}
 
 	return m, tea.Batch(cmds...)
