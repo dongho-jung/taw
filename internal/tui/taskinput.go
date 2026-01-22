@@ -334,28 +334,27 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
-	// Check for history selection file (from Ctrl+R picker)
-	// This replaces the current content with the selected history item
-	m.checkHistorySelection()
-	if m.checkTemplateSelection() {
-		cmds = append(cmds, tea.Tick(templateTipDuration, func(t time.Time) tea.Msg {
-			return templateTipClearMsg{}
-		}))
-	}
-
 	switch msg := msg.(type) {
 	case tickMsg:
 		// Refresh Kanban data on tick (expensive I/O is done here, not in View)
 		m.kanban.Refresh()
 		// Persist template draft on tick (debounced, not on every keystroke)
 		m.persistTemplateDraft()
+		// Check for history/template selection on tick (not on every keystroke)
+		// This avoids file I/O on every keystroke which causes stuttering
+		m.checkHistorySelection()
+		if m.checkTemplateSelection() {
+			cmds = append(cmds, tea.Tick(templateTipDuration, func(t time.Time) tea.Msg {
+				return templateTipClearMsg{}
+			}))
+		}
 		// Refresh tip every minute
 		if time.Since(m.lastTipRefresh) >= time.Minute {
 			m.currentTip = GetTip()
 			m.lastTipRefresh = time.Now()
 		}
 		// Schedule next tick
-		return m, m.tickCmd()
+		return m, tea.Batch(append(cmds, m.tickCmd())...)
 
 	case cancelClearMsg:
 		// Clear the cancel pending state after timeout
@@ -387,6 +386,14 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// When terminal gains focus (user switches to this window),
 		// automatically focus the task input textarea
 		m.switchFocusTo(FocusPanelLeft)
+		// Check for history/template selection when window regains focus
+		// (e.g., returning from Ctrl+R history picker or Ctrl+T template picker)
+		m.checkHistorySelection()
+		if m.checkTemplateSelection() {
+			return m, tea.Tick(templateTipDuration, func(t time.Time) tea.Msg {
+				return templateTipClearMsg{}
+			})
+		}
 		return m, nil
 
 	case tea.WindowSizeMsg:
