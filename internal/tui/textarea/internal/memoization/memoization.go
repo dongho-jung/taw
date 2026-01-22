@@ -4,8 +4,8 @@ package memoization
 
 import (
 	"container/list"
-	"crypto/sha256"
 	"fmt"
+	"hash/fnv"
 	"sync"
 )
 
@@ -112,14 +112,20 @@ func (m *MemoCache[H, T]) Set(h H, value T) {
 type HString string
 
 // Hash is a method that returns the hash of the string.
+// Uses FNV-1a hash which is fast and suitable for hash tables.
 func (h HString) Hash() string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(h)))
+	hasher := fnv.New64a()
+	hasher.Write([]byte(h))
+	return fmt.Sprintf("%x", hasher.Sum64())
 }
 
 // HInt is a type that implements the Hasher interface for integers.
 type HInt int
 
 // Hash is a method that returns the hash of the integer.
+// Uses FNV-1a hash which is fast and suitable for hash tables.
 func (h HInt) Hash() string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%d", h))))
+	hasher := fnv.New64a()
+	hasher.Write([]byte(fmt.Sprintf("%d", h)))
+	return fmt.Sprintf("%x", hasher.Sum64())
 }

@@ -145,9 +145,9 @@ func TestHString_Hash(t *testing.T) {
 		t.Error("expected different hash for different strings")
 	}
 
-	// Hash should be 64 characters (SHA256 hex)
-	if len(h1.Hash()) != 64 {
-		t.Errorf("expected hash length 64, got %d", len(h1.Hash()))
+	// Hash should be non-empty (FNV-64 produces up to 16 hex characters)
+	if len(h1.Hash()) == 0 {
+		t.Error("expected non-empty hash")
 	}
 }
 
@@ -166,9 +166,9 @@ func TestHInt_Hash(t *testing.T) {
 		t.Error("expected different hash for different ints")
 	}
 
-	// Hash should be 64 characters (SHA256 hex)
-	if len(h1.Hash()) != 64 {
-		t.Errorf("expected hash length 64, got %d", len(h1.Hash()))
+	// Hash should be non-empty (FNV-64 produces up to 16 hex characters)
+	if len(h1.Hash()) == 0 {
+		t.Error("expected non-empty hash")
 	}
 }
 

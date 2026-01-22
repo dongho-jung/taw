@@ -1,8 +1,8 @@
 package textarea
 
 import (
-	"crypto/sha256"
 	"fmt"
+	"hash/fnv"
 	"image/color"
 	"strconv"
 	"strings"
@@ -238,9 +238,13 @@ type line struct {
 }
 
 // Hash returns a hash of the line.
+// Uses FNV-1a hash which is fast and suitable for hash tables (compared to SHA256).
 func (w line) Hash() string {
-	v := fmt.Sprintf("%s:%d", string(w.runes), w.width)
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(v)))
+	hasher := fnv.New64a()
+	hasher.Write([]byte(string(w.runes)))
+	// Include width in the hash by writing it as bytes
+	hasher.Write([]byte{byte(w.width), byte(w.width >> 8)})
+	return fmt.Sprintf("%x", hasher.Sum64())
 }
 
 // Model is the Bubble Tea model for this text area element.

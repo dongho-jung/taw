@@ -108,6 +108,10 @@ type TaskInput struct {
 	lastTemplateDraft string
 	templateTipUntil  time.Time
 
+	// Keystroke tracking for performance optimization
+	// Skip expensive I/O (like kanban refresh) while user is actively typing
+	lastKeystroke time.Time
+
 	// Cross-project jump target (set when user requests to jump to external project)
 	jumpTarget *JumpTarget
 }
@@ -336,8 +340,15 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tickMsg:
+		// Skip expensive I/O operations if user is actively typing (within last 500ms)
+		// This prevents stuttering during rapid input
+		isTyping := time.Since(m.lastKeystroke) < 500*time.Millisecond
+
 		// Refresh Kanban data on tick (expensive I/O is done here, not in View)
-		m.kanban.Refresh()
+		// Skip if user is actively typing to avoid stuttering
+		if !isTyping {
+			m.kanban.Refresh()
+		}
 		// Persist template draft on tick (debounced, not on every keystroke)
 		m.persistTemplateDraft()
 		// Check for history/template selection on tick (not on every keystroke)
@@ -455,6 +466,9 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textarea.SetWidth(textareaContentWidth)
 
 	case tea.KeyMsg:
+		// Track keystroke time to skip expensive I/O during typing
+		m.lastKeystroke = time.Now()
+
 		keyStr := msg.String()
 
 		// Handle Ctrl+C or Cmd+C for copying selection (textarea or kanban)
