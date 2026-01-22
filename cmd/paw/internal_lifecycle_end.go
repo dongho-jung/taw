@@ -75,11 +75,14 @@ var endTaskCmd = &cobra.Command{
 		logging.Trace("Working directory: %s", workDir)
 		logging.Debug("Configuration: Action=%s", endTaskAction)
 
-		// Handle drop action - discard changes and cleanup
-		skipGitOps := (endTaskAction == "drop")
-		if skipGitOps {
+		// Handle drop and done actions - skip git operations
+		skipGitOps := (endTaskAction == "drop" || endTaskAction == "done")
+		if endTaskAction == "drop" {
 			fmt.Println("  Dropping task (discarding changes)...")
 			logging.Log("drop action: discarding changes for task %s", targetTask.Name)
+		} else if endTaskAction == "done" {
+			fmt.Println("  Finishing task...")
+			logging.Log("done action: cleaning up task %s", targetTask.Name)
 		}
 
 		// Commit changes if git mode (skip for drop action)
@@ -215,8 +218,8 @@ var endTaskCmd = &cobra.Command{
 		}
 		fmt.Println()
 
-		// Skip post-task processing for drop action
-		if !skipGitOps {
+		// Skip post-task processing for drop action only (done action should run hooks)
+		if endTaskAction != "drop" {
 			if appCtx.Config != nil && appCtx.Config.PostTaskHook != "" {
 				hookEnv := appCtx.GetEnvVars(targetTask.Name, workDir, windowID)
 				hookSpinner := tui.NewSimpleSpinner("Running post-task hook")
@@ -236,16 +239,11 @@ var endTaskCmd = &cobra.Command{
 					hookSpinner.Stop(true, "")
 				}
 			}
+		}
 
-			// Clean up temp pane capture file if it exists
-			if paneCaptureFile != "" {
-				_ = os.Remove(paneCaptureFile)
-			}
-		} else {
-			// Clean up temp file for drop action too
-			if paneCaptureFile != "" {
-				_ = os.Remove(paneCaptureFile)
-			}
+		// Clean up temp pane capture file if it exists
+		if paneCaptureFile != "" {
+			_ = os.Remove(paneCaptureFile)
 		}
 
 		// Notify user that task completed successfully

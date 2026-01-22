@@ -18,6 +18,7 @@ const (
 	FinishActionMerge     FinishAction = "merge"
 	FinishActionPR        FinishAction = "pr"
 	FinishActionKeep      FinishAction = "keep"
+	FinishActionDone      FinishAction = "done"
 	FinishActionDrop      FinishAction = "drop"
 )
 
@@ -50,27 +51,30 @@ func gitOptions() []FinishOption {
 	}
 }
 
-// nonGitOptions returns the options for non-git mode.
-func nonGitOptions() []FinishOption {
+// doneOptions returns the options when there's nothing to merge (non-git or no commits).
+func doneOptions() []FinishOption {
 	return []FinishOption{
-		{Action: FinishActionKeep, Name: "Keep", Description: "Keep changes in place"},
+		{Action: FinishActionDone, Name: "Done", Description: "Clean up task"},
 		{Action: FinishActionDrop, Name: "Drop", Description: "Discard all changes", Warning: true},
 	}
 }
 
 // NewFinishPicker creates a new finish picker.
-func NewFinishPicker(isGitRepo bool) *FinishPicker {
-	logging.Debug("-> NewFinishPicker(isGitRepo=%v)", isGitRepo)
+// isGitRepo: whether the project is a git repository
+// hasCommits: whether there are commits to merge (only relevant if isGitRepo is true)
+func NewFinishPicker(isGitRepo, hasCommits bool) *FinishPicker {
+	logging.Debug("-> NewFinishPicker(isGitRepo=%v, hasCommits=%v)", isGitRepo, hasCommits)
 	defer logging.Debug("<- NewFinishPicker")
 
 	// Detect dark mode BEFORE bubbletea starts
 	isDark := DetectDarkMode()
 
 	var options []FinishOption
-	if isGitRepo {
+	if isGitRepo && hasCommits {
 		options = gitOptions()
 	} else {
-		options = nonGitOptions()
+		// Non-git or no commits: just show Done and Drop
+		options = doneOptions()
 	}
 
 	return &FinishPicker{
@@ -181,6 +185,14 @@ func (m *FinishPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "p", "P":
 			for i, opt := range m.options {
 				if opt.Action == FinishActionPR {
+					m.cursor = i
+					m.selected = opt.Action
+					return m, tea.Quit
+				}
+			}
+		case "n", "N":
+			for i, opt := range m.options {
+				if opt.Action == FinishActionDone {
 					m.cursor = i
 					m.selected = opt.Action
 					return m, tea.Quit
@@ -299,11 +311,11 @@ func (m *FinishPicker) Result() FinishAction {
 }
 
 // RunFinishPicker runs the finish picker and returns the selected action.
-func RunFinishPicker(isGitRepo bool) (FinishAction, error) {
-	logging.Debug("-> RunFinishPicker(isGitRepo=%v)", isGitRepo)
+func RunFinishPicker(isGitRepo, hasCommits bool) (FinishAction, error) {
+	logging.Debug("-> RunFinishPicker(isGitRepo=%v, hasCommits=%v)", isGitRepo, hasCommits)
 	defer logging.Debug("<- RunFinishPicker")
 
-	m := NewFinishPicker(isGitRepo)
+	m := NewFinishPicker(isGitRepo, hasCommits)
 	logging.Debug("RunFinishPicker: starting tea.Program")
 	p := tea.NewProgram(m)
 

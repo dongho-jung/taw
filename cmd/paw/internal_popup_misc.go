@@ -8,7 +8,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 
+	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/logging"
+	"github.com/dongho-jung/paw/internal/task"
 	"github.com/dongho-jung/paw/internal/tmux"
 	"github.com/dongho-jung/paw/internal/tui"
 )
@@ -148,8 +150,24 @@ var finishPickerTUICmd = &cobra.Command{
 		logging.Debug("-> finishPickerTUICmd(session=%s, windowID=%s)", sessionName, windowID)
 		defer logging.Debug("<- finishPickerTUICmd")
 
+		// Detect if there are commits to merge (only for git repos)
+		hasCommits := false
+		if appCtx.IsGitRepo {
+			// Find task by window ID to get the branch name
+			mgr := task.NewManager(appCtx.AgentsDir, appCtx.ProjectDir, appCtx.PawDir, appCtx.IsGitRepo, appCtx.Config)
+			targetTask, err := mgr.FindTaskByWindowID(windowID)
+			if err == nil {
+				gitClient := git.New()
+				mainBranch := gitClient.GetMainBranch(appCtx.ProjectDir)
+				workDir := mgr.GetWorkingDirectory(targetTask)
+				commits, _ := gitClient.GetBranchCommits(workDir, targetTask.Name, mainBranch, 1)
+				hasCommits = len(commits) > 0
+				logging.Debug("finishPickerTUICmd: hasCommits=%v (branch=%s, main=%s)", hasCommits, targetTask.Name, mainBranch)
+			}
+		}
+
 		// Run the finish picker
-		action, err := tui.RunFinishPicker(appCtx.IsGitRepo)
+		action, err := tui.RunFinishPicker(appCtx.IsGitRepo, hasCommits)
 		if err != nil {
 			logging.Debug("finishPickerTUICmd: RunFinishPicker failed: %v", err)
 			return err
@@ -176,6 +194,8 @@ var finishPickerTUICmd = &cobra.Command{
 			endAction = "pr"
 		case tui.FinishActionKeep:
 			endAction = "keep"
+		case tui.FinishActionDone:
+			endAction = "done"
 		case tui.FinishActionDrop:
 			endAction = "drop"
 		default:
