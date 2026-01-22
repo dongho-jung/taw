@@ -112,6 +112,10 @@ type TaskInput struct {
 	// Skip expensive I/O (like kanban refresh) while user is actively typing
 	lastKeystroke time.Time
 
+	// Content tracking for height optimization
+	// Skip expensive TotalVisualLines() calculation when content hasn't changed
+	lastContentLineCount int
+
 	// Cross-project jump target (set when user requests to jump to external project)
 	jumpTarget *JumpTarget
 }
@@ -314,12 +318,28 @@ func (m *TaskInput) updateTextareaHeight() {
 	}
 
 	// Only update if height changed
-	if requiredHeight != m.textareaHeight {
+	heightChanged := requiredHeight != m.textareaHeight
+	if heightChanged {
 		m.textareaHeight = requiredHeight
 		m.textarea.SetHeight(requiredHeight)
 	}
 
-	// Always adjust viewport position based on visual lines vs visible height
+	// Performance optimization: Skip expensive TotalVisualLines() calculation
+	// when content line count hasn't changed. Only recalculate when:
+	// 1. Height was just updated (heightChanged)
+	// 2. Content line count changed (potential for wrapped line count change)
+	// 3. Content is at the boundary (needs scroll adjustment)
+	contentChanged := contentLines != m.lastContentLineCount
+	m.lastContentLineCount = contentLines
+
+	if !heightChanged && !contentChanged {
+		// No meaningful change - skip expensive viewport calculations
+		// Just ensure cursor is visible (cheap operation)
+		m.textarea.EnsureCursorVisible()
+		return
+	}
+
+	// Content or height changed - do full viewport adjustment
 	// Use TotalVisualLines() which accounts for soft-wrapped lines, not just newlines
 	// This prevents cursor from going outside the box when long lines are wrapped
 	visualLines := m.textarea.TotalVisualLines()

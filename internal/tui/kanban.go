@@ -55,6 +55,19 @@ type KanbanView struct {
 	selectEndY    int  // End row (relative to kanban top)
 	selectedText  string
 	renderedLines []string // Cache of rendered text lines for selection
+
+	// Render cache for performance optimization
+	// Only re-render when data, dimensions, or visual state changes
+	cachedRender        string
+	cacheValid          bool
+	lastRenderWidth     int
+	lastRenderHeight    int
+	lastRenderDark      bool
+	lastRenderFocused   bool
+	lastRenderFocusCol  int
+	lastRenderScroll    int
+	lastRenderTaskCount int
+	lastRenderSelection bool
 }
 
 // NewKanbanView creates a new Kanban view.
@@ -115,11 +128,55 @@ func (k *KanbanView) taskAreaHeight() int {
 // This should be called periodically (e.g., on tick) rather than on every render.
 func (k *KanbanView) Refresh() {
 	k.working, k.waiting, k.done = k.service.DiscoverAll()
+	k.invalidateCache() // Task data changed, need to re-render
+}
+
+// invalidateCache marks the render cache as invalid.
+func (k *KanbanView) invalidateCache() {
+	k.cacheValid = false
+}
+
+// isCacheValid checks if the render cache is still valid.
+func (k *KanbanView) isCacheValid() bool {
+	if !k.cacheValid {
+		return false
+	}
+	// Check if any render-affecting state has changed
+	taskCount := len(k.working) + len(k.waiting) + len(k.done)
+	if k.width != k.lastRenderWidth ||
+		k.height != k.lastRenderHeight ||
+		k.isDark != k.lastRenderDark ||
+		k.focused != k.lastRenderFocused ||
+		k.focusedCol != k.lastRenderFocusCol ||
+		k.scrollOffset != k.lastRenderScroll ||
+		taskCount != k.lastRenderTaskCount ||
+		k.hasSelection != k.lastRenderSelection {
+		return false
+	}
+	return true
+}
+
+// updateCacheState saves current state for cache validation.
+func (k *KanbanView) updateCacheState() {
+	k.cacheValid = true
+	k.lastRenderWidth = k.width
+	k.lastRenderHeight = k.height
+	k.lastRenderDark = k.isDark
+	k.lastRenderFocused = k.focused
+	k.lastRenderFocusCol = k.focusedCol
+	k.lastRenderScroll = k.scrollOffset
+	k.lastRenderTaskCount = len(k.working) + len(k.waiting) + len(k.done)
+	k.lastRenderSelection = k.hasSelection
 }
 
 // Render renders the Kanban board using cached task data.
 // Call Refresh() first to update the cache.
 func (k *KanbanView) Render() string {
+	// Performance optimization: return cached render if still valid
+	if k.isCacheValid() && k.cachedRender != "" {
+		return k.cachedRender
+	}
+
 	// Use cached task data (populated by Refresh())
 	// 3 columns: Working, Waiting, Done (Warning merged into Waiting)
 	working, waiting, done := k.working, k.waiting, k.done
@@ -293,6 +350,10 @@ func (k *KanbanView) Render() string {
 	// Cache rendered text for copy functionality (strip ANSI codes for plain text)
 	k.cacheTextForCopy(board)
 
+	// Save to render cache
+	k.cachedRender = board
+	k.updateCacheState()
+
 	return board
 }
 
@@ -308,7 +369,10 @@ func (k *KanbanView) TaskCount() int {
 
 // SetFocused sets the focus state of the kanban view.
 func (k *KanbanView) SetFocused(focused bool) {
-	k.focused = focused
+	if k.focused != focused {
+		k.focused = focused
+		k.invalidateCache()
+	}
 	if !focused {
 		k.focusedCol = -1 // Clear column focus when unfocusing
 	}
