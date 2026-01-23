@@ -72,7 +72,12 @@ func NewProjectPicker(projects []ProjectPickerItem) *ProjectPicker {
 
 // Init initializes the project picker.
 func (m *ProjectPicker) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, tea.RequestBackgroundColor)
+	// Skip textinput.Blink since we use VirtualCursor = false (real cursor mode)
+	// Only request background color if not already cached
+	if _, ok := cachedDarkModeValue(); ok {
+		return nil
+	}
+	return tea.RequestBackgroundColor
 }
 
 // Update handles messages.
@@ -277,7 +282,10 @@ func (m *ProjectPicker) View() tea.View {
 	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter/Space: Switch  Esc/⌃J: Cancel"))
 
 	v := tea.NewView(sb.String())
+	v.AltScreen = true
 	if m.input.Focused() {
+		// Cursor position: X = border(1) + padding(1) + cursorX
+		// Y = inputBoxTopY + 1 (skip top border row to reach content row)
 		cursor := tea.NewCursor(2+inputRender.CursorX, inputBoxTopY+1)
 		cursor.Blink = m.input.Styles.Cursor.Blink
 		cursor.Color = m.input.Styles.Cursor.Color

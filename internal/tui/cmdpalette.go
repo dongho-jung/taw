@@ -68,7 +68,12 @@ func NewCommandPalette(commands []Command) *CommandPalette {
 
 // Init initializes the command palette.
 func (m *CommandPalette) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, tea.RequestBackgroundColor)
+	// Skip textinput.Blink since we use VirtualCursor = false (real cursor mode)
+	// Only request background color if not already cached
+	if _, ok := cachedDarkModeValue(); ok {
+		return nil
+	}
+	return tea.RequestBackgroundColor
 }
 
 // Update handles messages.
@@ -251,6 +256,7 @@ func (m *CommandPalette) View() tea.View {
 	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter: Execute  Esc/⌃P: Close"))
 
 	v := tea.NewView(sb.String())
+	v.AltScreen = true
 	if m.input.Focused() {
 		cursor := tea.NewCursor(2+inputRender.CursorX, inputBoxTopY+1)
 		cursor.Blink = m.input.Styles.Cursor.Blink
