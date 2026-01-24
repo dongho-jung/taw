@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss/v2"
 
 	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/service"
 	"github.com/dongho-jung/paw/internal/tmux"
 	"github.com/dongho-jung/paw/internal/tui/textarea"
@@ -522,9 +523,11 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.focusPanel == FocusPanelLeft && key.Matches(msg, m.textarea.KeyMap.Paste) {
+			logging.Info("taskinput: paste key detected on input panel")
 			if m.handleImagePaste() {
 				return m, nil
 			}
+			logging.Debug("taskinput: no image handled, falling back to text paste")
 		}
 
 		// Global keys (work in both panels)
