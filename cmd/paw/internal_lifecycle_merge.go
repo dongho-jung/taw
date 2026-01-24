@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -382,16 +381,11 @@ var mergeTaskUICmd = &cobra.Command{
 
 		tm := tmux.New(sessionName)
 
-		// Get current window ID
-		windowID, err := tm.Display("#{window_id}")
+		// Get current window info
+		windowID, windowName, err := getCurrentWindowInfo(tm)
 		if err != nil {
-			return fmt.Errorf("failed to get window ID: %w", err)
+			return fmt.Errorf("failed to get window info: %w", err)
 		}
-		windowID = strings.TrimSpace(windowID)
-
-		// Get current window name
-		windowName, _ := tm.Display("#{window_name}")
-		windowName = strings.TrimSpace(windowName)
 
 		// Check if this is a task window
 		if !constants.IsTaskWindow(windowName) {
@@ -412,8 +406,8 @@ var mergeTaskUICmd = &cobra.Command{
 		}
 
 		// Build merge-task command
-		mergeTaskCmdStr := fmt.Sprintf("%s internal merge-task %s %s; echo; echo 'Press Enter to close...'; read",
-			pawBin, sessionName, windowID)
+		mergeTaskCmdStr := shellJoin(pawBin, "internal", "merge-task", sessionName, windowID)
+		mergeTaskCmdStr += "; echo; echo 'Press Enter to close...'; read"
 
 		// Create a top pane (40% height)
 		_, err = tm.SplitWindowPane(tmux.SplitOpts{

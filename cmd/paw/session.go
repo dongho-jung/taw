@@ -61,6 +61,7 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 	}); err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
+	syncSessionEnv(tm, appCtx)
 
 	// Setup tmux configuration
 	if err := setupTmuxConfig(appCtx, tm); err != nil {
@@ -121,8 +122,7 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 	// Send new-task command to the _ window
 	// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
 	// (required for global workspaces where there's no local .paw directory)
-	newTaskCmd := fmt.Sprintf("PAW_DIR='%s' PROJECT_DIR='%s' DISPLAY_NAME='%s' %s internal new-task %s",
-		appCtx.PawDir, appCtx.ProjectDir, appCtx.GetDisplayName(), pawBin, appCtx.SessionName)
+	newTaskCmd := buildNewTaskCommand(appCtx, pawBin, appCtx.SessionName)
 	_ = tm.SendKeysLiteral(appCtx.SessionName+":"+constants.NewWindowName, newTaskCmd)
 	_ = tm.SendKeys(appCtx.SessionName+":"+constants.NewWindowName, "Enter")
 
@@ -136,6 +136,7 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 // attachToSession attaches to an existing session
 func attachToSession(appCtx *app.App, tm tmux.Client) error {
 	logging.Debug("Running pre-attach cleanup and recovery...")
+	syncSessionEnv(tm, appCtx)
 
 	// Check if PAW version has changed and update symlink
 	versionChanged := checkVersionChanged(appCtx.PawDir)
@@ -358,8 +359,7 @@ func respawnMainWindow(appCtx *app.App, tm tmux.Client) error {
 
 	// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
 	// (required for global workspaces where there's no local .paw directory)
-	newTaskCmd := fmt.Sprintf("PAW_DIR='%s' PROJECT_DIR='%s' DISPLAY_NAME='%s' %s internal new-task %s",
-		appCtx.PawDir, appCtx.ProjectDir, appCtx.GetDisplayName(), pawBin, appCtx.SessionName)
+	newTaskCmd := buildNewTaskCommand(appCtx, pawBin, appCtx.SessionName)
 
 	if mainWindowID == "" {
 		// Main window doesn't exist - create it

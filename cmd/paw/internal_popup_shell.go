@@ -83,17 +83,10 @@ var showCurrentTaskCmd = &cobra.Command{
 		tm := tmux.New(sessionName)
 
 		// Get current window info
-		windowName, err := tm.Display("#{window_name}")
+		windowID, windowName, err := getCurrentWindowInfo(tm)
 		if err != nil {
-			return fmt.Errorf("failed to get window name: %w", err)
+			return fmt.Errorf("failed to get window info: %w", err)
 		}
-		windowName = strings.TrimSpace(windowName)
-
-		windowID, err := tm.Display("#{window_id}")
-		if err != nil {
-			return fmt.Errorf("failed to get window ID: %w", err)
-		}
-		windowID = strings.TrimSpace(windowID)
 
 		logging.Debug("Current window: name=%s, id=%s", windowName, windowID)
 
@@ -132,7 +125,7 @@ var showCurrentTaskCmd = &cobra.Command{
 		}
 
 		// Send the cat command to display task content
-		catCmd := fmt.Sprintf("cat '%s'", taskFilePath)
+		catCmd := fmt.Sprintf("cat %s", shellQuote(taskFilePath))
 		if err := tm.SendKeys(userPane, catCmd, "Enter"); err != nil {
 			logging.Debug("Failed to send cat command: %v", err)
 			return fmt.Errorf("failed to send command to pane: %w", err)
@@ -166,17 +159,10 @@ var restorePanesCmd = &cobra.Command{
 		tm := tmux.New(sessionName)
 
 		// Get current window info
-		windowName, err := tm.Display("#{window_name}")
+		windowID, windowName, err := getCurrentWindowInfo(tm)
 		if err != nil {
-			return fmt.Errorf("failed to get window name: %w", err)
+			return fmt.Errorf("failed to get window info: %w", err)
 		}
-		windowName = strings.TrimSpace(windowName)
-
-		windowID, err := tm.Display("#{window_id}")
-		if err != nil {
-			return fmt.Errorf("failed to get window ID: %w", err)
-		}
-		windowID = strings.TrimSpace(windowID)
 
 		logging.Debug("Current window: name=%s, id=%s", windowName, windowID)
 
@@ -229,13 +215,13 @@ var restorePanesCmd = &cobra.Command{
 				return nil
 			}
 
-			if err := tm.RespawnPane(windowID+".0", workDir, startAgentScript); err != nil {
+			if err := tm.RespawnPane(windowID+".0", workDir, shellQuote(startAgentScript)); err != nil {
 				return fmt.Errorf("failed to respawn agent pane: %w", err)
 			}
 
 			// Create user pane
 			taskFilePath := t.GetTaskFilePath()
-			userPaneCmd := fmt.Sprintf("sh -c 'cat %s; echo; exec %s'", taskFilePath, getShell())
+			userPaneCmd := shellCommand(fmt.Sprintf("cat %s; echo; exec %s", shellQuote(taskFilePath), shellQuote(getShell())))
 			if err := tm.SplitWindow(windowID, true, workDir, userPaneCmd); err != nil {
 				logging.Warn("Failed to create user pane: %v", err)
 			}
@@ -256,7 +242,7 @@ var restorePanesCmd = &cobra.Command{
 				// Agent pane exists, user pane is missing
 				logging.Log("User pane missing, creating it")
 				taskFilePath := t.GetTaskFilePath()
-				userPaneCmd := fmt.Sprintf("sh -c 'cat %s; echo; exec %s'", taskFilePath, getShell())
+				userPaneCmd := shellCommand(fmt.Sprintf("cat %s; echo; exec %s", shellQuote(taskFilePath), shellQuote(getShell())))
 				if err := tm.SplitWindow(windowID, true, workDir, userPaneCmd); err != nil {
 					return fmt.Errorf("failed to create user pane: %w", err)
 				}
@@ -278,7 +264,7 @@ var restorePanesCmd = &cobra.Command{
 					Horizontal: true,
 					Before:     true,
 					StartDir:   workDir,
-					Command:    startAgentScript,
+					Command:    shellQuote(startAgentScript),
 				})
 				if err != nil {
 					return fmt.Errorf("failed to create agent pane: %w", err)

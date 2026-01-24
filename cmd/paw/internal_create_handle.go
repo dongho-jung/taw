@@ -198,7 +198,7 @@ var handleTaskCmd = &cobra.Command{
 		}
 
 		// Split window for user pane (error is non-fatal)
-		userPaneCmd := fmt.Sprintf("sh -c 'exec %s'", getShell())
+		userPaneCmd := shellCommand(fmt.Sprintf("exec %s", shellQuote(getShell())))
 		if err := tm.SplitWindow(windowID, true, workDir, userPaneCmd); err != nil {
 			logging.Warn("Failed to split window: %v", err)
 		} else {
@@ -240,9 +240,9 @@ var handleTaskCmd = &cobra.Command{
 # Auto-generated end-task script for this task
 # Finish is user-initiated (Ctrl+F). This script is retained for reference.
 # PAW_DIR is set to ensure the correct project is found
-export PAW_DIR="%s"
-exec "%s" internal end-task "%s" "%s"
-`, appCtx.PawDir, pawBin, sessionName, windowID)
+export PAW_DIR=%s
+exec %s
+`, shellQuote(appCtx.PawDir), shellJoin(pawBin, "internal", "end-task", sessionName, windowID))
 		if err := os.WriteFile(endTaskScriptPath, []byte(endTaskContent), 0755); err != nil {
 			logging.Warn("Failed to create end-task script: %v", err)
 		} else {
@@ -268,7 +268,7 @@ exec "%s" internal end-task "%s" "%s"
 		}
 
 		// Start Claude using the start-agent script
-		if err := tm.RespawnPane(agentPane, workDir, startAgentScriptPath); err != nil {
+		if err := tm.RespawnPane(agentPane, workDir, shellQuote(startAgentScriptPath)); err != nil {
 			return fmt.Errorf("failed to start Claude: %w", err)
 		}
 
@@ -387,14 +387,14 @@ func buildStartAgentScript(appCtx *app.App, t *task.Task, taskOpts *config.TaskO
 	taskName := t.Name
 	worktreeDirExport := ""
 	if workDir != "" && workDir != appCtx.ProjectDir {
-		worktreeDirExport = fmt.Sprintf("export WORKTREE_DIR='%s'\n", workDir)
+		worktreeDirExport = fmt.Sprintf("export WORKTREE_DIR=%s\n", shellQuote(workDir))
 	}
 
 	// Build model flag for Claude command
 	// Always pass the model flag since Claude CLI's default (sonnet) differs from PAW's default (opus)
 	modelFlag := ""
 	if taskOpts.Model != "" {
-		modelFlag = fmt.Sprintf(" --model %s", taskOpts.Model)
+		modelFlag = fmt.Sprintf(" --model %s", shellQuote(string(taskOpts.Model)))
 	}
 
 	// Settings file path - use agent directory's .claude symlink
@@ -405,45 +405,45 @@ func buildStartAgentScript(appCtx *app.App, t *task.Task, taskOpts *config.TaskO
 		// Resume mode: use --continue to automatically continue previous session
 		return fmt.Sprintf(`#!/bin/bash
 # Auto-generated start-agent script for this task (RESUME MODE)
-export TASK_NAME='%s'
-export PAW_DIR='%s'
-export PROJECT_DIR='%s'
-%sexport WINDOW_ID='%s'
-export PAW_HOME='%s'
-export PAW_BIN='%s'
-export SESSION_NAME='%s'
+export TASK_NAME=%s
+export PAW_DIR=%s
+export PROJECT_DIR=%s
+%sexport WINDOW_ID=%s
+export PAW_HOME=%s
+export PAW_BIN=%s
+export SESSION_NAME=%s
 export IS_DEMO='1'
 
 # Continue the previous Claude session (--continue auto-selects last session)
 # --settings points to agent dir's .claude (outside git worktree)
-exec claude --continue --dangerously-skip-permissions --settings '%s'%s
-`, taskName, appCtx.PawDir, appCtx.ProjectDir, worktreeDirExport, windowID,
-			filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName, settingsPath, modelFlag)
+exec claude --continue --dangerously-skip-permissions --settings %s%s
+`, shellQuote(taskName), shellQuote(appCtx.PawDir), shellQuote(appCtx.ProjectDir), worktreeDirExport, shellQuote(windowID),
+			shellQuote(filepath.Dir(filepath.Dir(pawBin))), shellQuote(pawBinSymlink), shellQuote(sessionName), shellQuote(settingsPath), modelFlag)
 	}
 
 	// New session: start fresh with system prompt
 	encodedPrompt := base64.StdEncoding.EncodeToString([]byte(systemPrompt))
 	return fmt.Sprintf(`#!/bin/bash
 # Auto-generated start-agent script for this task
-export TASK_NAME='%s'
-export PAW_DIR='%s'
-export PROJECT_DIR='%s'
-%sexport WINDOW_ID='%s'
-export PAW_HOME='%s'
-export PAW_BIN='%s'
-export SESSION_NAME='%s'
+export TASK_NAME=%s
+export PAW_DIR=%s
+export PROJECT_DIR=%s
+%sexport WINDOW_ID=%s
+export PAW_HOME=%s
+export PAW_BIN=%s
+export SESSION_NAME=%s
 export IS_DEMO='1'
 
 # System prompt is base64 encoded to avoid shell escaping issues
 # Using heredoc with single-quoted delimiter prevents any shell interpretation
 # --settings points to agent dir's .claude (outside git worktree)
-exec claude --dangerously-skip-permissions --settings '%s'%s --system-prompt "$(base64 -d <<'__PROMPT_END__'
+exec claude --dangerously-skip-permissions --settings %s%s --system-prompt "$(base64 -d <<'__PROMPT_END__'
 %s
 __PROMPT_END__
 )"
-`, taskName, appCtx.PawDir, appCtx.ProjectDir, worktreeDirExport, windowID,
-		filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName,
-		settingsPath, modelFlag, encodedPrompt)
+`, shellQuote(taskName), shellQuote(appCtx.PawDir), shellQuote(appCtx.ProjectDir), worktreeDirExport, shellQuote(windowID),
+		shellQuote(filepath.Dir(filepath.Dir(pawBin))), shellQuote(pawBinSymlink), shellQuote(sessionName),
+		shellQuote(settingsPath), modelFlag, encodedPrompt)
 }
 
 // startNewTaskSession handles the setup for a new (non-resumed) task session.

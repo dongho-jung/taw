@@ -47,22 +47,28 @@ func shellPassthrough(key, pawCmd string) string {
 // Note: Most Ctrl keybindings pass through to shell when in the shell pane (Ctrl+B popup),
 // except Ctrl+B (toggle shell), Ctrl+Q (quit), and Ctrl+F (finish task).
 func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
-	// Environment variables for proper context resolution in subdirectory sessions
-	// These are embedded directly in the keybindings (not tmux format variables)
-	envPrefix := fmt.Sprintf(`PAW_DIR="%s" PROJECT_DIR="%s" DISPLAY_NAME="%s" `,
-		ctx.PawDir, ctx.ProjectDir, ctx.DisplayName)
+	buildPawRunShell := func(args ...string) string {
+		envParts := []string{
+			shellEnv("PAW_DIR", ctx.PawDir),
+			shellEnv("PROJECT_DIR", ctx.ProjectDir),
+			shellEnv("DISPLAY_NAME", ctx.DisplayName),
+		}
+		cmd := shellJoin(append([]string{ctx.PawBin, "internal"}, args...)...)
+		full := strings.Join(append(envParts, cmd), " ")
+		return fmt.Sprintf("run-shell %s", shellQuote(full))
+	}
 
 	// Command shortcuts - all commands include env vars for proper context resolution
-	cmdNewTask := fmt.Sprintf("run-shell '%s%s internal toggle-new %s'", envPrefix, ctx.PawBin, ctx.SessionName)
-	cmdDoneTask := fmt.Sprintf("run-shell '%s%s internal done-task %s'", envPrefix, ctx.PawBin, ctx.SessionName)
+	cmdNewTask := buildPawRunShell("toggle-new", ctx.SessionName)
+	cmdDoneTask := buildPawRunShell("done-task", ctx.SessionName)
 	cmdQuit := "detach-client"
-	cmdToggleLogs := fmt.Sprintf("run-shell '%s%s internal toggle-log %s'", envPrefix, ctx.PawBin, ctx.SessionName)
-	cmdToggleGitStatus := fmt.Sprintf("run-shell '%s%s internal toggle-git-status %s'", envPrefix, ctx.PawBin, ctx.SessionName)
-	cmdToggleBottom := fmt.Sprintf("run-shell '%s%s internal popup-shell %s'", envPrefix, ctx.PawBin, ctx.SessionName)
-	cmdToggleHelp := fmt.Sprintf("run-shell '%s%s internal toggle-help %s'", envPrefix, ctx.PawBin, ctx.SessionName)
-	cmdToggleCmdPalette := fmt.Sprintf("run-shell '%s%s internal toggle-cmd-palette %s'", envPrefix, ctx.PawBin, ctx.SessionName)
-	cmdToggleProjectPicker := fmt.Sprintf("run-shell '%s%s internal toggle-project-picker %s'", envPrefix, ctx.PawBin, ctx.SessionName)
-	cmdTogglePromptPicker := fmt.Sprintf("run-shell '%s%s internal toggle-prompt-picker %s'", envPrefix, ctx.PawBin, ctx.SessionName)
+	cmdToggleLogs := buildPawRunShell("toggle-log", ctx.SessionName)
+	cmdToggleGitStatus := buildPawRunShell("toggle-git-status", ctx.SessionName)
+	cmdToggleBottom := buildPawRunShell("popup-shell", ctx.SessionName)
+	cmdToggleHelp := buildPawRunShell("toggle-help", ctx.SessionName)
+	cmdToggleCmdPalette := buildPawRunShell("toggle-cmd-palette", ctx.SessionName)
+	cmdToggleProjectPicker := buildPawRunShell("toggle-project-picker", ctx.SessionName)
+	cmdTogglePromptPicker := buildPawRunShell("toggle-prompt-picker", ctx.SessionName)
 
 	// Alt+Tab: context-aware - pass through to TUI in new task window, cycle panes otherwise
 	// #{m:pattern,string} checks if string matches pattern (⭐️* = starts with ⭐️)
@@ -74,11 +80,11 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 
 	// Ctrl+R: context-aware with shell passthrough
 	// Priority: shell pane > new task window > pass through
-	cmdCtrlRBase := fmt.Sprintf(`if -F "#{m:⭐️*,#{window_name}}" "run-shell '%s%s internal toggle-history %s'" "send-keys C-r"`, envPrefix, ctx.PawBin, ctx.SessionName)
+	cmdCtrlRBase := fmt.Sprintf(`if -F "#{m:⭐️*,#{window_name}}" "%s" "send-keys C-r"`, buildPawRunShell("toggle-history", ctx.SessionName))
 	cmdCtrlR := shellPassthrough("C-r", cmdCtrlRBase)
 
 	// Ctrl+T: context-aware with shell passthrough
-	cmdCtrlTBase := fmt.Sprintf(`if -F "#{m:⭐️*,#{window_name}}" "run-shell '%s%s internal toggle-template %s'" "send-keys C-t"`, envPrefix, ctx.PawBin, ctx.SessionName)
+	cmdCtrlTBase := fmt.Sprintf(`if -F "#{m:⭐️*,#{window_name}}" "%s" "send-keys C-t"`, buildPawRunShell("toggle-template", ctx.SessionName))
 	cmdCtrlT := shellPassthrough("C-t", cmdCtrlTBase)
 
 	return []tmux.BindOpts{
@@ -99,10 +105,10 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 		// These pass through to shell in shell pane, except Ctrl+B
 		{Key: "C-o", Command: shellPassthrough("C-o", cmdToggleLogs), NoPrefix: true},
 		{Key: "C-g", Command: shellPassthrough("C-g", cmdToggleGitStatus), NoPrefix: true},
-		{Key: "C-b", Command: cmdToggleBottom, NoPrefix: true},                             // Always works (toggle shell)
-		{Key: "C-_", Command: shellPassthrough("C-_", cmdToggleHelp), NoPrefix: true},      // Ctrl+/ sends C-_
-		{Key: "C-r", Command: cmdCtrlR, NoPrefix: true},                                    // History search in new task window
-		{Key: "C-t", Command: cmdCtrlT, NoPrefix: true},                                    // Template picker in new task window
+		{Key: "C-b", Command: cmdToggleBottom, NoPrefix: true},                                 // Always works (toggle shell)
+		{Key: "C-_", Command: shellPassthrough("C-_", cmdToggleHelp), NoPrefix: true},          // Ctrl+/ sends C-_
+		{Key: "C-r", Command: cmdCtrlR, NoPrefix: true},                                        // History search in new task window
+		{Key: "C-t", Command: cmdCtrlT, NoPrefix: true},                                        // Template picker in new task window
 		{Key: "C-j", Command: shellPassthrough("C-j", cmdToggleProjectPicker), NoPrefix: true}, // Project picker
 		{Key: "C-y", Command: shellPassthrough("C-y", cmdTogglePromptPicker), NoPrefix: true},  // Prompt editor
 	}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os/exec"
 
 	"github.com/spf13/cobra"
@@ -51,7 +50,7 @@ var toggleCmdPaletteCmd = &cobra.Command{
 		tm := tmux.New(sessionName)
 
 		// Run command palette in top pane
-		paletteCmd := fmt.Sprintf("%s internal cmd-palette-tui %s", getPawBin(), sessionName)
+		paletteCmd := shellJoin(getPawBin(), "internal", "cmd-palette-tui", sessionName)
 
 		result, err := displayTopPane(tm, "palette", paletteCmd, "")
 		if err != nil {

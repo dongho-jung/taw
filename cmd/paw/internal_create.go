@@ -75,8 +75,7 @@ var toggleNewCmd = &cobra.Command{
 		// Send new-task command to the new window
 		// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
 		pawBin, _ := os.Executable()
-		newTaskCmdStr := fmt.Sprintf("PAW_DIR='%s' PROJECT_DIR='%s' DISPLAY_NAME='%s' %s internal new-task %s",
-			appCtx.PawDir, appCtx.ProjectDir, appCtx.GetDisplayName(), pawBin, sessionName)
+		newTaskCmdStr := buildNewTaskCommand(appCtx, pawBin, sessionName)
 		if err := tm.SendKeysLiteral(windowID, newTaskCmdStr); err != nil {
 			return fmt.Errorf("failed to send keys: %w", err)
 		}
@@ -158,7 +157,7 @@ var newTaskCmd = &cobra.Command{
 				// to the target session. This works across different tmux sockets and
 				// prevents nesting (unlike syscall.Exec which would create nested tmux).
 				targetSocket := constants.TmuxSocketPrefix + target.Session
-				switchCmd := fmt.Sprintf("tmux -L %s attach-session -t %s", targetSocket, target.Session)
+				switchCmd := fmt.Sprintf("tmux -L %s attach-session -t %s", shellQuote(targetSocket), shellQuote(target.Session))
 				logging.Debug("Switching to session via detach-client -E: %s", switchCmd)
 
 				tm := tmux.New(sessionName)
@@ -336,7 +335,7 @@ var spawnTaskCmd = &cobra.Command{
 		}()
 
 		// Run loading screen inside the progress window
-		loadingCmd := fmt.Sprintf("sh -c %q", fmt.Sprintf("%s internal loading-screen 'Generating task name...'", pawBin))
+		loadingCmd := shellJoin(pawBin, "internal", "loading-screen", "Generating task name...")
 		if err := tm.RespawnPane(progressWindowID+".0", appCtx.ProjectDir, loadingCmd); err != nil {
 			logging.Warn("Failed to run loading screen: %v", err)
 		}
@@ -420,6 +419,7 @@ func ensureMainWindowInSession(sessionName string) error {
 				logging.Warn("Failed to get app context for respawn: %v", err)
 				return nil
 			}
+			syncSessionEnv(tm, appCtx)
 
 			// Get paw binary path
 			pawBin, err := os.Executable()
@@ -430,8 +430,7 @@ func ensureMainWindowInSession(sessionName string) error {
 
 			// Respawn the pane to ensure new-task is running
 			// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
-			newTaskCmd := fmt.Sprintf("PAW_DIR='%s' PROJECT_DIR='%s' DISPLAY_NAME='%s' %s internal new-task %s",
-				appCtx.PawDir, appCtx.ProjectDir, appCtx.GetDisplayName(), pawBin, sessionName)
+			newTaskCmd := buildNewTaskCommand(appCtx, pawBin, sessionName)
 			if err := tm.RespawnPane(w.ID+".0", appCtx.ProjectDir, newTaskCmd); err != nil {
 				logging.Warn("Failed to respawn main window: %v", err)
 			}
@@ -447,6 +446,7 @@ func ensureMainWindowInSession(sessionName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get app context: %w", err)
 	}
+	syncSessionEnv(tm, appCtx)
 
 	// Get paw binary path
 	pawBin, err := os.Executable()
@@ -456,8 +456,7 @@ func ensureMainWindowInSession(sessionName string) error {
 
 	// Build the new-task command
 	// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
-	newTaskCmd := fmt.Sprintf("PAW_DIR='%s' PROJECT_DIR='%s' DISPLAY_NAME='%s' %s internal new-task %s",
-		appCtx.PawDir, appCtx.ProjectDir, appCtx.GetDisplayName(), pawBin, sessionName)
+	newTaskCmd := buildNewTaskCommand(appCtx, pawBin, sessionName)
 
 	// Create new window with command directly (more reliable than sending keys)
 	// Using Command option ensures the command runs immediately without race conditions

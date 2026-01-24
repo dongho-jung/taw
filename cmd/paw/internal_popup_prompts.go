@@ -32,7 +32,7 @@ var togglePromptPickerCmd = &cobra.Command{
 		}
 
 		// Run prompt picker in top pane
-		pickerCmd := fmt.Sprintf("%s internal prompt-picker-tui %s", pawBin, sessionName)
+		pickerCmd := shellJoin(pawBin, "internal", "prompt-picker-tui", sessionName)
 
 		result, err := displayTopPane(tm, "prompt", pickerCmd, "")
 		if err != nil {

@@ -228,7 +228,7 @@ var toggleLogCmd = &cobra.Command{
 		logPath := appCtx.GetLogPath()
 
 		// Run log viewer in top pane (closes with q/Esc/Ctrl+O)
-		logCmd := fmt.Sprintf("%s internal log-viewer %s", getPawBin(), logPath)
+		logCmd := shellJoin(getPawBin(), "internal", "log-viewer", logPath)
 
 		result, err := displayTopPane(tm, "log", logCmd, "")
 		if err != nil {
@@ -265,7 +265,7 @@ var toggleHelpCmd = &cobra.Command{
 		tm := tmux.New(sessionName)
 
 		// Run help viewer in top pane (closes with q/Esc/Ctrl+/)
-		helpCmd := fmt.Sprintf("%s internal help-viewer", getPawBin())
+		helpCmd := shellJoin(getPawBin(), "internal", "help-viewer")
 
 		result, err := displayTopPane(tm, "help", helpCmd, "")
 		if err != nil {
@@ -341,7 +341,7 @@ var toggleGitStatusCmd = &cobra.Command{
 		mainBranch := gitClient.GetMainBranch(panePath)
 
 		// Run git viewer in top pane (closes with q/Esc/Ctrl+G)
-		gitCmd := fmt.Sprintf("%s internal git-viewer %s %s", getPawBin(), panePath, mainBranch)
+		gitCmd := shellJoin(getPawBin(), "internal", "git-viewer", panePath, mainBranch)
 
 		result, err := displayTopPane(tm, "git", gitCmd, panePath)
 		if err != nil {
@@ -389,7 +389,7 @@ var toggleShowDiffCmd = &cobra.Command{
 		mainBranch := gitClient.GetMainBranch(panePath)
 
 		// Run diff viewer in top pane (closes with q/Esc/Ctrl+D)
-		diffCmd := fmt.Sprintf("%s internal diff-viewer %s %s", getPawBin(), panePath, mainBranch)
+		diffCmd := shellJoin(getPawBin(), "internal", "diff-viewer", panePath, mainBranch)
 
 		result, err := displayTopPane(tm, "diff", diffCmd, panePath)
 		if err != nil {
@@ -432,7 +432,7 @@ var toggleHistoryCmd = &cobra.Command{
 		}
 
 		// Run history picker in top pane
-		historyCmd := fmt.Sprintf("%s internal history-picker %s", getPawBin(), sessionName)
+		historyCmd := shellJoin(getPawBin(), "internal", "history-picker", sessionName)
 
 		result, err := displayTopPane(tm, "history", historyCmd, appCtx.ProjectDir)
 		if err != nil {
@@ -526,7 +526,7 @@ var toggleTemplateCmd = &cobra.Command{
 			return err
 		}
 
-		templateCmd := fmt.Sprintf("%s internal template-picker %s", getPawBin(), sessionName)
+		templateCmd := shellJoin(getPawBin(), "internal", "template-picker", sessionName)
 
 		result, err := displayTopPane(tm, "template", templateCmd, appCtx.ProjectDir)
 		if err != nil {
@@ -623,7 +623,7 @@ var toggleProjectPickerCmd = &cobra.Command{
 		}
 
 		// Run project picker in popup (faster than top pane)
-		pickerCmd := fmt.Sprintf("%s internal project-picker-wrapper %s", getPawBin(), sessionName)
+		pickerCmd := shellJoin(getPawBin(), "internal", "project-picker-wrapper", sessionName)
 
 		err = tm.DisplayPopup(tmux.PopupOpts{
 			Width:     constants.PopupWidthProject,
@@ -766,7 +766,7 @@ var projectPickerWrapperCmd = &cobra.Command{
 			// Use detach-client -E to replace the current client with a new attachment
 			// to the target session. This works across different tmux sockets.
 			targetSocket := constants.TmuxSocketPrefix + selected.Name
-			switchCmd := fmt.Sprintf("tmux -L %s attach-session -t %s", targetSocket, selected.Name)
+			switchCmd := fmt.Sprintf("tmux -L %s attach-session -t %s", shellQuote(targetSocket), shellQuote(selected.Name))
 			return tm.Run("detach-client", "-E", switchCmd)
 		}
 

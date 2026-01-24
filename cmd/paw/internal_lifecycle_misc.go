@@ -53,7 +53,7 @@ var doneTaskCmd = &cobra.Command{
 
 		// Show finish picker in top pane
 		pawBin, _ := os.Executable()
-		finishCmd := fmt.Sprintf("%s internal finish-picker-tui %s %s", pawBin, sessionName, windowID)
+		finishCmd := shellJoin(pawBin, "internal", "finish-picker-tui", sessionName, windowID)
 
 		// Display as popup to avoid resizing/redrawing task panes.
 		err = tm.DisplayPopup(tmux.PopupOpts{
@@ -152,7 +152,7 @@ var resumeAgentCmd = &cobra.Command{
 		// Build start-agent script with --continue flag
 		worktreeDirExport := ""
 		if appCtx.IsWorktreeMode() {
-			worktreeDirExport = fmt.Sprintf("export WORKTREE_DIR='%s'\n", workDir)
+			worktreeDirExport = fmt.Sprintf("export WORKTREE_DIR=%s\n", shellQuote(workDir))
 		}
 
 		// Settings file path - use agent directory's .claude symlink
@@ -160,19 +160,19 @@ var resumeAgentCmd = &cobra.Command{
 
 		startAgentContent := fmt.Sprintf(`#!/bin/bash
 # Auto-generated start-agent script for this task (RESUME MODE)
-export TASK_NAME='%s'
-export PAW_DIR='%s'
-export PROJECT_DIR='%s'
-%sexport WINDOW_ID='%s'
-export PAW_HOME='%s'
-export PAW_BIN='%s'
-export SESSION_NAME='%s'
+export TASK_NAME=%s
+export PAW_DIR=%s
+export PROJECT_DIR=%s
+%sexport WINDOW_ID=%s
+export PAW_HOME=%s
+export PAW_BIN=%s
+export SESSION_NAME=%s
 
 # Continue the previous Claude session (--continue auto-selects last session)
 # --settings points to agent dir's .claude (outside git worktree)
-exec claude --continue --dangerously-skip-permissions --settings '%s'
-`, taskName, appCtx.PawDir, appCtx.ProjectDir, worktreeDirExport, windowID,
-			filepath.Dir(filepath.Dir(pawBin)), pawBinSymlink, sessionName, settingsPath)
+exec claude --continue --dangerously-skip-permissions --settings %s
+`, shellQuote(taskName), shellQuote(appCtx.PawDir), shellQuote(appCtx.ProjectDir), worktreeDirExport, shellQuote(windowID),
+			shellQuote(filepath.Dir(filepath.Dir(pawBin))), shellQuote(pawBinSymlink), shellQuote(sessionName), shellQuote(settingsPath))
 
 		startAgentScriptPath := filepath.Join(t.AgentDir, "start-agent")
 		if err := os.WriteFile(startAgentScriptPath, []byte(startAgentContent), 0755); err != nil {
@@ -182,7 +182,7 @@ exec claude --continue --dangerously-skip-permissions --settings '%s'
 		agentPane := windowID + ".0"
 
 		// Respawn the agent pane with the resume script
-		if err := tm.RespawnPane(agentPane, workDir, startAgentScriptPath); err != nil {
+		if err := tm.RespawnPane(agentPane, workDir, shellQuote(startAgentScriptPath)); err != nil {
 			return fmt.Errorf("failed to respawn agent pane: %w", err)
 		}
 

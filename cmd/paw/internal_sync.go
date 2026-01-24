@@ -191,8 +191,8 @@ var syncWithMainUICmd = &cobra.Command{
 		}
 
 		// Build sync-with-main command that runs in the pane
-		syncCmdStr := fmt.Sprintf("%s internal sync-with-main %s %s; echo; echo 'Press Enter to close...'; read",
-			pawBin, sessionName, windowID)
+		syncCmdStr := shellJoin(pawBin, "internal", "sync-with-main", sessionName, windowID)
+		syncCmdStr += "; echo; echo 'Press Enter to close...'; read"
 
 		// Create a top pane (40% height) spanning full window width
 		_, err = tm.SplitWindowPane(tmux.SplitOpts{

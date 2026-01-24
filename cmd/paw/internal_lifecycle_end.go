@@ -348,14 +348,16 @@ var endTaskUICmd = &cobra.Command{
 		// Include pane-capture-file flag if we have pre-captured content
 		// CRITICAL: Pass PAW_DIR as env var so end-task can find the correct project
 		// even if the agent changed its working directory (e.g., cd /tmp)
-		var endTaskCmdStr string
+		cmdArgs := []string{pawBin, "internal", "end-task", "--user-initiated", "--action", endTaskAction}
 		if capturePath != "" {
-			endTaskCmdStr = fmt.Sprintf("PAW_DIR='%s' %s internal end-task --user-initiated --action=%s --pane-capture-file=%q %s %s; echo; echo 'Press Enter to close...'; read",
-				appCtx.PawDir, pawBin, endTaskAction, capturePath, sessionName, windowID)
-		} else {
-			endTaskCmdStr = fmt.Sprintf("PAW_DIR='%s' %s internal end-task --user-initiated --action=%s %s %s; echo; echo 'Press Enter to close...'; read",
-				appCtx.PawDir, pawBin, endTaskAction, sessionName, windowID)
+			cmdArgs = append(cmdArgs, "--pane-capture-file", capturePath)
 		}
+		cmdArgs = append(cmdArgs, sessionName, windowID)
+		endTaskCmdStr := strings.Join([]string{
+			shellEnv("PAW_DIR", appCtx.PawDir),
+			shellJoin(cmdArgs...),
+		}, " ")
+		endTaskCmdStr += "; echo; echo 'Press Enter to close...'; read"
 
 		// Create a top pane (40% height) spanning full window width
 		_, err = tm.SplitWindowPane(tmux.SplitOpts{
@@ -769,7 +771,7 @@ func showPRPopup(tm tmux.Client, sessionName string, prNumber int, prURL string)
 		pawBin = "paw"
 	}
 
-	popupCmd := fmt.Sprintf("%s internal pr-popup-tui %s %d %q", pawBin, sessionName, prNumber, prURL)
+	popupCmd := shellJoin(pawBin, "internal", "pr-popup-tui", sessionName, fmt.Sprintf("%d", prNumber), prURL)
 	_ = tm.DisplayPopup(tmux.PopupOpts{
 		Width:  constants.PopupWidthPR,
 		Height: constants.PopupHeightPR,

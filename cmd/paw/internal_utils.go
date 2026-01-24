@@ -107,6 +107,104 @@ func statusFromWindowName(name string) task.Status {
 	return ""
 }
 
+type sessionContext struct {
+	projectDir  string
+	pawDir      string
+	displayName string
+}
+
+func readSessionEnv(tm tmux.Client, sessionName string) map[string]string {
+	output, err := tm.RunWithOutput("show-environment", "-t", sessionName)
+	if err != nil || output == "" {
+		return nil
+	}
+
+	env := make(map[string]string)
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "-") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		env[parts[0]] = parts[1]
+	}
+
+	return env
+}
+
+func loadSessionContext(sessionName string) sessionContext {
+	if sessionName == "" {
+		return sessionContext{}
+	}
+
+	tm := tmux.New(sessionName)
+	if !tm.HasSession(sessionName) {
+		return sessionContext{}
+	}
+
+	env := readSessionEnv(tm, sessionName)
+	ctx := sessionContext{}
+	if env != nil {
+		ctx.projectDir = env["PROJECT_DIR"]
+		ctx.pawDir = env["PAW_DIR"]
+		ctx.displayName = env["DISPLAY_NAME"]
+	}
+
+	if ctx.projectDir == "" {
+		if sessionPath, err := tm.RunWithOutput("display-message", "-p", "-t", sessionName, "#{session_path}"); err == nil {
+			sessionPath = strings.TrimSpace(sessionPath)
+			if sessionPath != "" {
+				ctx.projectDir = sessionPath
+			}
+		}
+	}
+
+	return ctx
+}
+
+func syncSessionEnv(tm tmux.Client, appCtx *app.App) {
+	if tm == nil || appCtx == nil {
+		return
+	}
+	sessionName := appCtx.SessionName
+	if sessionName == "" {
+		return
+	}
+
+	values := map[string]string{
+		"PAW_DIR":      appCtx.PawDir,
+		"PROJECT_DIR":  appCtx.ProjectDir,
+		"DISPLAY_NAME": appCtx.GetDisplayName(),
+		"SESSION_NAME": appCtx.SessionName,
+	}
+
+	for key, value := range values {
+		if value == "" {
+			continue
+		}
+		if err := tm.Run("set-environment", "-t", sessionName, key, value); err != nil {
+			logging.Debug("syncSessionEnv: failed to set %s for %s: %v", key, sessionName, err)
+		}
+	}
+}
+
+func getCurrentWindowInfo(tm tmux.Client) (string, string, error) {
+	values, err := tm.DisplayMultiple("#{window_id}", "#{window_name}")
+	if err != nil {
+		return "", "", err
+	}
+	if len(values) < 2 {
+		return "", "", fmt.Errorf("unexpected tmux response for window info")
+	}
+	windowID := strings.TrimSpace(values[0])
+	windowName := strings.TrimSpace(values[1])
+	return windowID, windowName, nil
+}
+
 // validateRequiredParams checks if all required parameters are non-empty.
 // Returns an error with a descriptive message if any parameter is empty.
 func validateRequiredParams(params map[string]string) error {
@@ -198,9 +296,21 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 
 	gitClient := git.New()
 
+	sessionCtx := loadSessionContext(sessionName)
+
 	// Get environment variables - both may be set
-	projectDirEnv := os.Getenv("PROJECT_DIR")
-	pawDirEnv := os.Getenv("PAW_DIR")
+	projectDirEnv := sessionCtx.projectDir
+	pawDirEnv := sessionCtx.pawDir
+	displayNameEnv := sessionCtx.displayName
+	if projectDirEnv == "" {
+		projectDirEnv = os.Getenv("PROJECT_DIR")
+	}
+	if pawDirEnv == "" {
+		pawDirEnv = os.Getenv("PAW_DIR")
+	}
+	if displayNameEnv == "" {
+		displayNameEnv = os.Getenv("DISPLAY_NAME")
+	}
 	if pawDirEnv != "" {
 		// Clean the path to remove any trailing slashes
 		// This is important because filepath.Dir("/a/b/c/") returns "/a/b/c" instead of "/a/b"
@@ -224,6 +334,12 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 			logging.Debug("getAppFromSession: overriding PawDir with PAW_DIR=%s", pawDirEnv)
 			application.PawDir = pawDirEnv
 			application.AgentsDir = filepath.Join(pawDirEnv, constants.AgentsDirName)
+		}
+		if displayNameEnv != "" {
+			application.DisplayName = displayNameEnv
+		}
+		if sessionName != "" {
+			application.SessionName = sessionName
 		}
 		return loadAppConfig(application)
 	}
@@ -249,6 +365,12 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 			// Use the PAW_DIR directly
 			application.PawDir = pawDirEnv
 			application.AgentsDir = filepath.Join(pawDirEnv, constants.AgentsDirName)
+			if displayNameEnv != "" {
+				application.DisplayName = displayNameEnv
+			}
+			if sessionName != "" {
+				application.SessionName = sessionName
+			}
 			return loadAppConfig(application)
 		}
 
@@ -264,6 +386,12 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 		// Use the PAW_DIR directly
 		application.PawDir = pawDirEnv
 		application.AgentsDir = filepath.Join(pawDirEnv, constants.AgentsDirName)
+		if displayNameEnv != "" {
+			application.DisplayName = displayNameEnv
+		}
+		if sessionName != "" {
+			application.SessionName = sessionName
+		}
 		return loadAppConfig(application)
 	}
 
@@ -295,6 +423,12 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 				logging.Debug("getAppFromSession: app.NewWithGitInfo failed: %v", err)
 				return nil, err
 			}
+			if displayNameEnv != "" {
+				application.DisplayName = displayNameEnv
+			}
+			if sessionName != "" {
+				application.SessionName = sessionName
+			}
 			return loadAppConfig(application)
 		}
 
@@ -321,6 +455,13 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 	if err != nil {
 		logging.Debug("getAppFromSession: app.NewWithGitInfo failed: %v", err)
 		return nil, fmt.Errorf("could not find project directory for session %s", sessionName)
+	}
+
+	if displayNameEnv != "" {
+		application.DisplayName = displayNameEnv
+	}
+	if sessionName != "" {
+		application.SessionName = sessionName
 	}
 
 	// Verify that the workspace exists (was initialized)
@@ -358,6 +499,39 @@ func getShell() string {
 		shell = "/bin/bash"
 	}
 	return shell
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
+}
+
+func shellJoin(args ...string) string {
+	quoted := make([]string, 0, len(args))
+	for _, arg := range args {
+		quoted = append(quoted, shellQuote(arg))
+	}
+	return strings.Join(quoted, " ")
+}
+
+func shellEnv(key, value string) string {
+	return key + "=" + shellQuote(value)
+}
+
+func shellCommand(command string) string {
+	return "sh -c " + shellQuote(command)
+}
+
+func buildNewTaskCommand(appCtx *app.App, pawBin, sessionName string) string {
+	envParts := []string{
+		shellEnv("PAW_DIR", appCtx.PawDir),
+		shellEnv("PROJECT_DIR", appCtx.ProjectDir),
+		shellEnv("DISPLAY_NAME", appCtx.GetDisplayName()),
+	}
+	cmd := shellJoin(pawBin, "internal", "new-task", sessionName)
+	return strings.Join(append(envParts, cmd), " ")
 }
 
 func buildTaskInstruction(userPromptPath string) (string, error) {
