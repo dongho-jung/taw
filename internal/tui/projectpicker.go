@@ -37,6 +37,15 @@ type ProjectPicker struct {
 	colors           ThemeColors
 	width            int
 	height           int
+
+	// Style cache (reused across renders)
+	styleTitle    lipgloss.Style
+	styleInput    lipgloss.Style
+	styleItem     lipgloss.Style
+	styleSelected lipgloss.Style
+	styleHelp     lipgloss.Style
+	styleDim      lipgloss.Style
+	stylesCached  bool
 }
 
 // NewProjectPicker creates a new project picker.
@@ -96,6 +105,7 @@ func (m *ProjectPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 
@@ -170,7 +180,7 @@ func (m *ProjectPicker) updateFiltered() {
 	}
 
 	// Create searchable strings (project names)
-	var searchables []string
+	searchables := make([]string, 0, len(m.projects))
 	for _, p := range m.projects {
 		searchables = append(searchables, p.Name)
 	}
@@ -199,39 +209,41 @@ func (m *ProjectPicker) renderInput() textInputRender {
 func (m *ProjectPicker) View() tea.View {
 	c := m.colors
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(c.Accent)
-
-	inputStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(c.BorderFocused).
-		Padding(0, 1)
-
-	itemStyle := lipgloss.NewStyle().
-		Foreground(c.TextNormal).
-		PaddingLeft(2)
-
-	selectedStyle := lipgloss.NewStyle().
-		Foreground(c.Accent).
-		Bold(true).
-		PaddingLeft(0)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		MarginTop(1)
+	// Update style cache if needed (only on theme change)
+	if !m.stylesCached {
+		m.styleTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(c.Accent)
+		m.styleInput = lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(c.BorderFocused).
+			Padding(0, 1)
+		m.styleItem = lipgloss.NewStyle().
+			Foreground(c.TextNormal).
+			PaddingLeft(2)
+		m.styleSelected = lipgloss.NewStyle().
+			Foreground(c.Accent).
+			Bold(true).
+			PaddingLeft(0)
+		m.styleHelp = lipgloss.NewStyle().
+			Foreground(c.TextDim).
+			MarginTop(1)
+		m.styleDim = lipgloss.NewStyle().
+			Foreground(c.TextDim)
+		m.stylesCached = true
+	}
 
 	var sb strings.Builder
 	line := 0
 
 	// Title
-	sb.WriteString(titleStyle.Render("Switch Project"))
+	sb.WriteString(m.styleTitle.Render("Switch Project"))
 	sb.WriteString("\n\n")
 	line += 2
 
 	// Input - use custom rendering for proper Korean/CJK cursor positioning
 	inputRender := m.renderInput()
-	inputBox := inputStyle.Render(inputRender.Text)
+	inputBox := m.styleInput.Render(inputRender.Text)
 	inputBoxTopY := line
 	sb.WriteString(inputBox)
 	sb.WriteString("\n\n")
@@ -244,9 +256,9 @@ func (m *ProjectPicker) View() tea.View {
 	// Filtered projects
 	if len(m.filtered) == 0 {
 		if len(m.projects) == 0 {
-			sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("  No other projects running"))
+			sb.WriteString(m.styleDim.Render("  No other projects running"))
 		} else {
-			sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("  No matching projects"))
+			sb.WriteString(m.styleDim.Render("  No matching projects"))
 		}
 		sb.WriteString("\n")
 	} else {
@@ -262,16 +274,16 @@ func (m *ProjectPicker) View() tea.View {
 			project := m.projects[idx]
 
 			if i == m.cursor {
-				sb.WriteString(selectedStyle.Render("> " + project.Name))
+				sb.WriteString(m.styleSelected.Render("> " + project.Name))
 			} else {
-				sb.WriteString(itemStyle.Render(project.Name))
+				sb.WriteString(m.styleItem.Render(project.Name))
 			}
 			sb.WriteString("\n")
 		}
 
 		// Show scroll indicator if needed
 		if len(m.filtered) > listHeight {
-			scrollInfo := lipgloss.NewStyle().Foreground(c.TextDim).Render(
+			scrollInfo := m.styleDim.Render(
 				"  ... " + formatNumber(m.cursor+1) + "/" + formatNumber(len(m.filtered)))
 			sb.WriteString(scrollInfo)
 			sb.WriteString("\n")
@@ -279,7 +291,7 @@ func (m *ProjectPicker) View() tea.View {
 	}
 
 	// Help (MarginTop adds spacing)
-	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter/Space: Switch  Esc/⌃J: Cancel"))
+	sb.WriteString(m.styleHelp.Render("↑/↓: Navigate  Enter/Space: Switch  Esc/⌃J: Cancel"))
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true

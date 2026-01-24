@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
@@ -9,6 +8,12 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/dongho-jung/paw/internal/config"
+)
+
+// Pre-computed padded labels for options panel (avoids fmt.Sprintf per render)
+const (
+	optionLabelModel  = "Model:      " // 12 chars, left-aligned
+	optionLabelBranch = "Branch:     " // 12 chars, left-aligned
 )
 
 // updateOptionsPanel handles key events when the options panel is focused.
@@ -117,44 +122,28 @@ func (m *TaskInput) applyOptionInputValues() {
 func (m *TaskInput) renderOptionsPanel() string {
 	isFocused := m.focusPanel == FocusPanelRight
 
-	// Adaptive colors for light/dark terminal themes (use cached isDark value)
-	// Light theme: use darker colors for visibility on light backgrounds
-	// Dark theme: use lighter colors for visibility on dark backgrounds
-	lightDark := lipgloss.LightDark(m.isDark)
-	normalColor := lightDark(lipgloss.Color("236"), lipgloss.Color("252"))
-	// Dim color: medium contrast for non-selected items (readable but clearly dimmed)
-	dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("243"))
-	// Accent color: darker blue for light bg, bright cyan for dark bg
-	accentColor := lightDark(lipgloss.Color("25"), lipgloss.Color("39"))
+	// Update style cache if needed (only on theme change)
+	if !m.optStylesCached {
+		// Adaptive colors for light/dark terminal themes
+		lightDark := lipgloss.LightDark(m.isDark)
+		normalColor := lightDark(lipgloss.Color("236"), lipgloss.Color("252"))
+		dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("243"))
+		accentColor := lightDark(lipgloss.Color("25"), lipgloss.Color("39"))
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(accentColor)
+		m.optStyleTitle = lipgloss.NewStyle().Bold(true).Foreground(accentColor)
+		m.optStyleTitleDim = lipgloss.NewStyle().Bold(true).Foreground(dimColor)
+		m.optStyleLabel = lipgloss.NewStyle().Foreground(normalColor)
+		m.optStyleSelectedLabel = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
+		m.optStyleValue = lipgloss.NewStyle().Foreground(normalColor)
+		m.optStyleSelectedValue = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
+		m.optStyleDim = lipgloss.NewStyle().Foreground(dimColor)
+		m.optStylesCached = true
+	}
 
-	titleDimStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(dimColor)
-
-	labelStyle := lipgloss.NewStyle().
-		Foreground(normalColor)
-
-	selectedLabelStyle := lipgloss.NewStyle().
-		Foreground(accentColor).
-		Bold(true)
-
-	valueStyle := lipgloss.NewStyle().
-		Foreground(normalColor)
-
-	selectedValueStyle := lipgloss.NewStyle().
-		Foreground(accentColor).
-		Bold(true)
-
-	dimStyle := lipgloss.NewStyle().
-		Foreground(dimColor)
-
-	borderColor := dimColor
+	// Get border color based on focus (uses cached dim/accent colors via styles)
+	borderColor := m.optStyleDim.GetForeground()
 	if isFocused {
-		borderColor = accentColor
+		borderColor = m.optStyleTitle.GetForeground()
 	}
 
 	// Build content lines with consistent visible width
@@ -165,64 +154,64 @@ func (m *TaskInput) renderOptionsPanel() string {
 	if innerWidth < 20 {
 		innerWidth = 20 // Minimum to display labels
 	}
-	var lines []string
+	// Pre-allocate lines slice: title + empty + model + branch(if git) + fill lines
+	lines := make([]string, 0, m.textareaHeight)
 
-	// Title line
+	// Title line (use cached styles)
 	if isFocused {
-		lines = append(lines, padToWidth(titleStyle.Render("Options"), innerWidth))
+		lines = append(lines, padToWidth(m.optStyleTitle.Render("Options"), innerWidth))
 	} else {
-		lines = append(lines, padToWidth(titleDimStyle.Render("Options"), innerWidth))
+		lines = append(lines, padToWidth(m.optStyleTitleDim.Render("Options"), innerWidth))
 	}
 
 	// Empty line (from MarginBottom effect)
-	lines = append(lines, strings.Repeat(" ", innerWidth))
+	emptyLine := getPadding(innerWidth)
+	lines = append(lines, emptyLine)
 
-	// Model field
+	// Model field (use cached styles)
 	{
 		isSelected := isFocused && m.optField == OptFieldModel
-		paddedLabel := fmt.Sprintf("%-12s", "Model:")
-		label := labelStyle.Render(paddedLabel)
+		label := m.optStyleLabel.Render(optionLabelModel)
 		if isSelected {
-			label = selectedLabelStyle.Render(paddedLabel)
+			label = m.optStyleSelectedLabel.Render(optionLabelModel)
 		}
 
 		models := config.ValidModels()
-		var parts []string
+		parts := make([]string, 0, len(models))
 		for i, model := range models {
 			if i == m.modelIdx {
 				if isSelected {
-					parts = append(parts, selectedValueStyle.Render("["+string(model)+"]"))
+					parts = append(parts, m.optStyleSelectedValue.Render("["+string(model)+"]"))
 				} else {
-					parts = append(parts, valueStyle.Render("["+string(model)+"]"))
+					parts = append(parts, m.optStyleValue.Render("["+string(model)+"]"))
 				}
 			} else {
-				parts = append(parts, dimStyle.Render(" "+string(model)+" "))
+				parts = append(parts, m.optStyleDim.Render(" "+string(model)+" "))
 			}
 		}
 		modelLine := label + strings.Join(parts, "")
 		lines = append(lines, padToWidth(modelLine, innerWidth))
 	}
 
-	// Branch name field (only in git mode)
+	// Branch name field (only in git mode, use cached styles)
 	if m.isGitRepo {
 		isSelected := isFocused && m.optField == OptFieldBranchName
-		paddedLabel := fmt.Sprintf("%-12s", "Branch:")
-		label := labelStyle.Render(paddedLabel)
+		label := m.optStyleLabel.Render(optionLabelBranch)
 		if isSelected {
-			label = selectedLabelStyle.Render(paddedLabel)
+			label = m.optStyleSelectedLabel.Render(optionLabelBranch)
 		}
 
 		branchValue := m.branchName
-		branchStyle := valueStyle
+		branchStyle := m.optStyleValue
 		if branchValue == "" {
 			branchValue = "auto"
-			branchStyle = dimStyle
+			branchStyle = m.optStyleDim
 		}
 		if isSelected {
-			branchStyle = selectedValueStyle
+			branchStyle = m.optStyleSelectedValue
 		}
 
-		availableWidth := innerWidth - lipgloss.Width(paddedLabel)
+		availableWidth := innerWidth - len(optionLabelBranch)
 		if availableWidth < 0 {
 			availableWidth = 0
 		}
@@ -234,9 +223,9 @@ func (m *TaskInput) renderOptionsPanel() string {
 		lines = append(lines, padToWidth(branchLine, innerWidth))
 	}
 
-	// Fill remaining height with empty lines
+	// Fill remaining height with empty lines (reuse cached padding)
 	for len(lines) < m.textareaHeight {
-		lines = append(lines, strings.Repeat(" ", innerWidth))
+		lines = append(lines, emptyLine)
 	}
 
 	// Apply border and padding to pre-formatted content

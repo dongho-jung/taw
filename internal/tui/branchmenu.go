@@ -21,6 +21,13 @@ type BranchMenu struct {
 	action BranchAction
 	isDark bool
 	colors ThemeColors
+
+	// Style cache (reused across renders)
+	styleTitle   lipgloss.Style
+	styleItem    lipgloss.Style
+	styleKey     lipgloss.Style
+	styleDim     lipgloss.Style
+	stylesCached bool
 }
 
 // NewBranchMenu creates a new branch menu.
@@ -43,6 +50,7 @@ func (m *BranchMenu) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 
@@ -66,19 +74,24 @@ func (m *BranchMenu) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the menu.
 func (m *BranchMenu) View() tea.View {
 	c := m.colors
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(c.Accent)
-	itemStyle := lipgloss.NewStyle().Foreground(c.TextNormal)
-	keyStyle := lipgloss.NewStyle().Foreground(c.WarningColor)
-	dimStyle := lipgloss.NewStyle().Foreground(c.TextDim)
+
+	// Update style cache if needed (only on theme change)
+	if !m.stylesCached {
+		m.styleTitle = lipgloss.NewStyle().Bold(true).Foreground(c.Accent)
+		m.styleItem = lipgloss.NewStyle().Foreground(c.TextNormal)
+		m.styleKey = lipgloss.NewStyle().Foreground(c.WarningColor)
+		m.styleDim = lipgloss.NewStyle().Foreground(c.TextDim)
+		m.stylesCached = true
+	}
 
 	content := fmt.Sprintf(
 		"%s\n\n  %s  %s\n  %s  %s\n\n%s",
-		titleStyle.Render("Branch Actions"),
-		keyStyle.Render("↑"),
-		itemStyle.Render("Merge to main (default ← task)"),
-		keyStyle.Render("↓"),
-		itemStyle.Render("Sync from main (default → task)"),
-		dimStyle.Render("Press any other key to cancel"),
+		m.styleTitle.Render("Branch Actions"),
+		m.styleKey.Render("↑"),
+		m.styleItem.Render("Merge to main (default ← task)"),
+		m.styleKey.Render("↓"),
+		m.styleItem.Render("Sync from main (default → task)"),
+		m.styleDim.Render("Press any other key to cancel"),
 	)
 
 	return tea.NewView(content)

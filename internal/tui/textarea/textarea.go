@@ -1,7 +1,6 @@
 package textarea
 
 import (
-	"fmt"
 	"hash/fnv"
 	"image/color"
 	"strconv"
@@ -33,6 +32,26 @@ const (
 	// XXX: in v2, make max lines dynamic and default max lines configurable.
 	maxLines = 10000
 )
+
+// paddingCache stores pre-computed padding strings to avoid allocation on each render.
+// Common widths (0-200) are cached on first use.
+var paddingCache = make(map[int]string, 64)
+
+// getPadding returns a padding string of n spaces, using cache when possible.
+func getPadding(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if s, ok := paddingCache[n]; ok {
+		return s
+	}
+	s := strings.Repeat(" ", n)
+	// Only cache reasonable sizes to avoid memory bloat
+	if n <= 200 {
+		paddingCache[n] = s
+	}
+	return s
+}
 
 // Internal messages for clipboard operations.
 type (
@@ -244,7 +263,7 @@ func (w line) Hash() string {
 	hasher.Write([]byte(string(w.runes)))
 	// Include width in the hash by writing it as bytes
 	hasher.Write([]byte{byte(w.width), byte(w.width >> 8)})
-	return fmt.Sprintf("%x", hasher.Sum64())
+	return strconv.FormatUint(hasher.Sum64(), 16)
 }
 
 // Model is the Bubble Tea model for this text area element.
@@ -1511,7 +1530,7 @@ func (m Model) View() string {
 					s.WriteString(style.Render(string(wrappedLine)))
 				}
 			}
-			s.WriteString(style.Render(strings.Repeat(" ", max(0, padding))))
+			s.WriteString(style.Render(getPadding(padding)))
 			wrapStart = wrapEnd
 			s.WriteRune('\n')
 			newLines++
@@ -1527,7 +1546,7 @@ func (m Model) View() string {
 		// Write end of buffer content
 		leftGutter := string(m.EndOfBufferCharacter)
 		rightGapWidth := m.Width() - uniseg.StringWidth(leftGutter) + widestLineNumber
-		rightGap := strings.Repeat(" ", max(0, rightGapWidth))
+		rightGap := getPadding(rightGapWidth)
 		s.WriteString(styles.computedEndOfBuffer().Render(leftGutter + rightGap))
 		s.WriteRune('\n')
 	}
@@ -1545,7 +1564,8 @@ func (m Model) promptView(displayLine int) (prompt string) {
 	prompt = m.promptFunc(displayLine)
 	width := lipgloss.Width(prompt)
 	if width < m.promptWidth {
-		prompt = fmt.Sprintf("%*s%s", m.promptWidth-width, "", prompt)
+		// Use cached padding instead of fmt.Sprintf for hot path
+		prompt = getPadding(m.promptWidth-width) + prompt
 	}
 
 	return m.activeStyle().computedPrompt().Render(prompt)
@@ -1578,8 +1598,14 @@ func (m Model) lineNumberView(n int, isCursorLine bool) (str string) {
 	}
 
 	// Format line number dynamically based on the maximum number of lines.
+	// Use getPadding cache instead of fmt.Sprintf for hot path
 	digits := len(strconv.Itoa(m.MaxHeight))
-	str = fmt.Sprintf(" %*v ", digits, str)
+	padding := digits - len(str)
+	if padding > 0 {
+		str = " " + getPadding(padding) + str + " "
+	} else {
+		str = " " + str + " "
+	}
 
 	return textStyle.Render(lineNumberStyle.Render(str))
 }
@@ -1638,7 +1664,7 @@ func (m Model) placeholderView() string {
 
 			// the rest of the first line
 			placeholderTail := plines[0][1:]
-			gap := strings.Repeat(" ", max(0, m.width-uniseg.StringWidth(plines[0])))
+			gap := getPadding(m.width - uniseg.StringWidth(plines[0]))
 			renderedPlaceholder := styles.computedPlaceholder().Render(placeholderTail + gap)
 			s.WriteString(lineStyle.Render(renderedPlaceholder))
 		// remaining lines
@@ -1646,7 +1672,7 @@ func (m Model) placeholderView() string {
 			// current line placeholder text
 			if len(plines) > i {
 				placeholderLine := plines[i]
-				gap := strings.Repeat(" ", max(0, m.width-uniseg.StringWidth(plines[i])))
+				gap := getPadding(m.width - uniseg.StringWidth(plines[i]))
 				s.WriteString(lineStyle.Render(placeholderLine + gap))
 			}
 		default:
@@ -2023,8 +2049,28 @@ func splitRunesByWidth(runes []rune, width int) ([]rune, []rune) {
 	return runes, nil
 }
 
+// runeSpaceCache stores pre-computed space rune slices for common widths.
+var runeSpaceCache = make(map[int][]rune, 32)
+
 func repeatSpaces(n int) []rune {
-	return []rune(strings.Repeat(string(' '), n))
+	if n <= 0 {
+		return nil
+	}
+	if r, ok := runeSpaceCache[n]; ok {
+		// Return a copy to avoid mutation issues
+		result := make([]rune, n)
+		copy(result, r)
+		return result
+	}
+	r := []rune(strings.Repeat(" ", n))
+	// Cache common sizes
+	if n <= 100 {
+		runeSpaceCache[n] = r
+	}
+	// Return a copy to avoid mutation
+	result := make([]rune, n)
+	copy(result, r)
+	return result
 }
 
 // numDigits returns the number of digits in an integer.

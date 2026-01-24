@@ -2,8 +2,8 @@
 package tui
 
 import (
-	"fmt"
 	"image/color"
+	"strconv"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -22,6 +22,23 @@ const (
 	kanbanTaskIndent     = 2
 )
 
+// kanbanIndentStr is the pre-computed indent string (avoids strings.Repeat in hot path)
+var kanbanIndentStr = strings.Repeat(" ", kanbanTaskIndent)
+
+// hintPatterns contains keyboard hint patterns to filter from Kanban preview.
+// Package-level to avoid allocation on every isKeyboardHintLine call.
+var hintPatterns = []string{
+	"(shift+tab",    // Cycle options hint
+	"(shift-tab",    // Alternative format
+	"(tab to cycle", // Tab hint
+	"(esc to",       // Escape key hint
+	"(ctrl+c to",    // Ctrl+C hint
+	"(ctrl-c to",    // Alternative format
+	"(⌃c to",        // macOS ctrl notation
+	"to interrupt)", // Common suffix
+	"to cancel)",    // Common suffix
+}
+
 // KanbanView renders a Kanban-style task board.
 // The board has 3 columns: Working, Waiting, Done.
 type KanbanView struct {
@@ -32,9 +49,10 @@ type KanbanView struct {
 
 	// Cached task data (refreshed on tick, not on every render)
 	// 3 columns: Working, Waiting, Done (Warning merged into Waiting)
-	working []*service.DiscoveredTask
-	waiting []*service.DiscoveredTask
-	done    []*service.DiscoveredTask
+	working        []*service.DiscoveredTask
+	waiting        []*service.DiscoveredTask
+	done           []*service.DiscoveredTask
+	taskCountCache int // Cached total task count, updated on Refresh()
 
 	// Scroll state
 	scrollOffset int
@@ -68,6 +86,18 @@ type KanbanView struct {
 	lastRenderScroll    int
 	lastRenderTaskCount int
 	lastRenderSelection bool
+
+	// Style cache (invalidated on theme change)
+	stylesCached      bool
+	styleHeader       lipgloss.Style
+	styleTaskName     lipgloss.Style
+	styleSelectedTask lipgloss.Style
+	styleAction       lipgloss.Style
+	styleHighlight    lipgloss.Style
+
+	// Separator cache (invalidated on width change)
+	cachedSeparator      string
+	cachedSeparatorWidth int
 }
 
 // NewKanbanView creates a new Kanban view.
@@ -83,6 +113,9 @@ func NewKanbanView(isDark bool) *KanbanView {
 
 // SetDarkMode updates the cached theme for adaptive rendering.
 func (k *KanbanView) SetDarkMode(isDark bool) {
+	if k.isDark != isDark {
+		k.stylesCached = false // Invalidate style cache on theme change
+	}
 	k.isDark = isDark
 }
 
@@ -112,6 +145,17 @@ func (k *KanbanView) columnContentWidth() int {
 	return width
 }
 
+// getSeparator returns the cached separator string for column headers.
+// The separator is invalidated when column width changes.
+func (k *KanbanView) getSeparator(columnWidth int) string {
+	separatorWidth := max(0, columnWidth-4)
+	if k.cachedSeparatorWidth != separatorWidth {
+		k.cachedSeparator = strings.Repeat("─", separatorWidth)
+		k.cachedSeparatorWidth = separatorWidth
+	}
+	return k.cachedSeparator
+}
+
 func (k *KanbanView) taskAreaHeight() int {
 	if k.height <= 0 {
 		return 0
@@ -128,6 +172,8 @@ func (k *KanbanView) taskAreaHeight() int {
 // This should be called periodically (e.g., on tick) rather than on every render.
 func (k *KanbanView) Refresh() {
 	k.working, k.waiting, k.done = k.service.DiscoverAll()
+	// Update cached task count to avoid recalculating in isCacheValid/updateCacheState
+	k.taskCountCache = len(k.working) + len(k.waiting) + len(k.done)
 	k.invalidateCache() // Task data changed, need to re-render
 }
 
@@ -142,14 +188,14 @@ func (k *KanbanView) isCacheValid() bool {
 		return false
 	}
 	// Check if any render-affecting state has changed
-	taskCount := len(k.working) + len(k.waiting) + len(k.done)
+	// Uses cached taskCountCache instead of recalculating each call
 	if k.width != k.lastRenderWidth ||
 		k.height != k.lastRenderHeight ||
 		k.isDark != k.lastRenderDark ||
 		k.focused != k.lastRenderFocused ||
 		k.focusedCol != k.lastRenderFocusCol ||
 		k.scrollOffset != k.lastRenderScroll ||
-		taskCount != k.lastRenderTaskCount ||
+		k.taskCountCache != k.lastRenderTaskCount ||
 		k.hasSelection != k.lastRenderSelection {
 		return false
 	}
@@ -165,7 +211,8 @@ func (k *KanbanView) updateCacheState() {
 	k.lastRenderFocused = k.focused
 	k.lastRenderFocusCol = k.focusedCol
 	k.lastRenderScroll = k.scrollOffset
-	k.lastRenderTaskCount = len(k.working) + len(k.waiting) + len(k.done)
+	// Use cached taskCountCache instead of recalculating
+	k.lastRenderTaskCount = k.taskCountCache
 	k.lastRenderSelection = k.hasSelection
 }
 
@@ -181,28 +228,27 @@ func (k *KanbanView) Render() string {
 	// 3 columns: Working, Waiting, Done (Warning merged into Waiting)
 	working, waiting, done := k.working, k.waiting, k.done
 
-	// Styles (adaptive to light/dark mode)
+	// Update style cache if needed (only on theme change)
+	if !k.stylesCached {
+		lightDark := lipgloss.LightDark(k.isDark)
+		normalColor := lightDark(lipgloss.Color("236"), lipgloss.Color("252"))
+		dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("243"))
+
+		k.styleHeader = lipgloss.NewStyle().Bold(true).Foreground(normalColor)
+		k.styleTaskName = lipgloss.NewStyle().Foreground(normalColor)
+		k.styleSelectedTask = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("231")).
+			Background(lipgloss.Color("39")).
+			Bold(true)
+		k.styleAction = lipgloss.NewStyle().Foreground(dimColor).Italic(true)
+		k.styleHighlight = lipgloss.NewStyle().
+			Background(lipgloss.Color("39")).
+			Foreground(lipgloss.Color("231"))
+		k.stylesCached = true
+	}
+
+	// Use cached styles
 	lightDark := lipgloss.LightDark(k.isDark)
-	normalColor := lightDark(lipgloss.Color("236"), lipgloss.Color("252"))
-	// Dim color: medium contrast for non-selected items (readable on various backgrounds)
-	dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("243"))
-
-	headerStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(normalColor)
-
-	taskNameStyle := lipgloss.NewStyle().
-		Foreground(normalColor)
-
-	// Selected task style: inverted colors for visibility
-	selectedTaskStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("231")). // White text
-		Background(lipgloss.Color("39")).  // Blue background
-		Bold(true)
-
-	actionStyle := lipgloss.NewStyle().
-		Foreground(dimColor).
-		Italic(true)
 
 	// Calculate column width (3 columns with gaps)
 	// Minimum width per column
@@ -233,13 +279,12 @@ func (k *KanbanView) Render() string {
 		{constants.EmojiDone, "Done", done, doneColor},
 	}
 
-	var columnViews []string
-	maxHeight := k.height - 2 // Reserve space for border only (no title)
-	indent := strings.Repeat(" ", kanbanTaskIndent)
+	columnViews := make([]string, 0, 3) // Pre-allocate for 3 columns
+	maxHeight := k.height - 2          // Reserve space for border only (no title)
 
 	for colIdx, col := range columns {
-		// Determine border color for this column
-		borderColor := dimColor
+		// Determine border color for this column (use foreground from cached action style for dim)
+		borderColor := k.styleAction.GetForeground()
 		if k.focused && k.focusedCol == colIdx {
 			borderColor = lipgloss.Color("39")
 		}
@@ -249,12 +294,12 @@ func (k *KanbanView) Render() string {
 			Padding(0, 1)
 		var content strings.Builder
 
-		// Column header
-		colHeaderStyle := headerStyle.Foreground(col.color)
-		header := fmt.Sprintf("%s %s (%d)", col.emoji, col.title, len(col.tasks))
+		// Column header (use string concatenation to avoid fmt.Sprintf, use cached style)
+		colHeaderStyle := k.styleHeader.Foreground(col.color)
+		header := col.emoji + " " + col.title + " (" + strconv.Itoa(len(col.tasks)) + ")"
 		content.WriteString(colHeaderStyle.Render(header))
 		content.WriteString("\n")
-		content.WriteString(strings.Repeat("─", max(0, columnWidth-4)))
+		content.WriteString(k.getSeparator(columnWidth))
 		content.WriteString("\n")
 
 		// Tasks (limited by height, with scroll offset applied)
@@ -291,17 +336,18 @@ func (k *KanbanView) Render() string {
 			}
 			displayName = truncateWithEllipsis(displayName, availableWidth)
 
-			// Build task lines for scrolling (name + detail lines)
-			var taskLines []string
+			// Build task lines for scrolling (name + detail lines, use cached styles)
+			// Pre-allocate with estimated capacity (1 name line + actionLinesPerTask detail lines)
+			taskLines := make([]string, 0, 1+actionLinesPerTask)
 			if isSelected {
-				taskLines = append(taskLines, selectedTaskStyle.Render(displayName))
+				taskLines = append(taskLines, k.styleSelectedTask.Render(displayName))
 			} else {
-				taskLines = append(taskLines, taskNameStyle.Render(displayName))
+				taskLines = append(taskLines, k.styleTaskName.Render(displayName))
 			}
 
 			detailLines := buildTaskDetailLines(task, actionLinesPerTask, availableWidth)
 			for _, line := range detailLines {
-				taskLines = append(taskLines, actionStyle.Render(indent+line))
+				taskLines = append(taskLines, k.styleAction.Render(kanbanIndentStr+line))
 			}
 
 			// Apply scroll offset line-by-line
@@ -424,7 +470,10 @@ func (k *KanbanView) SetSelectedTaskIndex(col, idx int) {
 	}
 	taskCount := k.ColumnTaskCount(col)
 	if taskCount == 0 {
-		k.selectedTaskIdx[col] = -1
+		if k.selectedTaskIdx[col] != -1 {
+			k.selectedTaskIdx[col] = -1
+			k.invalidateCache()
+		}
 		return
 	}
 	// Clamp index to valid range
@@ -433,7 +482,10 @@ func (k *KanbanView) SetSelectedTaskIndex(col, idx int) {
 	} else if idx >= taskCount {
 		idx = taskCount - 1
 	}
-	k.selectedTaskIdx[col] = idx
+	if k.selectedTaskIdx[col] != idx {
+		k.selectedTaskIdx[col] = idx
+		k.invalidateCache()
+	}
 }
 
 // SelectPreviousTask moves selection up in the focused column.
@@ -446,11 +498,16 @@ func (k *KanbanView) SelectPreviousTask() {
 		return
 	}
 	current := k.selectedTaskIdx[k.focusedCol]
+	next := current
 	if current <= 0 {
 		// Wrap to last task
-		k.selectedTaskIdx[k.focusedCol] = taskCount - 1
+		next = taskCount - 1
 	} else {
-		k.selectedTaskIdx[k.focusedCol] = current - 1
+		next = current - 1
+	}
+	if next != current {
+		k.selectedTaskIdx[k.focusedCol] = next
+		k.invalidateCache()
 	}
 }
 
@@ -464,11 +521,16 @@ func (k *KanbanView) SelectNextTask() {
 		return
 	}
 	current := k.selectedTaskIdx[k.focusedCol]
+	next := current
 	if current < 0 || current >= taskCount-1 {
 		// Wrap to first task
-		k.selectedTaskIdx[k.focusedCol] = 0
+		next = 0
 	} else {
-		k.selectedTaskIdx[k.focusedCol] = current + 1
+		next = current + 1
+	}
+	if next != current {
+		k.selectedTaskIdx[k.focusedCol] = next
+		k.invalidateCache()
 	}
 }
 
@@ -481,6 +543,7 @@ func (k *KanbanView) InitializeColumnSelection(col int) {
 	taskCount := k.ColumnTaskCount(col)
 	if taskCount > 0 && k.selectedTaskIdx[col] < 0 {
 		k.selectedTaskIdx[col] = 0
+		k.invalidateCache()
 	}
 }
 
@@ -609,14 +672,18 @@ func (k *KanbanView) StartSelection(col, x, y int) {
 	k.selectStartY = y
 	k.selectEndX = x
 	k.selectEndY = y
+	k.invalidateCache()
 }
 
 // ExtendSelection extends the selection to the given position.
 // x is clamped to the same column where selection started.
 func (k *KanbanView) ExtendSelection(x, y int) {
 	if k.selecting {
-		k.selectEndX = x
-		k.selectEndY = y
+		if k.selectEndX != x || k.selectEndY != y {
+			k.selectEndX = x
+			k.selectEndY = y
+			k.invalidateCache()
+		}
 	}
 }
 
@@ -627,6 +694,7 @@ func (k *KanbanView) EndSelection() {
 
 // ClearSelection clears the current selection.
 func (k *KanbanView) ClearSelection() {
+	hadSelection := k.hasSelection || k.selecting
 	k.selecting = false
 	k.hasSelection = false
 	k.selectColumn = -1
@@ -635,6 +703,9 @@ func (k *KanbanView) ClearSelection() {
 	k.selectEndX = 0
 	k.selectEndY = 0
 	k.selectedText = ""
+	if hadSelection {
+		k.invalidateCache()
+	}
 }
 
 // HasSelection returns true if there's an active selection.
@@ -813,11 +884,7 @@ func (k *KanbanView) applySelectionHighlight(board string) string {
 	contentStartX := colStartX + 2          // Skip left border and padding
 	contentEndX := colStartX + colWidth - 2 // Exclude right padding and border
 
-	// Selection highlight style with background color
-	highlightStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("39")). // Blue background
-		Foreground(lipgloss.Color("231")) // White text for contrast
-
+	// Use cached highlight style (initialized on first Render call)
 	for i := range lines {
 		if i < minY || i > maxY {
 			continue
@@ -855,12 +922,12 @@ func (k *KanbanView) applySelectionHighlight(board string) string {
 		byteStart := displayColToByteOffset(plainLine, absStartX)
 		byteEnd := displayColToByteOffset(plainLine, absEndX)
 
-		// Build the highlighted line: before + highlighted + after
+		// Build the highlighted line: before + highlighted + after (use cached style)
 		before := plainLine[:byteStart]
 		selected := plainLine[byteStart:byteEnd]
 		after := plainLine[byteEnd:]
 
-		lines[i] = before + highlightStyle.Render(selected) + after
+		lines[i] = before + k.styleHighlight.Render(selected) + after
 	}
 
 	return strings.Join(lines, "\n")
@@ -1016,7 +1083,8 @@ func buildTaskDetailLines(task *service.DiscoveredTask, maxLines, availableWidth
 	}
 
 	metadata := buildMetadataString(task.Duration, task.Tokens)
-	var baseLines []string
+	// Pre-allocate with estimated capacity (usually 3-5 lines from preview)
+	baseLines := make([]string, 0, 8)
 
 	if task.Preview != "" {
 		// Extract only the last segment (starting from the last ⏺ marker)
@@ -1073,7 +1141,8 @@ func buildTaskDetailLines(task *service.DiscoveredTask, maxLines, availableWidth
 		return nil
 	}
 
-	var wrapped []string
+	// Pre-allocate with estimated capacity (lines may expand due to wrapping)
+	wrapped := make([]string, 0, len(baseLines)*2)
 	for _, line := range baseLines {
 		if line == "" {
 			continue
@@ -1129,21 +1198,40 @@ func isKeyboardHintLine(line string) bool {
 	if strings.HasPrefix(line, "⏵") {
 		return true
 	}
-	// Lines containing keyboard hint patterns
-	hintPatterns := []string{
-		"(shift+tab",      // Cycle options hint
-		"(shift-tab",      // Alternative format
-		"(tab to cycle",   // Tab hint
-		"(esc to",         // Escape key hint
-		"(ctrl+c to",      // Ctrl+C hint
-		"(ctrl-c to",      // Alternative format
-		"(⌃c to",          // macOS ctrl notation
-		"to interrupt)",   // Common suffix
-		"to cancel)",      // Common suffix
-	}
-	lower := strings.ToLower(line)
+	// Lines containing keyboard hint patterns (uses package-level hintPatterns)
+	// Use containsLower for case-insensitive match without allocating new string
 	for _, pattern := range hintPatterns {
-		if strings.Contains(lower, pattern) {
+		if containsLower(line, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsLower checks if s contains substr case-insensitively without allocating.
+// substr must be lowercase.
+func containsLower(s, substr string) bool {
+	n := len(substr)
+	if n == 0 {
+		return true
+	}
+	if n > len(s) {
+		return false
+	}
+	for i := 0; i <= len(s)-n; i++ {
+		match := true
+		for j := 0; j < n; j++ {
+			c := s[i+j]
+			// ASCII lowercase conversion
+			if c >= 'A' && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			if c != substr[j] {
+				match = false
+				break
+			}
+		}
+		if match {
 			return true
 		}
 	}
@@ -1177,7 +1265,9 @@ func wrapByWidth(text string, width int) []string {
 		return []string{text}
 	}
 
-	var lines []string
+	// Pre-allocate with estimated number of lines
+	numLines := (textWidth + width - 1) / width
+	lines := make([]string, 0, numLines)
 	for start := 0; start < textWidth; start += width {
 		end := start + width
 		if end > textWidth {

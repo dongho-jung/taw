@@ -33,9 +33,15 @@ const (
 	LevelFatal              // L5: Fatal errors
 )
 
+// levelStrings contains pre-computed level strings to avoid fmt.Sprintf on each log line.
+var levelStrings = [6]string{"L0", "L1", "L2", "L3", "L4", "L5"}
+
 // String returns the level string for log output.
 func (l Level) String() string {
-	return fmt.Sprintf("L%d", l)
+	if l >= 0 && l <= 5 {
+		return levelStrings[l]
+	}
+	return "L?"
 }
 
 // Name returns the human-readable level name.
@@ -221,9 +227,20 @@ type logEntry struct {
 	Message   string `json:"msg"`
 }
 
+// callerPCsPool reuses uintptr slices to reduce allocations in getCaller.
+var callerPCsPool = sync.Pool{
+	New: func() interface{} {
+		pcs := make([]uintptr, 16)
+		return &pcs
+	},
+}
+
 // getCaller returns the caller function name (skipping internal logging frames).
 func getCaller() string {
-	pcs := make([]uintptr, 16)
+	pcsPtr := callerPCsPool.Get().(*[]uintptr)
+	pcs := *pcsPtr
+	defer callerPCsPool.Put(pcsPtr)
+
 	n := runtime.Callers(2, pcs)
 	frames := runtime.CallersFrames(pcs[:n])
 

@@ -303,11 +303,31 @@ func (m *Manager) FindTaskByTruncatedName(truncatedName string) (*Task, error) {
 
 // findTaskByTruncatedName finds a task whose name matches the truncated window name.
 // Returns the task and its full name, or nil if not found.
+// Uses a cache to avoid repeated directory scans - cache is invalidated on task creation/deletion.
 func (m *Manager) findTaskByTruncatedName(truncatedName string) (*Task, string) {
+	// Check cache first
+	if m.truncatedNameCache != nil {
+		if fullName, ok := m.truncatedNameCache[truncatedName]; ok {
+			task, err := m.GetTask(fullName)
+			if err != nil {
+				// Task may have been deleted - invalidate cache entry
+				delete(m.truncatedNameCache, truncatedName)
+			} else {
+				return task, fullName
+			}
+		}
+	}
+
+	// Cache miss - do directory scan and populate cache
 	entries, err := os.ReadDir(m.agentsDir)
 	if err != nil {
 		logging.Trace("findTaskByTruncatedName: failed to read agents dir %s: %v", m.agentsDir, err)
 		return nil, ""
+	}
+
+	// Lazily initialize cache if nil
+	if m.truncatedNameCache == nil {
+		m.truncatedNameCache = make(map[string]string)
 	}
 
 	for _, entry := range entries {
@@ -318,6 +338,9 @@ func (m *Manager) findTaskByTruncatedName(truncatedName string) (*Task, string) 
 		fullName := entry.Name()
 		// Check if this task name matches the truncated name
 		if constants.MatchesWindowToken(truncatedName, fullName) {
+			// Update cache
+			m.truncatedNameCache[truncatedName] = fullName
+
 			task, err := m.GetTask(fullName)
 			if err != nil {
 				logging.Trace("findTaskByTruncatedName: failed to load task %s: %v", fullName, err)
@@ -328,4 +351,10 @@ func (m *Manager) findTaskByTruncatedName(truncatedName string) (*Task, string) 
 	}
 
 	return nil, ""
+}
+
+// InvalidateTruncatedNameCache clears the truncated name cache.
+// Call this when tasks are created or deleted.
+func (m *Manager) InvalidateTruncatedNameCache() {
+	m.truncatedNameCache = nil
 }

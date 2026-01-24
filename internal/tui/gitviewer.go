@@ -4,6 +4,7 @@ package tui
 import (
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -20,6 +21,14 @@ const (
 	gitModeLog
 	gitModeAll
 	gitModeDiff
+)
+
+// Pre-computed status bar hints and their widths (avoids ansi.StringWidth on each render)
+const (
+	gitViewerHintFull      = "Tab/1-4:mode /:search n/N:match q:close"
+	gitViewerHintShort     = "⌃G/q:close"
+	gitViewerHintFullWidth = 41 // len("Tab/1-4:mode /:search n/N:match q:close")
+	gitViewerHintShortWidth = 10 // ansi.StringWidth("⌃G/q:close") - ⌃ is 1 width
 )
 
 // GitViewer provides an interactive git viewer with mode switching and vim-like navigation.
@@ -46,11 +55,25 @@ type GitViewer struct {
 	selectEndX   int // End column (screen-relative)
 
 	// Search state
-	searchMode      bool   // whether search input is active
-	searchQuery     string // current search term (confirmed)
-	searchInput     string // input buffer while typing
-	searchMatches   []int  // display line indices containing matches
-	currentMatchIdx int    // current match index for n/N navigation
+	searchMode        bool              // whether search input is active
+	searchQuery       string            // current search term (confirmed)
+	searchQueryLower  string            // pre-lowercased search query for performance
+	searchInput       string            // input buffer while typing
+	searchMatches     []int             // display line indices containing matches
+	currentMatchIdx   int               // current match index for n/N navigation
+	cacheMatchLineSet map[int]struct{}  // O(1) lookup for isMatchLine
+
+	// Style cache (reused across renders to avoid allocations)
+	styleHighlight    lipgloss.Style
+	styleStatus       lipgloss.Style
+	styleMatchCurrent lipgloss.Style
+	styleMatchOther   lipgloss.Style
+	stylesCached      bool
+
+	// Display lines cache (invalidated on content/width/wrap change)
+	cachedDisplayLines []string
+	cachedDisplayWidth int
+	cachedDisplayWrap  bool
 }
 
 // NewGitViewer creates a new git viewer for the given working directory.
@@ -78,6 +101,7 @@ func (m *GitViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 
@@ -128,6 +152,7 @@ func (m *GitViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gitOutputMsg:
 		m.lines = msg.lines
+		m.cachedDisplayLines = nil // Invalidate display lines cache
 		m.scrollPos = 0
 		m.horizontalPos = 0
 		m.clearSelection()
@@ -406,13 +431,22 @@ func (m *GitViewer) scrollToEnd() {
 }
 
 // getDisplayLines returns lines to display, handling word wrap if enabled.
+// Results are cached and invalidated on width/wrap mode change.
 func (m *GitViewer) getDisplayLines() []string {
 	if !m.wordWrap || m.width <= 0 {
 		return m.lines
 	}
 
+	// Check cache validity
+	if m.cachedDisplayLines != nil &&
+		m.cachedDisplayWidth == m.width &&
+		m.cachedDisplayWrap == m.wordWrap {
+		return m.cachedDisplayLines
+	}
+
 	// Word wrap mode: wrap long lines (ANSI-aware)
-	var wrapped []string
+	// Pre-allocate with estimated capacity (lines * 1.5 for wrapping)
+	wrapped := make([]string, 0, len(m.lines)*3/2)
 	for _, line := range m.lines {
 		lineWidth := ansi.StringWidth(line)
 		if lineWidth <= m.width {
@@ -430,6 +464,12 @@ func (m *GitViewer) getDisplayLines() []string {
 			}
 		}
 	}
+
+	// Cache the result
+	m.cachedDisplayLines = wrapped
+	m.cachedDisplayWidth = m.width
+	m.cachedDisplayWrap = m.wordWrap
+
 	return wrapped
 }
 
@@ -443,8 +483,6 @@ func (m *GitViewer) View() tea.View {
 		return tea.NewView("Loading...")
 	}
 
-	var sb strings.Builder
-
 	displayLines := m.getDisplayLines()
 
 	// Calculate visible lines
@@ -454,10 +492,28 @@ func (m *GitViewer) View() tea.View {
 		endPos = len(displayLines)
 	}
 
-	// Selection highlight style
-	highlightStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("25")).
-		Foreground(lipgloss.Color("255"))
+	// Pre-allocate builder: ~(width + newline) * contentHeight + status bar
+	var sb strings.Builder
+	sb.Grow((m.width + 1) * (contentHeight + 1))
+
+	c := m.colors
+
+	// Update style cache if needed (only on theme change)
+	if !m.stylesCached {
+		m.styleHighlight = lipgloss.NewStyle().
+			Background(lipgloss.Color("25")).
+			Foreground(lipgloss.Color("255"))
+		m.styleStatus = lipgloss.NewStyle().
+			Background(c.StatusBar).
+			Foreground(c.StatusBarText)
+		m.styleMatchCurrent = lipgloss.NewStyle().
+			Background(lipgloss.Color("208")). // Orange for current match
+			Foreground(lipgloss.Color("0"))    // Black text
+		m.styleMatchOther = lipgloss.NewStyle().
+			Background(lipgloss.Color("226")). // Yellow for other matches
+			Foreground(lipgloss.Color("0"))    // Black text
+		m.stylesCached = true
+	}
 
 	// Render visible lines
 	for i := m.scrollPos; i < endPos; i++ {
@@ -491,37 +547,31 @@ func (m *GitViewer) View() tea.View {
 
 		// Pad to full width (accounting for visual width)
 		if lineWidth < m.width {
-			line = line + strings.Repeat(" ", m.width-lineWidth)
+			line = line + getPadding(m.width-lineWidth)
 		}
 
 		// Apply selection highlighting if this line is in selection
 		if m.hasSelection {
-			line = m.applySelectionToLine(line, screenY, highlightStyle)
+			line = m.applySelectionToLine(line, screenY, m.styleHighlight)
 		}
 
 		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
 
-	// Pad remaining lines
+	// Pad remaining lines (use cached padding for common widths)
+	emptyLine := getPadding(m.width)
 	for i := endPos - m.scrollPos; i < contentHeight; i++ {
-		sb.WriteString(strings.Repeat(" ", m.width))
+		sb.WriteString(emptyLine)
 		sb.WriteString("\n")
 	}
 
-	// Status bar
-	c := m.colors
-	statusStyle := lipgloss.NewStyle().
-		Background(c.StatusBar).
-		Foreground(c.StatusBarText)
+	// Status bar (using cached styles)
 
 	// Search input mode: show search bar instead of status
 	if m.searchMode {
-		searchBar := fmt.Sprintf("/%-*s", m.width-1, m.searchInput)
-		if len(searchBar) > m.width {
-			searchBar = searchBar[:m.width]
-		}
-		sb.WriteString(statusStyle.Render(searchBar))
+		searchBar := buildSearchBar(m.searchInput, m.width)
+		sb.WriteString(m.styleStatus.Render(searchBar))
 		v := tea.NewView(sb.String())
 		v.AltScreen = true
 		v.MouseMode = tea.MouseModeAllMotion
@@ -538,7 +588,7 @@ func (m *GitViewer) View() tea.View {
 	case gitModeAll:
 		modeStr = "[3:LOG --all]"
 	case gitModeDiff:
-		modeStr = fmt.Sprintf("[4:DIFF %s...HEAD]", m.mainBranch)
+		modeStr = "[4:DIFF " + m.mainBranch + "...HEAD]"
 	}
 
 	var status string
@@ -549,32 +599,33 @@ func (m *GitViewer) View() tea.View {
 	// Show search info
 	if m.searchQuery != "" {
 		if len(m.searchMatches) > 0 {
-			status += fmt.Sprintf(" [/%s %d/%d]", m.searchQuery, m.currentMatchIdx+1, len(m.searchMatches))
+			status += " [/" + m.searchQuery + " " + strconv.Itoa(m.currentMatchIdx+1) + "/" + strconv.Itoa(len(m.searchMatches)) + "]"
 		} else {
-			status += fmt.Sprintf(" [/%s 0/0]", m.searchQuery)
+			status += " [/" + m.searchQuery + " 0/0]"
 		}
 	}
 	status += " "
 
 	if len(displayLines) > 0 {
-		status += fmt.Sprintf("Lines %d-%d of %d ", m.scrollPos+1, endPos, len(displayLines))
+		status += "Lines " + strconv.Itoa(m.scrollPos+1) + "-" + strconv.Itoa(endPos) + " of " + strconv.Itoa(len(displayLines)) + " "
 	} else {
 		status += "(empty) "
 	}
 
-	// Keybindings hint (use ansi.StringWidth for unicode characters like ⌃)
-	hint := "Tab/1-4:mode /:search n/N:match q:close"
-	padding := m.width - ansi.StringWidth(status) - ansi.StringWidth(hint)
+	// Keybindings hint (use pre-computed widths to avoid ansi.StringWidth on each render)
+	statusWidth := ansi.StringWidth(status)
+	hint := gitViewerHintFull
+	padding := m.width - statusWidth - gitViewerHintFullWidth
 	if padding < 0 {
-		hint = "⌃G/q:close"
-		padding = m.width - ansi.StringWidth(status) - ansi.StringWidth(hint)
+		hint = gitViewerHintShort
+		padding = m.width - statusWidth - gitViewerHintShortWidth
 		if padding < 0 {
 			padding = 0
 		}
 	}
 
-	statusLine := statusStyle.Render(
-		status + strings.Repeat(" ", padding) + hint,
+	statusLine := m.styleStatus.Render(
+		status + getPadding(padding) + hint,
 	)
 
 	sb.WriteString(statusLine)
@@ -620,28 +671,37 @@ func (m *GitViewer) clearSelection() {
 // clearSearch clears the current search state.
 func (m *GitViewer) clearSearch() {
 	m.searchQuery = ""
+	m.searchQueryLower = ""
 	m.searchInput = ""
 	m.searchMatches = nil
+	m.cacheMatchLineSet = nil
 	m.currentMatchIdx = 0
 }
 
 // findMatches finds all lines containing the search query.
 func (m *GitViewer) findMatches() {
 	m.searchMatches = nil
+	m.cacheMatchLineSet = nil
 	if m.searchQuery == "" {
 		return
 	}
 
-	displayLines := m.getDisplayLines()
-	query := strings.ToLower(m.searchQuery)
+	// Cache the lowercased query for use in highlightSearchMatches
+	m.searchQueryLower = strings.ToLower(m.searchQuery)
 
+	displayLines := m.getDisplayLines()
+
+	// Build both slice (for navigation order) and set (for O(1) lookup)
+	matchSet := make(map[int]struct{})
 	for i, line := range displayLines {
 		// Strip ANSI codes for matching
 		plainLine := strings.ToLower(ansi.Strip(line))
-		if strings.Contains(plainLine, query) {
+		if strings.Contains(plainLine, m.searchQueryLower) {
 			m.searchMatches = append(m.searchMatches, i)
+			matchSet[i] = struct{}{}
 		}
 	}
+	m.cacheMatchLineSet = matchSet
 }
 
 // scrollToMatch scrolls to make the match at the given index visible.
@@ -697,13 +757,13 @@ func (m *GitViewer) prevMatch() {
 }
 
 // isMatchLine returns true if the display line at idx is a match line.
+// Uses O(1) map lookup instead of O(n) slice scan.
 func (m *GitViewer) isMatchLine(idx int) bool {
-	for _, matchIdx := range m.searchMatches {
-		if matchIdx == idx {
-			return true
-		}
+	if m.cacheMatchLineSet == nil {
+		return false
 	}
-	return false
+	_, ok := m.cacheMatchLineSet[idx]
+	return ok
 }
 
 // isCurrentMatchLine returns true if the display line at idx is the current match.
@@ -715,30 +775,35 @@ func (m *GitViewer) isCurrentMatchLine(idx int) bool {
 }
 
 // highlightSearchMatches highlights search matches in a line (ANSI-aware).
+// Uses pre-cached searchQueryLower and cached styles to avoid allocations.
 func (m *GitViewer) highlightSearchMatches(line string, isCurrentMatch bool) string {
-	if m.searchQuery == "" {
+	if m.searchQuery == "" || m.searchQueryLower == "" {
 		return line
 	}
 
 	// Strip ANSI for matching, but we'll rebuild with highlighting
 	plainLine := ansi.Strip(line)
 	lowerPlain := strings.ToLower(plainLine)
-	lowerQuery := strings.ToLower(m.searchQuery)
+	// Use cached lowercased query
+	lowerQuery := m.searchQueryLower
 
-	// Use different colors for current match vs other matches
+	// Use cached styles
 	var matchStyle lipgloss.Style
 	if isCurrentMatch {
-		matchStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("208")). // Orange for current match
-			Foreground(lipgloss.Color("0"))    // Black text
+		matchStyle = m.styleMatchCurrent
 	} else {
-		matchStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("226")). // Yellow for other matches
-			Foreground(lipgloss.Color("0"))    // Black text
+		matchStyle = m.styleMatchOther
+	}
+
+	// Count matches first to pre-allocate
+	matchCount := strings.Count(lowerPlain, lowerQuery)
+	if matchCount == 0 {
+		return line
 	}
 
 	// Find all match positions in the plain text
-	var matches [][2]int // [start, end] positions
+	// Pre-allocate with known count
+	matches := make([][2]int, 0, matchCount)
 	searchStart := 0
 	for {
 		idx := strings.Index(lowerPlain[searchStart:], lowerQuery)
@@ -748,10 +813,6 @@ func (m *GitViewer) highlightSearchMatches(line string, isCurrentMatch bool) str
 		actualIdx := searchStart + idx
 		matches = append(matches, [2]int{actualIdx, actualIdx + len(m.searchQuery)})
 		searchStart = actualIdx + len(m.searchQuery)
-	}
-
-	if len(matches) == 0 {
-		return line
 	}
 
 	// Rebuild the line with highlighting (using plain text since ANSI codes complicate highlighting)
@@ -879,7 +940,7 @@ func (m *GitViewer) copySelection() {
 
 		// Pad for consistent width
 		if lineWidth < m.width {
-			line = line + strings.Repeat(" ", m.width-lineWidth)
+			line = line + getPadding(m.width-lineWidth)
 		}
 
 		startX, endX := m.getSelectionXRange(screenY)

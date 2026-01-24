@@ -187,7 +187,7 @@ func (m *TaskOptsUI) View() tea.View {
 		}
 
 		models := config.ValidModels()
-		var modelParts []string
+		modelParts := make([]string, 0, len(models))
 		for i, model := range models {
 			if i == m.modelIdx {
 				if m.field == TaskOptsFieldModel {

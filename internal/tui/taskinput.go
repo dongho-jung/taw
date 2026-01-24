@@ -2,7 +2,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -118,6 +117,28 @@ type TaskInput struct {
 
 	// Cross-project jump target (set when user requests to jump to external project)
 	jumpTarget *JumpTarget
+
+	// Style cache for options panel (invalidated on theme change)
+	optStylesCached       bool
+	optStyleTitle         lipgloss.Style
+	optStyleTitleDim      lipgloss.Style
+	optStyleLabel         lipgloss.Style
+	optStyleSelectedLabel lipgloss.Style
+	optStyleValue         lipgloss.Style
+	optStyleSelectedValue lipgloss.Style
+	optStyleDim           lipgloss.Style
+
+	// Style cache for main View() (invalidated on theme change)
+	viewStylesCached     bool
+	viewStyleHelp        lipgloss.Style
+	viewStyleVersion     lipgloss.Style
+	viewStyleWarning     lipgloss.Style
+	viewStyleTemplateTip lipgloss.Style
+	viewStyleCancelHint  lipgloss.Style
+
+	// Pre-rendered help text and width (cached to avoid lipgloss.Width on each render)
+	viewHelpRendered string
+	viewHelpWidth    int
 }
 
 // tickMsg is used for periodic Kanban refresh.
@@ -248,6 +269,8 @@ func (m *TaskInput) applyTheme(isDark bool) {
 		return
 	}
 	m.isDark = isDark
+	m.optStylesCached = false  // Invalidate options panel style cache
+	m.viewStylesCached = false // Invalidate main view style cache
 	m.kanban.SetDarkMode(isDark)
 	applyTaskInputTextareaTheme(&m.textarea, isDark)
 }
@@ -717,12 +740,21 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the task input.
 func (m *TaskInput) View() tea.View {
-	// Adaptive color for help text (use cached isDark value)
-	lightDark := lipgloss.LightDark(m.isDark)
-	dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("240"))
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(dimColor)
+	// Update view style cache if needed (only on theme change)
+	if !m.viewStylesCached {
+		lightDark := lipgloss.LightDark(m.isDark)
+		dimColor := lightDark(lipgloss.Color("245"), lipgloss.Color("240"))
+		m.viewStyleHelp = lipgloss.NewStyle().Foreground(dimColor)
+		m.viewStyleVersion = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
+		m.viewStyleWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+		m.viewStyleTemplateTip = lipgloss.NewStyle().
+			Foreground(lightDark(lipgloss.Color("24"), lipgloss.Color("214"))).Bold(true)
+		m.viewStyleCancelHint = lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
+		// Pre-render help text and cache width (avoids lipgloss.Width on each render)
+		m.viewHelpRendered = m.viewStyleHelp.Render("Alt+Enter: Submit  |  Esc×2: Cancel")
+		m.viewHelpWidth = lipgloss.Width(m.viewHelpRendered)
+		m.viewStylesCached = true
+	}
 
 	// Build left panel (task input) with scrollbar if needed
 	textareaView := m.textarea.View()
@@ -748,37 +780,25 @@ func (m *TaskInput) View() tea.View {
 	// Build content with version+tip at top-left and help text at top-right
 	var sb strings.Builder
 
-	// Version and tip style (same dim color as help text)
-	versionStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
-		Bold(true)
-	tipStyle := helpStyle
-
 	// Show warning if terminal is smaller than 72x22
 	isNarrow := m.width < 72 || m.height < 22
 
 	// Left side: PAW {version} - {projectName}  Tip: {tip} or Warning
-	versionText := versionStyle.Render("PAW " + Version)
+	versionText := m.viewStyleVersion.Render("PAW " + Version)
 	projectText := ""
 	if ProjectName != "" {
-		projectText = versionStyle.Render(" - " + ProjectName)
+		projectText = m.viewStyleVersion.Render(" - " + ProjectName)
 	}
 
 	// Show warning in bright red if terminal is too small, otherwise show tip
 	var tipText string
 	if isNarrow {
-		warningStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")). // Bright red
-			Bold(true)
-		tipText = warningStyle.Render("  ⚠️  Terminal too small - content may be truncated")
+		tipText = m.viewStyleWarning.Render("  ⚠️  Terminal too small - content may be truncated")
 	} else {
 		if time.Now().Before(m.templateTipUntil) {
-			templateTipStyle := lipgloss.NewStyle().
-				Foreground(lightDark(lipgloss.Color("24"), lipgloss.Color("214"))).
-				Bold(true)
-			tipText = templateTipStyle.Render("  Tip: Tab to jump to next ___ placeholder")
+			tipText = m.viewStyleTemplateTip.Render("  Tip: Tab to jump to next ___ placeholder")
 		} else {
-			tipText = tipStyle.Render("  Tip: " + m.currentTip)
+			tipText = m.viewStyleHelp.Render("  Tip: " + m.currentTip)
 		}
 	}
 
@@ -787,46 +807,28 @@ func (m *TaskInput) View() tea.View {
 
 	// Show cancel pending hint if waiting for second press, otherwise show normal help text
 	if m.isCancelPending() {
-		// Cancel pending state - show prominent hint on the right
-		cancelHintStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("214")). // Orange/yellow for visibility
-			Bold(true)
 		// Display the appropriate key based on what was pressed
 		keyName := "Esc"
 		if m.cancelKey == "ctrl+c" {
 			keyName = "Ctrl+C"
 		}
-		cancelHint := cancelHintStyle.Render(fmt.Sprintf("Press %s again to cancel", keyName))
+		cancelHint := m.viewStyleCancelHint.Render("Press " + keyName + " again to cancel")
 		hintWidth := lipgloss.Width(cancelHint)
 
 		sb.WriteString(leftContent)
 		gap := m.width - leftWidth - hintWidth
 		if gap > 0 {
-			sb.WriteString(strings.Repeat(" ", gap))
+			sb.WriteString(getPadding(gap))
 		}
 		sb.WriteString(cancelHint)
 	} else {
-		// Determine help text based on focus panel
-		var helpText string
-		switch m.focusPanel {
-		case FocusPanelLeft:
-			helpText = "Alt+Enter: Submit  |  Esc×2: Cancel"
-		case FocusPanelRight:
-			helpText = "Alt+Enter: Submit  |  Esc×2: Cancel"
-		case FocusPanelKanban:
-			helpText = "Alt+Enter: Submit  |  Esc×2: Cancel"
-		}
-
-		// Add version+tip on left, help text on right
-		helpRendered := helpStyle.Render(helpText)
-		helpWidth := lipgloss.Width(helpRendered)
-
+		// Add version+tip on left, help text on right (use pre-rendered cached values)
 		sb.WriteString(leftContent)
-		gap := m.width - leftWidth - helpWidth
+		gap := m.width - leftWidth - m.viewHelpWidth
 		if gap > 0 {
-			sb.WriteString(strings.Repeat(" ", gap))
+			sb.WriteString(getPadding(gap))
 		}
-		sb.WriteString(helpRendered)
+		sb.WriteString(m.viewHelpRendered)
 	}
 	sb.WriteString("\n")
 

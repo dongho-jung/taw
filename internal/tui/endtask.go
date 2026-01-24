@@ -2,7 +2,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -39,6 +38,15 @@ type EndTaskUI struct {
 	height      int
 	isDark      bool
 	colors      ThemeColors
+
+	// Style cache (reused across renders)
+	styleTitle   lipgloss.Style
+	styleOK      lipgloss.Style
+	styleSkip    lipgloss.Style
+	styleFail    lipgloss.Style
+	styleRunning lipgloss.Style
+	stylePending lipgloss.Style
+	stylesCached bool
 }
 
 // stepCompleteMsg is sent when a step completes.
@@ -88,6 +96,7 @@ func (m *EndTaskUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 
@@ -130,29 +139,29 @@ func (m *EndTaskUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the finish task UI.
 func (m *EndTaskUI) View() tea.View {
 	c := m.colors
+
+	// Update style cache if needed (only on theme change)
+	if !m.stylesCached {
+		m.styleTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(c.Accent)
+		m.styleOK = lipgloss.NewStyle().
+			Foreground(c.SuccessColor)
+		m.styleSkip = lipgloss.NewStyle().
+			Foreground(c.TextDim)
+		m.styleFail = lipgloss.NewStyle().
+			Foreground(c.ErrorColor)
+		m.styleRunning = lipgloss.NewStyle().
+			Foreground(c.WarningColor)
+		m.stylePending = lipgloss.NewStyle().
+			Foreground(c.TextDim)
+		m.stylesCached = true
+	}
+
 	var sb strings.Builder
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(c.Accent)
-
-	okStyle := lipgloss.NewStyle().
-		Foreground(c.SuccessColor)
-
-	skipStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim)
-
-	failStyle := lipgloss.NewStyle().
-		Foreground(c.ErrorColor)
-
-	runningStyle := lipgloss.NewStyle().
-		Foreground(c.WarningColor)
-
-	pendingStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim)
-
 	sb.WriteString("\n")
-	sb.WriteString(titleStyle.Render(fmt.Sprintf("Finishing task: %s", m.taskName)))
+	sb.WriteString(m.styleTitle.Render("Finishing task: " + m.taskName))
 	sb.WriteString("\n\n")
 
 	for i, step := range m.steps {
@@ -162,26 +171,27 @@ func (m *EndTaskUI) View() tea.View {
 		switch step.Status {
 		case StepOK:
 			icon = "✓"
-			style = okStyle
+			style = m.styleOK
 		case StepSkip:
 			icon = "○"
-			style = skipStyle
+			style = m.styleSkip
 		case StepFail:
 			icon = "✗"
-			style = failStyle
+			style = m.styleFail
 		case StepRunning:
 			icon = "●"
-			style = runningStyle
+			style = m.styleRunning
 		default:
 			icon = "○"
-			style = pendingStyle
+			style = m.stylePending
 		}
 
-		line := fmt.Sprintf(" %s %s", icon, step.Name)
+		// Use string concatenation instead of fmt.Sprintf
+		line := " " + icon + " " + step.Name
 		sb.WriteString(style.Render(line))
 
 		if step.Message != "" {
-			sb.WriteString(skipStyle.Render(fmt.Sprintf(" (%s)", step.Message)))
+			sb.WriteString(m.styleSkip.Render(" (" + step.Message + ")"))
 		}
 
 		sb.WriteString("\n")
@@ -192,7 +202,7 @@ func (m *EndTaskUI) View() tea.View {
 	if m.done {
 		sb.WriteString("\n")
 		if m.err != nil {
-			sb.WriteString(failStyle.Render(fmt.Sprintf("Error: %v", m.err)))
+			sb.WriteString(m.styleFail.Render("Error: " + m.err.Error()))
 		} else {
 			allOK := true
 			for _, step := range m.steps {
@@ -202,7 +212,7 @@ func (m *EndTaskUI) View() tea.View {
 				}
 			}
 			if allOK {
-				sb.WriteString(okStyle.Render("Done!"))
+				sb.WriteString(m.styleOK.Render("Done!"))
 			}
 		}
 		sb.WriteString("\n")

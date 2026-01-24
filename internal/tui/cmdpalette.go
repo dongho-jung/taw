@@ -38,6 +38,17 @@ type CommandPalette struct {
 	selected         *Command
 	isDark           bool
 	colors           ThemeColors
+
+	// Style cache (reused across renders)
+	styleTitle        lipgloss.Style
+	styleInput        lipgloss.Style
+	styleItem         lipgloss.Style
+	styleSelected     lipgloss.Style
+	styleDesc         lipgloss.Style
+	styleSelectedDesc lipgloss.Style
+	styleHelp         lipgloss.Style
+	styleDim          lipgloss.Style
+	stylesCached      bool
 }
 
 // NewCommandPalette creates a new command palette.
@@ -84,6 +95,7 @@ func (m *CommandPalette) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 	case tea.KeyMsg:
@@ -145,7 +157,7 @@ func (m *CommandPalette) updateFiltered() {
 	}
 
 	// Create a list of searchable strings (name + description)
-	var searchables []string
+	searchables := make([]string, 0, len(m.commands))
 	for _, cmd := range m.commands {
 		searchables = append(searchables, cmd.Name+" "+cmd.Description)
 	}
@@ -174,55 +186,55 @@ func (m *CommandPalette) renderInput() textInputRender {
 func (m *CommandPalette) View() tea.View {
 	c := m.colors
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(c.Accent)
-
-	inputStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(c.BorderFocused).
-		Padding(0, 1).
-		Width(46)
-
-	itemStyle := lipgloss.NewStyle().
-		Foreground(c.TextNormal).
-		PaddingLeft(2)
-
-	selectedStyle := lipgloss.NewStyle().
-		Foreground(c.Accent).
-		Bold(true).
-		PaddingLeft(0)
-
-	descStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		PaddingLeft(4)
-
-	selectedDescStyle := lipgloss.NewStyle().
-		Foreground(c.Accent).
-		PaddingLeft(4)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		MarginTop(1)
+	// Update style cache if needed (only on theme change)
+	if !m.stylesCached {
+		m.styleTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(c.Accent)
+		m.styleInput = lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(c.BorderFocused).
+			Padding(0, 1).
+			Width(46)
+		m.styleItem = lipgloss.NewStyle().
+			Foreground(c.TextNormal).
+			PaddingLeft(2)
+		m.styleSelected = lipgloss.NewStyle().
+			Foreground(c.Accent).
+			Bold(true).
+			PaddingLeft(0)
+		m.styleDesc = lipgloss.NewStyle().
+			Foreground(c.TextDim).
+			PaddingLeft(4)
+		m.styleSelectedDesc = lipgloss.NewStyle().
+			Foreground(c.Accent).
+			PaddingLeft(4)
+		m.styleHelp = lipgloss.NewStyle().
+			Foreground(c.TextDim).
+			MarginTop(1)
+		m.styleDim = lipgloss.NewStyle().
+			Foreground(c.TextDim)
+		m.stylesCached = true
+	}
 
 	var sb strings.Builder
 	line := 0
 
 	// Title
-	sb.WriteString(titleStyle.Render("Command Palette"))
+	sb.WriteString(m.styleTitle.Render("Command Palette"))
 	sb.WriteString("\n\n")
 	line += 2
 
 	// Input - use custom rendering for proper Korean/CJK cursor positioning
 	inputRender := m.renderInput()
-	inputBox := inputStyle.Render(inputRender.Text)
+	inputBox := m.styleInput.Render(inputRender.Text)
 	inputBoxTopY := line
 	sb.WriteString(inputBox)
 	sb.WriteString("\n\n")
 
 	// Filtered commands
 	if len(m.filtered) == 0 {
-		sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("  No matching commands"))
+		sb.WriteString(m.styleDim.Render("  No matching commands"))
 		sb.WriteString("\n")
 	} else {
 		// Show up to 10 commands
@@ -234,26 +246,25 @@ func (m *CommandPalette) View() tea.View {
 		for i := 0; i < maxItems; i++ {
 			cmd := m.filtered[i]
 			if i == m.cursor {
-				sb.WriteString(selectedStyle.Render("> " + cmd.Name))
+				sb.WriteString(m.styleSelected.Render("> " + cmd.Name))
 				sb.WriteString("\n")
-				sb.WriteString(selectedDescStyle.Render(cmd.Description))
+				sb.WriteString(m.styleSelectedDesc.Render(cmd.Description))
 			} else {
-				sb.WriteString(itemStyle.Render(cmd.Name))
+				sb.WriteString(m.styleItem.Render(cmd.Name))
 				sb.WriteString("\n")
-				sb.WriteString(descStyle.Render(cmd.Description))
+				sb.WriteString(m.styleDesc.Render(cmd.Description))
 			}
 			sb.WriteString("\n")
 		}
 
 		if len(m.filtered) > maxItems {
-			sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render(
-				"  ... and more"))
+			sb.WriteString(m.styleDim.Render("  ... and more"))
 			sb.WriteString("\n")
 		}
 	}
 
 	// Help
-	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter: Execute  Esc/⌃P: Close"))
+	sb.WriteString(m.styleHelp.Render("↑/↓: Navigate  Enter: Execute  Esc/⌃P: Close"))
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true

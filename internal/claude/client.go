@@ -9,12 +9,20 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/tmux"
 )
+
+// bufferPool reuses bytes.Buffer instances to reduce allocations.
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
 
 // Client defines the interface for Claude CLI operations.
 type Client interface {
@@ -200,9 +208,16 @@ func (c *claudeClient) runClaudeWithModel(prompt, model string, thinking bool, t
 	cmd.Env = env
 	cmd.Stdin = strings.NewReader(prompt)
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Reuse buffers from pool to reduce allocations
+	stdout := bufferPool.Get().(*bytes.Buffer)
+	stderr := bufferPool.Get().(*bytes.Buffer)
+	stdout.Reset()
+	stderr.Reset()
+	defer bufferPool.Put(stdout)
+	defer bufferPool.Put(stderr)
+
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	if err := cmd.Run(); err != nil {
 		errMsg := stderr.String()

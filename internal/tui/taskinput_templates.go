@@ -15,6 +15,9 @@ const (
 	templatePlaceholderToken = "___"
 )
 
+// Pre-computed rune slice for template placeholder token (avoids repeated conversions)
+var templatePlaceholderTokenRunes = []rune(templatePlaceholderToken)
+
 func (m *TaskInput) pawDirPath() string {
 	if pawDir := os.Getenv("PAW_DIR"); pawDir != "" {
 		info, err := os.Stat(pawDir)
@@ -125,7 +128,7 @@ func (m *TaskInput) jumpToNextTemplatePlaceholder() bool {
 
 	line := lines[targetRow]
 	lineRunes := []rune(line)
-	tokenLen := len([]rune(templatePlaceholderToken))
+	tokenLen := len(templatePlaceholderTokenRunes)
 	if targetCol+tokenLen > len(lineRunes) {
 		return false
 	}
@@ -152,7 +155,7 @@ func (m *TaskInput) jumpToFirstTemplatePlaceholder() bool {
 
 	line := lines[targetRow]
 	lineRunes := []rune(line)
-	tokenLen := len([]rune(templatePlaceholderToken))
+	tokenLen := len(templatePlaceholderTokenRunes)
 	if targetCol+tokenLen > len(lineRunes) {
 		return false
 	}
@@ -212,7 +215,7 @@ func findPlaceholderInRunes(line []rune, startCol int) (int, bool) {
 		startCol = len(line)
 	}
 
-	token := []rune(templatePlaceholderToken)
+	token := templatePlaceholderTokenRunes
 	tokenLen := len(token)
 	if tokenLen == 0 || len(line) < tokenLen {
 		return 0, false

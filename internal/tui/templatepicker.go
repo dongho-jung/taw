@@ -47,6 +47,19 @@ type TemplatePicker struct {
 	colors ThemeColors
 	width  int
 	height int
+
+	// Style cache (reused across renders)
+	styleTitle         lipgloss.Style
+	styleInput         lipgloss.Style
+	styleItem          lipgloss.Style
+	styleSelected      lipgloss.Style
+	styleHelp          lipgloss.Style
+	styleDim           lipgloss.Style
+	stylePreviewBorder lipgloss.Style
+	stylePreviewTitle  lipgloss.Style
+	styleError         lipgloss.Style
+	styleName          lipgloss.Style
+	stylesCached       bool
 }
 
 // NewTemplatePicker creates a new template picker.
@@ -118,6 +131,7 @@ func (m *TemplatePicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 
@@ -373,6 +387,47 @@ func (m *TemplatePicker) renderNameInput() textInputRender {
 	return renderTextInput(m.nameInput.Value(), m.nameInput.Position(), m.nameInput.Width(), m.nameInput.Placeholder, m.nameOffset, m.nameOffsetRight)
 }
 
+// ensureStylesCached initializes styles if needed.
+func (m *TemplatePicker) ensureStylesCached() {
+	if m.stylesCached {
+		return
+	}
+	c := m.colors
+	m.styleTitle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(c.Accent)
+	m.styleInput = lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(c.BorderFocused).
+		Padding(0, 1)
+	m.styleItem = lipgloss.NewStyle().
+		Foreground(c.TextNormal).
+		PaddingLeft(2)
+	m.styleSelected = lipgloss.NewStyle().
+		Foreground(c.Accent).
+		Bold(true).
+		PaddingLeft(0)
+	m.styleHelp = lipgloss.NewStyle().
+		Foreground(c.TextDim).
+		MarginTop(1)
+	m.styleDim = lipgloss.NewStyle().
+		Foreground(c.TextDim)
+	m.stylePreviewBorder = lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(c.Border).
+		Padding(0, 1)
+	m.stylePreviewTitle = lipgloss.NewStyle().
+		Foreground(c.TextDim).
+		Bold(true)
+	m.styleError = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(c.ErrorColor)
+	m.styleName = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(c.Accent)
+	m.stylesCached = true
+}
+
 // View renders the template picker.
 func (m *TemplatePicker) View() tea.View {
 	if m.deleting {
@@ -383,48 +438,17 @@ func (m *TemplatePicker) View() tea.View {
 		return m.namePromptView()
 	}
 
-	c := m.colors
-
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(c.Accent)
-
-	inputStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(c.BorderFocused).
-		Padding(0, 1)
-
-	itemStyle := lipgloss.NewStyle().
-		Foreground(c.TextNormal).
-		PaddingLeft(2)
-
-	selectedStyle := lipgloss.NewStyle().
-		Foreground(c.Accent).
-		Bold(true).
-		PaddingLeft(0)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		MarginTop(1)
-
-	previewBorderStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(c.Border).
-		Padding(0, 1)
-
-	previewTitleStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		Bold(true)
+	m.ensureStylesCached()
 
 	var sb strings.Builder
 	line := 0
 
-	sb.WriteString(titleStyle.Render("Templates"))
+	sb.WriteString(m.styleTitle.Render("Templates"))
 	sb.WriteString("\n\n")
 	line += 2
 
 	inputRender := m.renderInput()
-	inputBox := inputStyle.Render(inputRender.Text)
+	inputBox := m.styleInput.Render(inputRender.Text)
 	inputBoxTopY := line
 	sb.WriteString(inputBox)
 	sb.WriteString("\n\n")
@@ -435,9 +459,9 @@ func (m *TemplatePicker) View() tea.View {
 
 	if len(m.filtered) == 0 {
 		if len(m.templates) == 0 {
-			sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("  No templates yet"))
+			sb.WriteString(m.styleDim.Render("  No templates yet"))
 		} else {
-			sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("  No matching templates"))
+			sb.WriteString(m.styleDim.Render("  No matching templates"))
 		}
 		sb.WriteString("\n")
 	} else {
@@ -453,9 +477,9 @@ func (m *TemplatePicker) View() tea.View {
 			displayName := truncateWithEllipsis(name, m.width-10)
 
 			if i == m.cursor {
-				sb.WriteString(selectedStyle.Render("> " + displayName))
+				sb.WriteString(m.styleSelected.Render("> " + displayName))
 			} else {
-				sb.WriteString(itemStyle.Render(displayName))
+				sb.WriteString(m.styleItem.Render(displayName))
 			}
 			sb.WriteString("\n")
 		}
@@ -466,28 +490,28 @@ func (m *TemplatePicker) View() tea.View {
 		content := m.templates[idx].Content
 
 		sb.WriteString("\n")
-		sb.WriteString(previewTitleStyle.Render("Preview:"))
+		sb.WriteString(m.stylePreviewTitle.Render("Preview:"))
 		sb.WriteString("\n")
 
+		// Split once, reuse for truncation
 		lines := strings.Split(content, "\n")
 		previewLines := min(previewHeight, len(lines))
-		previewContent := strings.Join(lines[:previewLines], "\n")
-		if len(lines) > previewHeight {
-			previewContent += "\n..."
-		}
 
 		previewWidth := min(m.width-6, 70)
-		truncatedLines := make([]string, 0, len(strings.Split(previewContent, "\n")))
-		for _, line := range strings.Split(previewContent, "\n") {
-			truncatedLines = append(truncatedLines, truncateWithEllipsis(line, previewWidth))
+		truncatedLines := make([]string, 0, previewLines+1)
+		for i := 0; i < previewLines; i++ {
+			truncatedLines = append(truncatedLines, truncateWithEllipsis(lines[i], previewWidth))
 		}
-		previewContent = strings.Join(truncatedLines, "\n")
+		if len(lines) > previewHeight {
+			truncatedLines = append(truncatedLines, "...")
+		}
+		previewContent := strings.Join(truncatedLines, "\n")
 
-		sb.WriteString(previewBorderStyle.Width(previewWidth).Render(previewContent))
+		sb.WriteString(m.stylePreviewBorder.Width(previewWidth).Render(previewContent))
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter: Apply  Ctrl+N: New  Ctrl+U: Update  Ctrl+D: Delete  Esc/⌃T: Cancel"))
+	sb.WriteString(m.styleHelp.Render("↑/↓: Navigate  Enter: Apply  Ctrl+N: New  Ctrl+U: Update  Ctrl+D: Delete  Esc/⌃T: Cancel"))
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
@@ -502,35 +526,22 @@ func (m *TemplatePicker) View() tea.View {
 }
 
 func (m *TemplatePicker) namePromptView() tea.View {
-	c := m.colors
-
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(c.Accent)
-
-	inputStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(c.BorderFocused).
-		Padding(0, 1)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		MarginTop(1)
+	m.ensureStylesCached()
 
 	var sb strings.Builder
 	line := 0
 
-	sb.WriteString(titleStyle.Render("New Template"))
+	sb.WriteString(m.styleTitle.Render("New Template"))
 	sb.WriteString("\n\n")
 	line += 2
 
 	inputRender := m.renderNameInput()
-	inputBox := inputStyle.Render(inputRender.Text)
+	inputBox := m.styleInput.Render(inputRender.Text)
 	inputBoxTopY := line
 	sb.WriteString(inputBox)
 	sb.WriteString("\n")
 
-	sb.WriteString(helpStyle.Render("Enter: Save  Esc: Cancel"))
+	sb.WriteString(m.styleHelp.Render("Enter: Save  Esc: Cancel"))
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
@@ -545,23 +556,11 @@ func (m *TemplatePicker) namePromptView() tea.View {
 }
 
 func (m *TemplatePicker) deleteConfirmView() tea.View {
-	c := m.colors
-
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(c.ErrorColor)
-
-	nameStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(c.Accent)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		MarginTop(1)
+	m.ensureStylesCached()
 
 	var sb strings.Builder
 
-	sb.WriteString(titleStyle.Render("Delete Template"))
+	sb.WriteString(m.styleError.Render("Delete Template"))
 	sb.WriteString("\n\n")
 
 	templateName := ""
@@ -570,10 +569,10 @@ func (m *TemplatePicker) deleteConfirmView() tea.View {
 	}
 
 	sb.WriteString("Are you sure you want to delete ")
-	sb.WriteString(nameStyle.Render(templateName))
+	sb.WriteString(m.styleName.Render(templateName))
 	sb.WriteString("?\n\n")
 
-	sb.WriteString(helpStyle.Render("Y/Enter: Delete  N/Esc: Cancel"))
+	sb.WriteString(m.styleHelp.Render("Y/Enter: Delete  N/Esc: Cancel"))
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true

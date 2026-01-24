@@ -2,13 +2,21 @@
 package tui
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+)
+
+// Pre-computed status bar hints and their widths (avoids ansi.StringWidth on each render)
+const (
+	helpViewerHintFull       = "↑↓j/k:scroll g/G:top/end ⌃/:close"
+	helpViewerHintShort      = "⌃/:close"
+	helpViewerHintFullWidth  = 33 // ansi.StringWidth - ⌃ char is 1 width
+	helpViewerHintShortWidth = 8  // ansi.StringWidth("⌃/:close")
 )
 
 // HelpViewer provides an interactive help viewer with vim-like navigation.
@@ -28,6 +36,11 @@ type HelpViewer struct {
 	selectStartX int // Start column (screen-relative)
 	selectEndY   int // End row (screen-relative)
 	selectEndX   int // End column (screen-relative)
+
+	// Style cache (reused across renders)
+	styleHighlight lipgloss.Style
+	styleStatus    lipgloss.Style
+	stylesCached   bool
 }
 
 // NewHelpViewer creates a new help viewer with the given content.
@@ -59,6 +72,7 @@ func (m *HelpViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 
@@ -192,6 +206,19 @@ func (m *HelpViewer) View() tea.View {
 		return tea.NewView("Loading...")
 	}
 
+	c := m.colors
+
+	// Update style cache if needed (only on theme change)
+	if !m.stylesCached {
+		m.styleHighlight = lipgloss.NewStyle().
+			Background(c.Selection).
+			Foreground(c.TextBright)
+		m.styleStatus = lipgloss.NewStyle().
+			Background(c.StatusBar).
+			Foreground(c.StatusBarText)
+		m.stylesCached = true
+	}
+
 	var sb strings.Builder
 
 	// Calculate visible lines
@@ -200,13 +227,6 @@ func (m *HelpViewer) View() tea.View {
 	if endPos > len(m.lines) {
 		endPos = len(m.lines)
 	}
-
-	c := m.colors
-
-	// Selection highlight style
-	highlightStyle := lipgloss.NewStyle().
-		Background(c.Selection).
-		Foreground(c.TextBright)
 
 	// Render visible lines
 	for i := m.scrollPos; i < endPos; i++ {
@@ -233,49 +253,46 @@ func (m *HelpViewer) View() tea.View {
 
 		// Pad to full width
 		if lineWidth < m.width {
-			line = line + strings.Repeat(" ", m.width-lineWidth)
+			line = line + getPadding(m.width-lineWidth)
 		}
 
 		// Apply selection highlighting if this line is in selection
 		if m.hasSelection {
-			line = m.applySelectionToLine(line, screenY, highlightStyle)
+			line = m.applySelectionToLine(line, screenY, m.styleHighlight)
 		}
 
 		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
 
-	// Pad remaining lines
+	// Pad remaining lines (use cached padding for common widths)
+	emptyLine := getPadding(m.width)
 	for i := endPos - m.scrollPos; i < contentHeight; i++ {
-		sb.WriteString(strings.Repeat(" ", m.width))
+		sb.WriteString(emptyLine)
 		sb.WriteString("\n")
 	}
 
 	// Status bar
-	statusStyle := lipgloss.NewStyle().
-		Background(c.StatusBar).
-		Foreground(c.StatusBarText)
-
 	var status string
 	if len(m.lines) > 0 {
-		status = fmt.Sprintf(" Lines %d-%d of %d ", m.scrollPos+1, endPos, len(m.lines))
+		status = " Lines " + strconv.Itoa(m.scrollPos+1) + "-" + strconv.Itoa(endPos) + " of " + strconv.Itoa(len(m.lines)) + " "
 	} else {
 		status = " (empty) "
 	}
 
-	// Keybindings hint
-	hint := "↑↓j/k:scroll g/G:top/end ⌃/:close"
-	padding := m.width - len(status) - len(hint)
+	// Keybindings hint (use pre-computed widths to avoid ansi.StringWidth on each render)
+	hint := helpViewerHintFull
+	padding := m.width - len(status) - helpViewerHintFullWidth
 	if padding < 0 {
-		hint = "⌃/:close"
-		padding = m.width - len(status) - len(hint)
+		hint = helpViewerHintShort
+		padding = m.width - len(status) - helpViewerHintShortWidth
 		if padding < 0 {
 			padding = 0
 		}
 	}
 
-	statusLine := statusStyle.Render(
-		status + strings.Repeat(" ", padding) + hint,
+	statusLine := m.styleStatus.Render(
+		status + getPadding(padding) + hint,
 	)
 
 	sb.WriteString(statusLine)
@@ -416,7 +433,7 @@ func (m *HelpViewer) copySelection() {
 
 		// Pad for consistent width
 		if lineWidth < m.width {
-			line = line + strings.Repeat(" ", m.width-lineWidth)
+			line = line + getPadding(m.width-lineWidth)
 		}
 
 		startX, endX := m.getSelectionXRange(screenY)

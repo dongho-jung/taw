@@ -23,6 +23,30 @@ type Spinner struct {
 // spinnerFrames are the animation frames for the spinner.
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
+// spinnerStyles caches spinner styles to avoid repeated allocations.
+var spinnerStyles struct {
+	error   lipgloss.Style
+	success lipgloss.Style
+	spinner lipgloss.Style
+	box     lipgloss.Style
+	init    bool
+}
+
+// getSpinnerStyles returns cached spinner styles.
+func getSpinnerStyles() (errorStyle, successStyle, spinnerStyle, boxStyle lipgloss.Style) {
+	if !spinnerStyles.init {
+		spinnerStyles.error = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+		spinnerStyles.success = lipgloss.NewStyle().Foreground(lipgloss.Color("40"))
+		spinnerStyles.spinner = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+		spinnerStyles.box = lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("39")).
+			Padding(1, 3)
+		spinnerStyles.init = true
+	}
+	return spinnerStyles.error, spinnerStyles.success, spinnerStyles.spinner, spinnerStyles.box
+}
+
 // tickMsg is sent periodically to animate the spinner.
 type spinnerTickMsg time.Time
 
@@ -83,31 +107,25 @@ func (m *Spinner) View() tea.View {
 		height = 24
 	}
 
-	// Build the spinner content
+	// Get cached styles
+	errorStyle, successStyle, spinnerStyle, boxStyle := getSpinnerStyles()
+
+	// Build the spinner content using string concatenation (avoids fmt.Sprintf per frame)
 	var innerContent string
 	if m.done {
 		if m.err != nil {
-			style := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-			innerContent = style.Render(fmt.Sprintf("✗ %s: %v", m.message, m.err))
+			innerContent = errorStyle.Render("✗ " + m.message + ": " + m.err.Error())
 		} else {
-			style := lipgloss.NewStyle().Foreground(lipgloss.Color("40"))
 			if m.result != "" {
-				innerContent = style.Render(fmt.Sprintf("✓ %s: %s", m.message, m.result))
+				innerContent = successStyle.Render("✓ " + m.message + ": " + m.result)
 			} else {
-				innerContent = style.Render(fmt.Sprintf("✓ %s", m.message))
+				innerContent = successStyle.Render("✓ " + m.message)
 			}
 		}
 	} else {
-		spinnerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
 		frame := spinnerFrames[m.frame]
-		innerContent = spinnerStyle.Render(fmt.Sprintf("%s %s", frame, m.message))
+		innerContent = spinnerStyle.Render(frame + " " + m.message)
 	}
-
-	// Create a box around the spinner content
-	boxStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("39")).
-		Padding(1, 3)
 
 	box := boxStyle.Render(innerContent)
 

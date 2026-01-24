@@ -2,6 +2,7 @@
 package embed
 
 import (
+	"bytes"
 	"embed"
 	"io/fs"
 	"os"
@@ -205,20 +206,6 @@ func InstallPreCommitHook(hooksDir string) error {
 
 // containsPawHook checks if the PAW pre-commit hook is already in the content.
 func containsPawHook(content []byte) bool {
-	return len(content) > 0 && (contains(content, []byte("PAW pre-commit hook")) || contains(content, []byte("PAW: Automatically unstaged .claude")))
-}
-
-// contains checks if b contains subslice.
-func contains(b, subslice []byte) bool {
-	return len(b) >= len(subslice) && string(b) != "" && len(subslice) > 0 && indexBytes(b, subslice) >= 0
-}
-
-// indexBytes returns the index of subslice in b, or -1 if not found.
-func indexBytes(b, subslice []byte) int {
-	for i := 0; i <= len(b)-len(subslice); i++ {
-		if string(b[i:i+len(subslice)]) == string(subslice) {
-			return i
-		}
-	}
-	return -1
+	return bytes.Contains(content, []byte("PAW pre-commit hook")) ||
+		bytes.Contains(content, []byte("PAW: Automatically unstaged .claude"))
 }

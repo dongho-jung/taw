@@ -165,9 +165,12 @@ func (s *TaskDiscoveryService) discoverFromSocket(socketName string) []*Discover
 			// Use more lines (50) to find the spinner indicator which shows current action
 			agentPane := w.ID + ".0"
 			if capture, err := tm.CapturePane(agentPane, 50); err == nil {
-				task.Preview = trimPreview(capture)
-				task.CurrentAction = extractCurrentAction(capture)
-				task.Duration, task.Tokens = extractDurationAndTokens(capture)
+				// Split lines once and pass to all extraction functions
+				// to avoid redundant strings.Split calls
+				lines := strings.Split(capture, "\n")
+				task.Preview = trimPreviewFromLines(lines)
+				task.CurrentAction = extractCurrentActionFromLines(lines)
+				task.Duration, task.Tokens = extractDurationAndTokensFromLines(lines)
 			}
 		}
 
@@ -267,12 +270,15 @@ func extractWindowEmoji(windowName string) string {
 }
 
 // trimPreview cleans up the preview text.
+// Deprecated: Use trimPreviewFromLines for better performance.
 func trimPreview(preview string) string {
-	// Remove leading/trailing whitespace
-	preview = strings.TrimSpace(preview)
+	return trimPreviewFromLines(strings.Split(preview, "\n"))
+}
 
+// trimPreviewFromLines cleans up the preview text from pre-split lines.
+// This avoids redundant strings.Split calls when processing multiple functions.
+func trimPreviewFromLines(lines []string) string {
 	// Get last 3 non-empty lines
-	lines := strings.Split(preview, "\n")
 	var nonEmpty []string
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -290,11 +296,15 @@ func trimPreview(preview string) string {
 }
 
 // extractCurrentAction extracts the agent's current action from pane capture.
+// Deprecated: Use extractCurrentActionFromLines for better performance.
+func extractCurrentAction(capture string) string {
+	return extractCurrentActionFromLines(strings.Split(capture, "\n"))
+}
+
+// extractCurrentActionFromLines extracts the agent's current action from pre-split lines.
 // Looks for the last line containing "⏺" (spinner indicator) which shows what
 // the agent is currently working on (e.g., "⏺ Reading file...", "⏺ Running tests...").
-func extractCurrentAction(capture string) string {
-	lines := strings.Split(capture, "\n")
-
+func extractCurrentActionFromLines(lines []string) string {
 	// Find the last line containing the spinner indicator "⏺"
 	var lastSpinnerLine string
 	for _, line := range lines {
@@ -326,15 +336,19 @@ func extractCurrentAction(capture string) string {
 }
 
 // extractDurationAndTokens extracts duration and token count from pane capture.
+// Deprecated: Use extractDurationAndTokensFromLines for better performance.
+func extractDurationAndTokens(capture string) (duration, tokens string) {
+	return extractDurationAndTokensFromLines(strings.Split(capture, "\n"))
+}
+
+// extractDurationAndTokensFromLines extracts duration and token count from pre-split lines.
 // Looks for the Claude status line which shows duration and tokens.
 // Example formats:
 //   - "✻ Whirring… (ctrl+c to interrupt · 54s · ↓ 2.7k tokens)"
 //   - "⏺ Reading file… (ctrl+c to interrupt · 1m 36s · ↓ 5.9k tokens · thought for 2s)"
 //
 // Returns duration (e.g., "54s", "1m 36s") and tokens (e.g., "↓ 2.7k").
-func extractDurationAndTokens(capture string) (duration, tokens string) {
-	lines := strings.Split(capture, "\n")
-
+func extractDurationAndTokensFromLines(lines []string) (duration, tokens string) {
 	// Find the last Claude status line containing duration/token info
 	// Status lines typically start with spinner indicators (✻, ⏺, etc.)
 	// and contain parenthetical metadata

@@ -37,6 +37,19 @@ type PromptPicker struct {
 	colors ThemeColors
 	width  int
 	height int
+
+	// Style cache (reused across renders)
+	styleTitle        lipgloss.Style
+	styleSubtitle     lipgloss.Style
+	styleItem         lipgloss.Style
+	styleSelected     lipgloss.Style
+	styleDesc         lipgloss.Style
+	styleSelectedDesc lipgloss.Style
+	styleScope        lipgloss.Style
+	stylePath         lipgloss.Style
+	styleHelp         lipgloss.Style
+	styleDim          lipgloss.Style
+	stylesCached      bool
 }
 
 // NewPromptPicker creates a new prompt picker.
@@ -71,6 +84,7 @@ func (m *PromptPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 
@@ -118,72 +132,70 @@ func (m *PromptPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *PromptPicker) View() tea.View {
 	c := m.colors
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(c.Accent)
-
-	subtitleStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim)
-
-	itemStyle := lipgloss.NewStyle().
-		Foreground(c.TextNormal).
-		PaddingLeft(2)
-
-	selectedStyle := lipgloss.NewStyle().
-		Foreground(c.Accent).
-		Bold(true).
-		PaddingLeft(0)
-
-	descStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		PaddingLeft(4)
-
-	selectedDescStyle := lipgloss.NewStyle().
-		Foreground(c.Accent).
-		PaddingLeft(4)
-
-	scopeStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		Italic(true)
-
-	pathStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		MarginTop(1)
+	// Update style cache if needed (only on theme change)
+	if !m.stylesCached {
+		m.styleTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(c.Accent)
+		m.styleSubtitle = lipgloss.NewStyle().
+			Foreground(c.TextDim)
+		m.styleItem = lipgloss.NewStyle().
+			Foreground(c.TextNormal).
+			PaddingLeft(2)
+		m.styleSelected = lipgloss.NewStyle().
+			Foreground(c.Accent).
+			Bold(true).
+			PaddingLeft(0)
+		m.styleDesc = lipgloss.NewStyle().
+			Foreground(c.TextDim).
+			PaddingLeft(4)
+		m.styleSelectedDesc = lipgloss.NewStyle().
+			Foreground(c.Accent).
+			PaddingLeft(4)
+		m.styleScope = lipgloss.NewStyle().
+			Foreground(c.TextDim).
+			Italic(true)
+		m.stylePath = lipgloss.NewStyle().
+			Foreground(c.TextDim)
+		m.styleHelp = lipgloss.NewStyle().
+			Foreground(c.TextDim).
+			MarginTop(1)
+		m.styleDim = lipgloss.NewStyle().
+			Foreground(c.TextDim)
+		m.stylesCached = true
+	}
 
 	var sb strings.Builder
 
 	// Title
-	sb.WriteString(titleStyle.Render("Edit Prompts"))
+	sb.WriteString(m.styleTitle.Render("Edit Prompts"))
 	sb.WriteString("\n")
-	sb.WriteString(subtitleStyle.Render("Select a prompt to edit with $EDITOR"))
+	sb.WriteString(m.styleSubtitle.Render("Select a prompt to edit with $EDITOR"))
 	sb.WriteString("\n\n")
 
 	// Prompt list
 	if len(m.prompts) == 0 {
-		sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("  No prompts available"))
+		sb.WriteString(m.styleDim.Render("  No prompts available"))
 		sb.WriteString("\n")
 	} else {
 		for i, prompt := range m.prompts {
 			// Name line
-			scopeLabel := scopeStyle.Render("[" + prompt.Scope + "]")
+			scopeLabel := m.styleScope.Render("[" + prompt.Scope + "]")
 			if i == m.cursor {
-				sb.WriteString(selectedStyle.Render("> " + prompt.Name + " " + scopeLabel))
+				sb.WriteString(m.styleSelected.Render("> " + prompt.Name + " " + scopeLabel))
 				sb.WriteString("\n")
-				sb.WriteString(selectedDescStyle.Render(prompt.Description))
+				sb.WriteString(m.styleSelectedDesc.Render(prompt.Description))
 			} else {
-				sb.WriteString(itemStyle.Render(prompt.Name + " " + scopeLabel))
+				sb.WriteString(m.styleItem.Render(prompt.Name + " " + scopeLabel))
 				sb.WriteString("\n")
-				sb.WriteString(descStyle.Render(prompt.Description))
+				sb.WriteString(m.styleDesc.Render(prompt.Description))
 			}
 			sb.WriteString("\n")
 
 			// Path line (if exists)
 			if prompt.Path != "" {
 				displayPath := truncateWithEllipsis(prompt.Path, m.width-8)
-				sb.WriteString(pathStyle.Render("      " + displayPath))
+				sb.WriteString(m.stylePath.Render("      " + displayPath))
 				sb.WriteString("\n")
 			}
 		}
@@ -191,7 +203,7 @@ func (m *PromptPicker) View() tea.View {
 
 	// Help
 	sb.WriteString("\n")
-	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter: Edit  Esc/⌃Y: Close"))
+	sb.WriteString(m.styleHelp.Render("↑/↓: Navigate  Enter: Edit  Esc/⌃Y: Close"))
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true

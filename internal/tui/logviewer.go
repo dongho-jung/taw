@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,20 @@ import (
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+)
+
+// logLevelTags stores pre-computed log level tags to avoid fmt.Sprintf per line.
+var logLevelTags = [6]string{"[L0]", "[L1]", "[L2]", "[L3]", "[L4]", "[L5]"}
+
+// logLevelFilters stores pre-computed filter indicators for status bar.
+var logLevelFilters = [6]string{"", " [L1+]", " [L2+]", " [L3+]", " [L4+]", " [L5]"}
+
+// Pre-computed status bar hints and their widths (avoids ansi.StringWidth on each render)
+const (
+	logViewerHintFull       = "/:search n/N:match Tab:level w:wrap ⌃O/q:close"
+	logViewerHintShort      = "⌃O/q:close"
+	logViewerHintFullWidth  = 46 // ansi.StringWidth - ⌃ chars are 1 width each
+	logViewerHintShortWidth = 10 // ansi.StringWidth("⌃O/q:close")
 )
 
 // LogViewer provides an interactive log viewer with vim-like navigation.
@@ -44,9 +59,27 @@ type LogViewer struct {
 	// Search state
 	searchMode       bool   // whether search input is active
 	searchQuery      string // current search term (confirmed)
+	searchQueryLower string // pre-lowercased search query for performance
 	searchInput      string // input buffer while typing
 	searchMatches    []int  // display line indices containing matches
 	currentMatchIdx  int    // current match index for n/N navigation
+
+	// Display lines cache (invalidated on lines/minLevel/wordWrap/width change)
+	cachedDisplayLines   []string
+	cacheMinLevel        int
+	cacheWordWrap        bool
+	cacheWidth           int
+	cacheLinesLen        int
+	cacheMatchLineSet    map[int]struct{} // O(1) lookup for isMatchLine
+	cacheLowercaseLines  []string         // pre-lowercased lines for search (same length as cachedDisplayLines)
+
+	// Style cache (reused across renders to avoid allocations)
+	styleHighlight     lipgloss.Style
+	styleStatus        lipgloss.Style
+	styleSearch        lipgloss.Style
+	styleMatchCurrent  lipgloss.Style
+	styleMatchOther    lipgloss.Style
+	stylesCached       bool
 }
 
 const maxLogLines = 5000
@@ -101,6 +134,7 @@ func (m *LogViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 
@@ -148,6 +182,9 @@ func (m *LogViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		if m.wordWrap && m.searchQuery != "" {
+			m.findMatches()
+		}
 		if m.tailMode {
 			m.scrollToEnd()
 		}
@@ -159,6 +196,10 @@ func (m *LogViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastSize = msg.size
 		m.lastEndedWithNewline = msg.endsWithNewline
 		m.trimLines()
+		m.invalidateDisplayCache()
+		if m.searchQuery != "" {
+			m.findMatches()
+		}
 		if m.tailMode {
 			m.scrollToEnd()
 		} else {
@@ -184,6 +225,10 @@ func (m *LogViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastSize = msg.size
 		m.lastEndedWithNewline = msg.endsWithNewline
 		m.trimLines()
+		m.invalidateDisplayCache()
+		if m.searchQuery != "" {
+			m.findMatches()
+		}
 		if m.tailMode {
 			m.scrollToEnd()
 		} else {
@@ -282,6 +327,9 @@ func (m *LogViewer) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.wordWrap = !m.wordWrap
 		if m.wordWrap {
 			m.horizontalPos = 0
+		}
+		if m.searchQuery != "" {
+			m.findMatches()
 		}
 
 	case "tab":
@@ -410,7 +458,8 @@ func (m *LogViewer) getFilteredLines() []string {
 		return m.lines
 	}
 
-	var filtered []string
+	// Pre-allocate with estimated capacity (most lines pass the filter)
+	filtered := make([]string, 0, len(m.lines))
 	for _, line := range m.lines {
 		level := getLogLevel(line)
 		// Show line if level is -1 (no level found) or >= minLevel
@@ -434,8 +483,8 @@ func (m *LogViewer) colorizeLogLine(line string) string {
 		return line
 	}
 
-	// Find and colorize the level tag [LN]
-	levelTag := fmt.Sprintf("[L%d]", level)
+	// Find and colorize the level tag [LN] (use pre-computed tags)
+	levelTag := logLevelTags[level]
 	idx := strings.Index(line, levelTag)
 	if idx < 0 {
 		return line
@@ -448,31 +497,59 @@ func (m *LogViewer) colorizeLogLine(line string) string {
 }
 
 // getDisplayLines returns lines to display, handling word wrap if enabled.
+// Results are cached and invalidated when lines/minLevel/wordWrap/width change.
 func (m *LogViewer) getDisplayLines() []string {
-	lines := m.getFilteredLines()
-
-	if !m.wordWrap || m.width <= 0 {
-		return lines
+	// Check cache validity
+	if m.cachedDisplayLines != nil &&
+		m.cacheMinLevel == m.minLevel &&
+		m.cacheWordWrap == m.wordWrap &&
+		m.cacheWidth == m.width &&
+		m.cacheLinesLen == len(m.lines) {
+		return m.cachedDisplayLines
 	}
 
-	// Word wrap mode: wrap long lines
-	var wrapped []string
-	for _, line := range lines {
-		if len(line) <= m.width {
-			wrapped = append(wrapped, line)
-		} else {
-			// Wrap the line
-			for len(line) > 0 {
-				end := m.width
-				if end > len(line) {
-					end = len(line)
+	lines := m.getFilteredLines()
+
+	var result []string
+	if !m.wordWrap || m.width <= 0 {
+		result = lines
+	} else {
+		// Word wrap mode: wrap long lines
+		// Pre-allocate with estimated capacity
+		result = make([]string, 0, len(lines))
+		for _, line := range lines {
+			if len(line) <= m.width {
+				result = append(result, line)
+			} else {
+				// Wrap the line
+				for len(line) > 0 {
+					end := m.width
+					if end > len(line) {
+						end = len(line)
+					}
+					result = append(result, line[:end])
+					line = line[end:]
 				}
-				wrapped = append(wrapped, line[:end])
-				line = line[end:]
 			}
 		}
 	}
-	return wrapped
+
+	// Update cache
+	m.cachedDisplayLines = result
+	m.cacheMinLevel = m.minLevel
+	m.cacheWordWrap = m.wordWrap
+	m.cacheWidth = m.width
+	m.cacheLinesLen = len(m.lines)
+
+	return result
+}
+
+// invalidateDisplayCache clears cached display lines and search helpers.
+func (m *LogViewer) invalidateDisplayCache() {
+	m.cachedDisplayLines = nil
+	m.cacheLinesLen = 0
+	m.cacheLowercaseLines = nil
+	m.cacheMatchLineSet = nil
 }
 
 // View renders the log viewer.
@@ -485,12 +562,14 @@ func (m *LogViewer) View() tea.View {
 		return tea.NewView("Loading...")
 	}
 
-	var sb strings.Builder
-
 	displayLines := m.getDisplayLines()
 
 	// Calculate visible lines
 	contentHeight := m.contentHeight()
+
+	// Pre-allocate builder: ~(width + newline) * contentHeight + status bar
+	var sb strings.Builder
+	sb.Grow((m.width + 1) * (contentHeight + 1))
 	endPos := m.scrollPos + contentHeight
 	if endPos > len(displayLines) {
 		endPos = len(displayLines)
@@ -498,10 +577,25 @@ func (m *LogViewer) View() tea.View {
 
 	c := m.colors
 
-	// Selection highlight style
-	highlightStyle := lipgloss.NewStyle().
-		Background(c.Selection).
-		Foreground(c.TextBright)
+	// Update style cache if needed (only on theme change)
+	if !m.stylesCached {
+		m.styleHighlight = lipgloss.NewStyle().
+			Background(c.Selection).
+			Foreground(c.TextBright)
+		m.styleStatus = lipgloss.NewStyle().
+			Background(c.StatusBar).
+			Foreground(c.StatusBarText)
+		m.styleSearch = lipgloss.NewStyle().
+			Background(c.StatusBar).
+			Foreground(c.StatusBarText)
+		m.styleMatchCurrent = lipgloss.NewStyle().
+			Background(c.SearchCurrent).
+			Foreground(c.TextInverted)
+		m.styleMatchOther = lipgloss.NewStyle().
+			Background(c.SearchMatch).
+			Foreground(c.TextInverted)
+		m.stylesCached = true
+	}
 
 	// Render visible lines
 	for i := m.scrollPos; i < endPos; i++ {
@@ -533,45 +627,37 @@ func (m *LogViewer) View() tea.View {
 		// Apply search highlighting before padding
 		if m.searchQuery != "" && m.isMatchLine(i) {
 			isCurrentMatch := m.isCurrentMatchLine(i)
-			line = m.highlightSearchMatches(line, isCurrentMatch)
+			line = m.highlightSearchMatches(line, i, isCurrentMatch)
 		}
 
 		// Pad to full width (using visual width)
 		visualWidth := ansi.StringWidth(line)
 		if visualWidth < m.width {
-			line = line + strings.Repeat(" ", m.width-visualWidth)
+			line = line + getPadding(m.width-visualWidth)
 		}
 
 		// Apply selection highlighting if this line is in selection
 		if m.hasSelection {
-			line = m.applySelectionToLine(line, screenY, highlightStyle)
+			line = m.applySelectionToLine(line, screenY, m.styleHighlight)
 		}
 
 		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
 
-	// Pad remaining lines
+	// Pad remaining lines (use cached padding for common widths)
+	emptyLine := getPadding(m.width)
 	for i := endPos - m.scrollPos; i < contentHeight; i++ {
-		sb.WriteString(strings.Repeat(" ", m.width))
+		sb.WriteString(emptyLine)
 		sb.WriteString("\n")
 	}
 
-	// Status bar
-	statusStyle := lipgloss.NewStyle().
-		Background(c.StatusBar).
-		Foreground(c.StatusBarText)
+	// Status bar (using cached styles)
 
 	// Search input mode: show search bar instead of status
 	if m.searchMode {
-		searchStyle := lipgloss.NewStyle().
-			Background(c.StatusBar).
-			Foreground(c.StatusBarText)
-		searchBar := fmt.Sprintf("/%-*s", m.width-1, m.searchInput)
-		if len(searchBar) > m.width {
-			searchBar = searchBar[:m.width]
-		}
-		sb.WriteString(searchStyle.Render(searchBar))
+		searchBar := buildSearchBar(m.searchInput, m.width)
+		sb.WriteString(m.styleSearch.Render(searchBar))
 		v := tea.NewView(sb.String())
 		v.AltScreen = true
 		v.MouseMode = tea.MouseModeAllMotion
@@ -585,15 +671,15 @@ func (m *LogViewer) View() tea.View {
 	if m.wordWrap {
 		status += " [WRAP]"
 	}
-	if m.minLevel > 0 {
-		status += fmt.Sprintf(" [L%d+]", m.minLevel)
+	if m.minLevel > 0 && m.minLevel <= 5 {
+		status += logLevelFilters[m.minLevel]
 	}
 	// Show search info
 	if m.searchQuery != "" {
 		if len(m.searchMatches) > 0 {
-			status += fmt.Sprintf(" [/%s %d/%d]", m.searchQuery, m.currentMatchIdx+1, len(m.searchMatches))
+			status += " [/" + m.searchQuery + " " + strconv.Itoa(m.currentMatchIdx+1) + "/" + strconv.Itoa(len(m.searchMatches)) + "]"
 		} else {
-			status += fmt.Sprintf(" [/%s 0/0]", m.searchQuery)
+			status += " [/" + m.searchQuery + " 0/0]"
 		}
 	}
 	if status == "" {
@@ -603,24 +689,24 @@ func (m *LogViewer) View() tea.View {
 	}
 
 	if len(displayLines) > 0 {
-		status += fmt.Sprintf("Lines %d-%d of %d ", m.scrollPos+1, endPos, len(displayLines))
+		status += "Lines " + strconv.Itoa(m.scrollPos+1) + "-" + strconv.Itoa(endPos) + " of " + strconv.Itoa(len(displayLines)) + " "
 	} else {
 		status += "(empty) "
 	}
 
-	// Keybindings hint
-	hint := "/:search n/N:match Tab:level w:wrap ⌃O/q:close"
-	padding := m.width - len(status) - len(hint)
+	// Keybindings hint (use pre-computed widths to avoid ansi.StringWidth on each render)
+	hint := logViewerHintFull
+	padding := m.width - len(status) - logViewerHintFullWidth
 	if padding < 0 {
-		hint = "q:close"
-		padding = m.width - len(status) - len(hint)
+		hint = logViewerHintShort
+		padding = m.width - len(status) - logViewerHintShortWidth
 		if padding < 0 {
 			padding = 0
 		}
 	}
 
-	statusLine := statusStyle.Render(
-		status + strings.Repeat(" ", padding) + hint,
+	statusLine := m.styleStatus.Render(
+		status + getPadding(padding) + hint,
 	)
 
 	sb.WriteString(statusLine)
@@ -775,26 +861,44 @@ func (m *LogViewer) tick() tea.Cmd {
 // clearSearch clears the current search state.
 func (m *LogViewer) clearSearch() {
 	m.searchQuery = ""
+	m.searchQueryLower = ""
 	m.searchInput = ""
 	m.searchMatches = nil
+	m.cacheMatchLineSet = nil
 	m.currentMatchIdx = 0
 }
 
 // findMatches finds all lines containing the search query.
 func (m *LogViewer) findMatches() {
 	m.searchMatches = nil
+	m.cacheMatchLineSet = nil
+	m.cacheLowercaseLines = nil
 	if m.searchQuery == "" {
 		return
 	}
 
-	displayLines := m.getDisplayLines()
-	query := strings.ToLower(m.searchQuery)
+	// Cache the lowercased query for use in highlightSearchMatches
+	m.searchQueryLower = strings.ToLower(m.searchQuery)
 
+	displayLines := m.getDisplayLines()
+
+	// Pre-allocate lowercase lines cache for search highlighting
+	m.cacheLowercaseLines = make([]string, len(displayLines))
 	for i, line := range displayLines {
-		if strings.Contains(strings.ToLower(line), query) {
+		m.cacheLowercaseLines[i] = strings.ToLower(line)
+	}
+
+	// Build both slice (for navigation order) and set (for O(1) lookup)
+	// Pre-allocate with estimated capacity
+	m.searchMatches = make([]int, 0, len(displayLines)/10+1)
+	matchSet := make(map[int]struct{})
+	for i, lowerLine := range m.cacheLowercaseLines {
+		if strings.Contains(lowerLine, m.searchQueryLower) {
 			m.searchMatches = append(m.searchMatches, i)
+			matchSet[i] = struct{}{}
 		}
 	}
+	m.cacheMatchLineSet = matchSet
 }
 
 // scrollToMatch scrolls to make the match at the given index visible.
@@ -852,13 +956,13 @@ func (m *LogViewer) prevMatch() {
 }
 
 // isMatchLine returns true if the display line at idx is a match line.
+// Uses O(1) map lookup instead of O(n) slice scan.
 func (m *LogViewer) isMatchLine(idx int) bool {
-	for _, matchIdx := range m.searchMatches {
-		if matchIdx == idx {
-			return true
-		}
+	if m.cacheMatchLineSet == nil {
+		return false
 	}
-	return false
+	_, ok := m.cacheMatchLineSet[idx]
+	return ok
 }
 
 // isCurrentMatchLine returns true if the display line at idx is the current match.
@@ -870,25 +974,28 @@ func (m *LogViewer) isCurrentMatchLine(idx int) bool {
 }
 
 // highlightSearchMatches highlights search matches in a line.
-func (m *LogViewer) highlightSearchMatches(line string, isCurrentMatch bool) string {
-	if m.searchQuery == "" {
+// Uses pre-cached searchQueryLower, cached lowercase lines, and cached styles to avoid allocations.
+func (m *LogViewer) highlightSearchMatches(line string, lineIdx int, isCurrentMatch bool) string {
+	if m.searchQuery == "" || m.searchQueryLower == "" {
 		return line
 	}
 
-	// Find all occurrences (case-insensitive)
-	lowerLine := strings.ToLower(line)
-	lowerQuery := strings.ToLower(m.searchQuery)
+	// Use cached lowercase line if available, otherwise lowercase on the fly
+	var lowerLine string
+	if lineIdx >= 0 && lineIdx < len(m.cacheLowercaseLines) && m.cacheLowercaseLines[lineIdx] != "" {
+		lowerLine = m.cacheLowercaseLines[lineIdx]
+	} else {
+		lowerLine = strings.ToLower(line)
+	}
+	// Use cached lowercased query
+	lowerQuery := m.searchQueryLower
 
-	// Use different colors for current match vs other matches
+	// Use cached styles
 	var matchStyle lipgloss.Style
 	if isCurrentMatch {
-		matchStyle = lipgloss.NewStyle().
-			Background(m.colors.SearchCurrent).
-			Foreground(m.colors.TextInverted)
+		matchStyle = m.styleMatchCurrent
 	} else {
-		matchStyle = lipgloss.NewStyle().
-			Background(m.colors.SearchMatch).
-			Foreground(m.colors.TextInverted)
+		matchStyle = m.styleMatchOther
 	}
 
 	var result strings.Builder
@@ -1024,7 +1131,7 @@ func (m *LogViewer) copySelection() {
 
 		// Pad for consistent width
 		if lineWidth < m.width {
-			line = line + strings.Repeat(" ", m.width-lineWidth)
+			line = line + getPadding(m.width-lineWidth)
 		}
 
 		startX, endX := m.getSelectionXRange(screenY)

@@ -20,9 +20,13 @@ const (
 // DefaultModel is the default model for new tasks.
 const DefaultModel = ModelOpus
 
+// validModels is a pre-allocated slice of valid models (avoids allocation on each call).
+var validModels = []Model{ModelOpus, ModelSonnet, ModelHaiku}
+
 // ValidModels returns all valid model options.
+// The returned slice should not be modified.
 func ValidModels() []Model {
-	return []Model{ModelOpus, ModelSonnet, ModelHaiku}
+	return validModels
 }
 
 // DependsOnCondition defines when a task should run relative to another task.

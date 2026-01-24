@@ -33,6 +33,15 @@ type PRPopup struct {
 	colors ThemeColors
 
 	linkBox linkBoxBounds
+
+	// Style cache (reused across renders)
+	styleTitle    lipgloss.Style
+	styleLabel    lipgloss.Style
+	styleBox      lipgloss.Style
+	styleChoice   lipgloss.Style
+	styleSelected lipgloss.Style
+	styleHelp     lipgloss.Style
+	stylesCached  bool
 }
 
 // NewPRPopup creates a new PR popup model.
@@ -63,6 +72,7 @@ func (m *PRPopup) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 
@@ -121,36 +131,35 @@ func (m *PRPopup) View() tea.View {
 	}
 	m.displayURL = truncateWithEllipsis(m.url, maxURLWidth)
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(c.Accent)
-
-	labelStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim)
-
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(c.Border).
-		Padding(0, 1)
-
-	choiceStyle := lipgloss.NewStyle().
-		Foreground(c.TextNormal)
-
-	selectedStyle := lipgloss.NewStyle().
-		Foreground(c.TextInverted).
-		Background(c.Accent).
-		Bold(true)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim)
+	// Update style cache if needed (only on theme change)
+	if !m.stylesCached {
+		m.styleTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(c.Accent)
+		m.styleLabel = lipgloss.NewStyle().
+			Foreground(c.TextDim)
+		m.styleBox = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(c.Border).
+			Padding(0, 1)
+		m.styleChoice = lipgloss.NewStyle().
+			Foreground(c.TextNormal)
+		m.styleSelected = lipgloss.NewStyle().
+			Foreground(c.TextInverted).
+			Background(c.Accent).
+			Bold(true)
+		m.styleHelp = lipgloss.NewStyle().
+			Foreground(c.TextDim)
+		m.stylesCached = true
+	}
 
 	var noLabel, yesLabel string
 	if m.cursor == 0 {
-		noLabel = selectedStyle.Render("No")
-		yesLabel = choiceStyle.Render("Yes")
+		noLabel = m.styleSelected.Render("No")
+		yesLabel = m.styleChoice.Render("Yes")
 	} else {
-		noLabel = choiceStyle.Render("No")
-		yesLabel = selectedStyle.Render("Yes")
+		noLabel = m.styleChoice.Render("No")
+		yesLabel = m.styleSelected.Render("Yes")
 	}
 
 	copyHint := "Click link to copy"
@@ -160,14 +169,14 @@ func (m *PRPopup) View() tea.View {
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
-		titleStyle.Render("PR Created"),
+		m.styleTitle.Render("PR Created"),
 		"",
-		labelStyle.Render("Link"),
-		boxStyle.Render(m.displayURL),
-		helpStyle.Render(copyHint),
+		m.styleLabel.Render("Link"),
+		m.styleBox.Render(m.displayURL),
+		m.styleHelp.Render(copyHint),
 		"",
-		labelStyle.Render("Open in browser?  ")+noLabel+"  "+yesLabel,
-		helpStyle.Render("Left/Right: Select  Enter: Confirm  Esc: Cancel"),
+		m.styleLabel.Render("Open in browser?  ")+noLabel+"  "+yesLabel,
+		m.styleHelp.Render("Left/Right: Select  Enter: Confirm  Esc: Cancel"),
 	)
 
 	view := content

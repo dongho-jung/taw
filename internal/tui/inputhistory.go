@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/v2/textinput"
@@ -32,6 +33,17 @@ type InputHistoryPicker struct {
 	colors           ThemeColors
 	width            int
 	height           int
+
+	// Style cache (reused across renders)
+	styleTitle        lipgloss.Style
+	styleInput        lipgloss.Style
+	styleItem         lipgloss.Style
+	styleSelected     lipgloss.Style
+	styleHelp         lipgloss.Style
+	styleDim          lipgloss.Style
+	stylePreviewBorder lipgloss.Style
+	stylePreviewTitle  lipgloss.Style
+	stylesCached      bool
 }
 
 // NewInputHistoryPicker creates a new input history picker.
@@ -86,6 +98,7 @@ func (m *InputHistoryPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 
@@ -192,48 +205,48 @@ func (m *InputHistoryPicker) updateFiltered() {
 func (m *InputHistoryPicker) View() tea.View {
 	c := m.colors
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(c.Accent)
-
-	inputStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(c.BorderFocused).
-		Padding(0, 1)
-
-	itemStyle := lipgloss.NewStyle().
-		Foreground(c.TextNormal).
-		PaddingLeft(2)
-
-	selectedStyle := lipgloss.NewStyle().
-		Foreground(c.Accent).
-		Bold(true).
-		PaddingLeft(0)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		MarginTop(1)
-
-	previewBorderStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(c.Border).
-		Padding(0, 1)
-
-	previewTitleStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		Bold(true)
+	// Update style cache if needed (only on theme change)
+	if !m.stylesCached {
+		m.styleTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(c.Accent)
+		m.styleInput = lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(c.BorderFocused).
+			Padding(0, 1)
+		m.styleItem = lipgloss.NewStyle().
+			Foreground(c.TextNormal).
+			PaddingLeft(2)
+		m.styleSelected = lipgloss.NewStyle().
+			Foreground(c.Accent).
+			Bold(true).
+			PaddingLeft(0)
+		m.styleHelp = lipgloss.NewStyle().
+			Foreground(c.TextDim).
+			MarginTop(1)
+		m.styleDim = lipgloss.NewStyle().
+			Foreground(c.TextDim)
+		m.stylePreviewBorder = lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(c.Border).
+			Padding(0, 1)
+		m.stylePreviewTitle = lipgloss.NewStyle().
+			Foreground(c.TextDim).
+			Bold(true)
+		m.stylesCached = true
+	}
 
 	var sb strings.Builder
 	line := 0
 
 	// Title
-	sb.WriteString(titleStyle.Render("Task History"))
+	sb.WriteString(m.styleTitle.Render("Task History"))
 	sb.WriteString("\n\n")
 	line += 2
 
 	// Input - use custom rendering for proper Korean/CJK cursor positioning
 	inputRender := m.renderInput()
-	inputBox := inputStyle.Render(inputRender.Text)
+	inputBox := m.styleInput.Render(inputRender.Text)
 	inputBoxTopY := line
 	sb.WriteString(inputBox)
 	sb.WriteString("\n\n")
@@ -247,9 +260,9 @@ func (m *InputHistoryPicker) View() tea.View {
 	// Filtered history
 	if len(m.filtered) == 0 {
 		if len(m.history) == 0 {
-			sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("  No history yet"))
+			sb.WriteString(m.styleDim.Render("  No history yet"))
 		} else {
-			sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("  No matching entries"))
+			sb.WriteString(m.styleDim.Render("  No matching entries"))
 		}
 		sb.WriteString("\n")
 	} else {
@@ -270,17 +283,16 @@ func (m *InputHistoryPicker) View() tea.View {
 			displayContent = strings.ReplaceAll(displayContent, "\n", " ")
 
 			if i == m.cursor {
-				sb.WriteString(selectedStyle.Render("> " + displayContent))
+				sb.WriteString(m.styleSelected.Render("> " + displayContent))
 			} else {
-				sb.WriteString(itemStyle.Render(displayContent))
+				sb.WriteString(m.styleItem.Render(displayContent))
 			}
 			sb.WriteString("\n")
 		}
 
-		// Show scroll indicator if needed
+		// Show scroll indicator if needed (use strconv for cleaner number formatting)
 		if len(m.filtered) > listHeight {
-			scrollInfo := lipgloss.NewStyle().Foreground(c.TextDim).Render(
-				strings.Repeat(" ", 2) + "... " + string(rune('0'+(m.cursor+1)/10)) + string(rune('0'+(m.cursor+1)%10)) + "/" + string(rune('0'+len(m.filtered)/10)) + string(rune('0'+len(m.filtered)%10)))
+			scrollInfo := m.styleDim.Render("  ... " + strconv.Itoa(m.cursor+1) + "/" + strconv.Itoa(len(m.filtered)))
 			sb.WriteString(scrollInfo)
 			sb.WriteString("\n")
 		}
@@ -292,31 +304,30 @@ func (m *InputHistoryPicker) View() tea.View {
 		content := m.history[idx]
 
 		sb.WriteString("\n")
-		sb.WriteString(previewTitleStyle.Render("Preview:"))
+		sb.WriteString(m.stylePreviewTitle.Render("Preview:"))
 		sb.WriteString("\n")
 
-		// Show preview with limited height
+		// Show preview with limited height (split once, reuse for truncation)
 		lines := strings.Split(content, "\n")
 		previewLines := min(previewHeight, len(lines))
-		previewContent := strings.Join(lines[:previewLines], "\n")
-		if len(lines) > previewHeight {
-			previewContent += "\n..."
-		}
 
-		// Truncate each line
+		// Truncate each line and build preview
 		previewWidth := min(m.width-6, 70)
-		truncatedLines := make([]string, 0)
-		for _, line := range strings.Split(previewContent, "\n") {
-			truncatedLines = append(truncatedLines, truncateWithEllipsis(line, previewWidth))
+		truncatedLines := make([]string, 0, previewLines+1)
+		for i := 0; i < previewLines; i++ {
+			truncatedLines = append(truncatedLines, truncateWithEllipsis(lines[i], previewWidth))
 		}
-		previewContent = strings.Join(truncatedLines, "\n")
+		if len(lines) > previewHeight {
+			truncatedLines = append(truncatedLines, "...")
+		}
+		previewContent := strings.Join(truncatedLines, "\n")
 
-		sb.WriteString(previewBorderStyle.Width(previewWidth).Render(previewContent))
+		sb.WriteString(m.stylePreviewBorder.Width(previewWidth).Render(previewContent))
 	}
 
 	// Help
 	sb.WriteString("\n")
-	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter: Select  Esc/⌃R: Cancel"))
+	sb.WriteString(m.styleHelp.Render("↑/↓: Navigate  Enter: Select  Esc/⌃R: Cancel"))
 
 	v := tea.NewView(sb.String())
 	v.AltScreen = true

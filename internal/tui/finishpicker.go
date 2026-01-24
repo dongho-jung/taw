@@ -39,6 +39,17 @@ type FinishPicker struct {
 	confirmCursor int  // 0=No, 1=Yes for confirmation dialog
 	isDark        bool
 	colors        ThemeColors
+
+	// Style cache (reused across renders)
+	styleTitle        lipgloss.Style
+	styleItem         lipgloss.Style
+	styleSelected     lipgloss.Style
+	styleDesc         lipgloss.Style
+	styleSelectedDesc lipgloss.Style
+	styleWarning      lipgloss.Style
+	styleHelp         lipgloss.Style
+	styleDim          lipgloss.Style
+	stylesCached      bool
 }
 
 // gitOptions returns the options for git mode.
@@ -97,6 +108,7 @@ func (m *FinishPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.colors = NewThemeColors(m.isDark)
+		m.stylesCached = false // Invalidate style cache on theme change
 		setCachedDarkMode(m.isDark)
 		return m, nil
 
@@ -217,42 +229,42 @@ func (m *FinishPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *FinishPicker) View() tea.View {
 	c := m.colors
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(c.Accent)
-
-	itemStyle := lipgloss.NewStyle().
-		Foreground(c.TextNormal).
-		PaddingLeft(2)
-
-	selectedStyle := lipgloss.NewStyle().
-		Foreground(c.Accent).
-		Bold(true).
-		PaddingLeft(0)
-
-	descStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		PaddingLeft(4)
-
-	selectedDescStyle := lipgloss.NewStyle().
-		Foreground(c.Accent).
-		PaddingLeft(4)
-
-	warningStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("203")). // Red
-		Bold(true)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(c.TextDim).
-		MarginTop(1)
+	// Update style cache if needed (only on theme change)
+	if !m.stylesCached {
+		m.styleTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(c.Accent)
+		m.styleItem = lipgloss.NewStyle().
+			Foreground(c.TextNormal).
+			PaddingLeft(2)
+		m.styleSelected = lipgloss.NewStyle().
+			Foreground(c.Accent).
+			Bold(true).
+			PaddingLeft(0)
+		m.styleDesc = lipgloss.NewStyle().
+			Foreground(c.TextDim).
+			PaddingLeft(4)
+		m.styleSelectedDesc = lipgloss.NewStyle().
+			Foreground(c.Accent).
+			PaddingLeft(4)
+		m.styleWarning = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("203")). // Red
+			Bold(true)
+		m.styleHelp = lipgloss.NewStyle().
+			Foreground(c.TextDim).
+			MarginTop(1)
+		m.styleDim = lipgloss.NewStyle().
+			Foreground(c.TextDim)
+		m.stylesCached = true
+	}
 
 	var sb strings.Builder
 
 	// Confirmation mode
 	if m.confirming {
-		sb.WriteString(warningStyle.Render("Are you sure you want to drop all changes?"))
+		sb.WriteString(m.styleWarning.Render("Are you sure you want to drop all changes?"))
 		sb.WriteString("\n\n")
-		sb.WriteString(lipgloss.NewStyle().Foreground(c.TextDim).Render("This will discard all uncommitted work."))
+		sb.WriteString(m.styleDim.Render("This will discard all uncommitted work."))
 		sb.WriteString("\n\n")
 
 		// Render confirmation options (No, Yes order)
@@ -265,19 +277,19 @@ func (m *FinishPicker) View() tea.View {
 		}
 		for i, opt := range confirmOptions {
 			if i == m.confirmCursor {
-				sb.WriteString(selectedStyle.Render("> " + opt.name))
+				sb.WriteString(m.styleSelected.Render("> " + opt.name))
 			} else {
-				sb.WriteString(itemStyle.Render(opt.name))
+				sb.WriteString(m.styleItem.Render(opt.name))
 			}
 			sb.WriteString("\n")
 		}
 
-		sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter: Select  n/y: Quick select"))
+		sb.WriteString(m.styleHelp.Render("↑/↓: Navigate  Enter: Select  n/y: Quick select"))
 		return tea.NewView(sb.String())
 	}
 
 	// Title
-	sb.WriteString(titleStyle.Render("Finish Task"))
+	sb.WriteString(m.styleTitle.Render("Finish Task"))
 	sb.WriteString("\n\n")
 
 	// Options
@@ -288,19 +300,19 @@ func (m *FinishPicker) View() tea.View {
 		}
 
 		if i == m.cursor {
-			sb.WriteString(selectedStyle.Render("> " + name))
+			sb.WriteString(m.styleSelected.Render("> " + name))
 			sb.WriteString("\n")
-			sb.WriteString(selectedDescStyle.Render(opt.Description))
+			sb.WriteString(m.styleSelectedDesc.Render(opt.Description))
 		} else {
-			sb.WriteString(itemStyle.Render(name))
+			sb.WriteString(m.styleItem.Render(name))
 			sb.WriteString("\n")
-			sb.WriteString(descStyle.Render(opt.Description))
+			sb.WriteString(m.styleDesc.Render(opt.Description))
 		}
 		sb.WriteString("\n")
 	}
 
 	// Help
-	sb.WriteString(helpStyle.Render("↑/↓: Navigate  Enter: Select  ⌃F/Esc: Cancel"))
+	sb.WriteString(m.styleHelp.Render("↑/↓: Navigate  Enter: Select  ⌃F/Esc: Cancel"))
 
 	return tea.NewView(sb.String())
 }

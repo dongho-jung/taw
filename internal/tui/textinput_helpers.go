@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"strings"
-
 	rw "github.com/mattn/go-runewidth"
 )
 
@@ -137,5 +135,5 @@ func padTextInputWidth(s string, width int) string {
 	if padding <= 0 {
 		return s
 	}
-	return s + strings.Repeat(" ", padding)
+	return s + getPadding(padding)
 }

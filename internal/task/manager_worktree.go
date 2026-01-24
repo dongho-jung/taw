@@ -104,7 +104,12 @@ func (m *Manager) CleanupTask(task *Task) error {
 	}
 
 	// Remove agent directory
-	return task.Remove()
+	err := task.Remove()
+
+	// Invalidate truncated name cache since we removed a task
+	m.InvalidateTruncatedNameCache()
+
+	return err
 }
 
 // PruneWorktrees removes stale worktree entries from git's database.

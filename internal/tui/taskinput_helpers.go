@@ -24,7 +24,7 @@ func padToWidth(s string, targetWidth int) string {
 	if currentWidth >= targetWidth {
 		return s
 	}
-	return s + strings.Repeat(" ", targetWidth-currentWidth)
+	return s + getPadding(targetWidth-currentWidth)
 }
 
 // embedScrollbarInTextarea embeds a scrollbar into a textarea view.

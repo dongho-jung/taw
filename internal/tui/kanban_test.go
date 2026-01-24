@@ -257,3 +257,48 @@ func TestNormalizePreviewLine(t *testing.T) {
 		})
 	}
 }
+
+// Benchmark tests for performance-critical functions
+
+func BenchmarkIsKeyboardHintLine(b *testing.B) {
+	lines := []string{
+		"⏵⏵ bypass permissions on (shift+tab to cycle)",
+		"Reading file /path/to/file.go",
+		"Running tests...",
+		"1m 36s · ↓ 5.9k",
+		"processing (ctrl+c to interrupt)",
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			_ = isKeyboardHintLine(line)
+		}
+	}
+}
+
+func BenchmarkWrapByWidth(b *testing.B) {
+	text := "This is a longer line of text that will need to be wrapped across multiple lines when displayed in a narrow column"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = wrapByWidth(text, 30)
+	}
+}
+
+func BenchmarkNormalizePreviewLine(b *testing.B) {
+	lines := []string{
+		"⏺ Running tests",
+		"Reading file.go",
+		"⏵ auto-accept edits",
+		"waiting (ctrl+c to interrupt)",
+		"Processing something important here",
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			_ = normalizePreviewLine(line)
+		}
+	}
+}

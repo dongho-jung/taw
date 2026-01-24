@@ -6,12 +6,68 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/dongho-jung/paw/internal/constants"
 )
+
+// paddingCache stores pre-computed padding strings to avoid repeated allocations.
+// Common terminal widths (80, 120, 160, 200) are pre-computed.
+var paddingCache struct {
+	sync.RWMutex
+	cache map[int]string
+}
+
+func init() {
+	paddingCache.cache = make(map[int]string, 16)
+	// Pre-compute common widths
+	for _, w := range []int{80, 100, 120, 140, 160, 180, 200} {
+		paddingCache.cache[w] = strings.Repeat(" ", w)
+	}
+}
+
+// getPadding returns a string of n spaces, using cache for common widths.
+func getPadding(n int) string {
+	if n <= 0 {
+		return ""
+	}
+
+	// Fast path: check cache without lock
+	paddingCache.RLock()
+	if s, ok := paddingCache.cache[n]; ok {
+		paddingCache.RUnlock()
+		return s
+	}
+	paddingCache.RUnlock()
+
+	// Slow path: generate and cache
+	s := strings.Repeat(" ", n)
+
+	// Only cache reasonable widths to avoid memory bloat
+	if n <= 300 {
+		paddingCache.Lock()
+		paddingCache.cache[n] = s
+		paddingCache.Unlock()
+	}
+
+	return s
+}
+
+// buildSearchBar creates a search bar string with proper padding.
+// This is more efficient than fmt.Sprintf("/%-*s", width, input) for hot paths.
+func buildSearchBar(input string, width int) string {
+	prefix := "/" + input
+	prefixLen := len(prefix)
+
+	if prefixLen >= width {
+		return prefix[:width]
+	}
+
+	return prefix + getPadding(width-prefixLen)
+}
 
 // ThemeColors provides a consistent color palette for TUI components.
 // Colors are calculated based on whether the terminal is in dark or light mode.

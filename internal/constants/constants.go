@@ -3,9 +3,14 @@ package constants
 
 import (
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
+
+// camelCaseCache caches ToCamelCase results to avoid repeated conversions.
+// Task names are converted frequently in hot paths like kanban rendering.
+var camelCaseCache sync.Map
 
 // Window status emojis
 const (
@@ -49,9 +54,15 @@ func ExtractTaskName(windowName string) (string, bool) {
 
 // ToCamelCase converts kebab-case or snake_case to camelCase.
 // Examples: "cancel-task-twice" → "cancelTaskTwice", "my_task_name" → "myTaskName"
+// Results are cached since task names are converted repeatedly in hot paths.
 func ToCamelCase(name string) string {
 	if name == "" {
 		return ""
+	}
+
+	// Check cache first
+	if cached, ok := camelCaseCache.Load(name); ok {
+		return cached.(string)
 	}
 
 	var result strings.Builder
@@ -76,7 +87,9 @@ func ToCamelCase(name string) string {
 		firstWritten = true
 	}
 
-	return result.String()
+	converted := result.String()
+	camelCaseCache.Store(name, converted)
+	return converted
 }
 
 // TruncateForWindowName returns a stable window token for a task name.

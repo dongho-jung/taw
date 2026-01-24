@@ -4,8 +4,8 @@ package memoization
 
 import (
 	"container/list"
-	"fmt"
 	"hash/fnv"
+	"strconv"
 	"sync"
 )
 
@@ -116,7 +116,7 @@ type HString string
 func (h HString) Hash() string {
 	hasher := fnv.New64a()
 	hasher.Write([]byte(h))
-	return fmt.Sprintf("%x", hasher.Sum64())
+	return strconv.FormatUint(hasher.Sum64(), 16)
 }
 
 // HInt is a type that implements the Hasher interface for integers.
@@ -126,6 +126,6 @@ type HInt int
 // Uses FNV-1a hash which is fast and suitable for hash tables.
 func (h HInt) Hash() string {
 	hasher := fnv.New64a()
-	hasher.Write([]byte(fmt.Sprintf("%d", h)))
-	return fmt.Sprintf("%x", hasher.Sum64())
+	hasher.Write([]byte(strconv.Itoa(int(h))))
+	return strconv.FormatUint(hasher.Sum64(), 16)
 }

@@ -30,6 +30,9 @@ type Manager struct {
 	gitClient    git.Client
 	ghClient     github.Client
 	claudeClient claude.Client
+
+	// Cache for truncated name lookups (populated lazily, invalidated on task changes)
+	truncatedNameCache map[string]string // truncatedName -> fullName
 }
 
 // NewManager creates a new task manager.
@@ -188,6 +191,9 @@ func (m *Manager) CreateTask(content string, customBranchName ...string) (*Task,
 		logging.Error("Failed to save task content: %v", err)
 		return nil, fmt.Errorf("failed to save task content: %w", err)
 	}
+
+	// Invalidate truncated name cache since we added a new task
+	m.InvalidateTruncatedNameCache()
 
 	return task, nil
 }

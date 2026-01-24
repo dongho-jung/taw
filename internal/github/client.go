@@ -8,8 +8,16 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
+
+// bufferPool reuses bytes.Buffer instances to reduce allocations.
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
 
 // Client defines the interface for GitHub CLI operations.
 type Client interface {
@@ -62,8 +70,13 @@ func (c *ghClient) run(dir string, args ...string) error {
 	defer cancel()
 
 	cmd := c.cmd(ctx, dir, args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+
+	// Reuse buffer from pool to reduce allocations
+	stderr := bufferPool.Get().(*bytes.Buffer)
+	stderr.Reset()
+	defer bufferPool.Put(stderr)
+
+	cmd.Stderr = stderr
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%w: %s", err, stderr.String())
@@ -76,9 +89,17 @@ func (c *ghClient) runOutput(dir string, args ...string) (string, error) {
 	defer cancel()
 
 	cmd := c.cmd(ctx, dir, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+
+	// Reuse buffers from pool to reduce allocations
+	stdout := bufferPool.Get().(*bytes.Buffer)
+	stderr := bufferPool.Get().(*bytes.Buffer)
+	stdout.Reset()
+	stderr.Reset()
+	defer bufferPool.Put(stdout)
+	defer bufferPool.Put(stderr)
+
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("%w: %s", err, stderr.String())
