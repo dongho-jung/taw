@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/dongho-jung/paw/internal/config"
@@ -170,6 +172,49 @@ func TestFindTaskByWindowID(t *testing.T) {
 		_, err := mgr.FindTaskByWindowID("missing")
 		if !errors.Is(err, ErrTaskNotFound) {
 			t.Fatalf("Expected ErrTaskNotFound, got %v", err)
+		}
+	})
+}
+
+func TestSanitizeCustomBranchName(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "basic", input: "My Branch_Name", want: "my-branch-name"},
+		{name: "invalid-chars", input: "feature/ABC", want: "featureabc"},
+		{name: "collapse-hyphens", input: "A__B  C", want: "a-b-c"},
+		{name: "too-short", input: "ab", want: ""},
+		{name: "hyphens-only", input: "---", want: ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sanitizeCustomBranchName(tc.input); got != tc.want {
+				t.Fatalf("sanitizeCustomBranchName(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+
+	t.Run("truncates-and-sanitizes", func(t *testing.T) {
+		input := "This is a very-long-custom-branch-name with EXTRA bits"
+		got := sanitizeCustomBranchName(input)
+		if got == "" {
+			t.Fatalf("sanitizeCustomBranchName(%q) returned empty string", input)
+		}
+		if len(got) > 32 {
+			t.Fatalf("sanitizeCustomBranchName(%q) length = %d, want <= 32", input, len(got))
+		}
+		if strings.HasPrefix(got, "-") || strings.HasSuffix(got, "-") {
+			t.Fatalf("sanitizeCustomBranchName(%q) has leading/trailing hyphen: %q", input, got)
+		}
+		if strings.Contains(got, "--") {
+			t.Fatalf("sanitizeCustomBranchName(%q) contains consecutive hyphens: %q", input, got)
+		}
+		valid := regexp.MustCompile(`^[a-z0-9-]+$`)
+		if !valid.MatchString(got) {
+			t.Fatalf("sanitizeCustomBranchName(%q) contains invalid characters: %q", input, got)
 		}
 	})
 }

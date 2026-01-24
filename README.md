@@ -55,7 +55,7 @@ brew install dongho-jung/tap/paw
 - Start a tmux-based workspace from any directory with the `paw` command.
 - Creating a task automatically launches the Claude Code agent.
 - **Git mode**: Each task gets its own worktree when running in a git repo.
-- **Non-Git mode**: Shared by default; optionally use per-task workspace copies (`non_git_workspace: copy`).
+- **Non-Git mode**: Shared workspace in the project directory.
 
 ## Usage
 
@@ -76,11 +76,10 @@ The first launch automatically opens the task editor.
 To add another task inside the tmux session, press `⌃N`:
 - The inline task input UI opens in the `⭐️main` window.
 - Submit with `Alt+Enter` (or `F5`) to launch the agent; `Esc` cancels.
-- Use `⌥Tab` to edit per-task options (model, dependencies, worktree hook) before submitting.
+- Use `⌥Tab` to edit per-task options (model, dependencies, branch name, worktree hook) before submitting.
 
 **Task completion**:
-- Press `⌃F` twice to finish. PAW commits changes and cleans up. In `auto-pr` mode, it also pushes and creates a PR. In `auto-merge` mode, it pushes and auto-merges to main.
-- In `auto-pr`, the agent creates the PR before you finish.
+- Press `⌃F` to finish. In git mode, PAW commits changes and runs the selected finish action (Merge & Push, Merge, PR, or Drop). In non-git or no-commit cases, choose Done or Drop.
 - Optional verification and hooks can run before finish/merge (see config).
 
 <details>
@@ -147,8 +146,8 @@ log_max_backups: 3
 | `pre_worktree_hook` | (command) | Runs after worktree/workspace creation (e.g., `npm install`) |
 | `pre_task_hook` | (command) | Runs before starting the agent |
 | `post_task_hook` | (command) | Runs after finishing a task |
-| `pre_merge_hook` | (command) | Runs before auto-merge/merge-task |
-| `post_merge_hook` | (command) | Runs after auto-merge/merge-task |
+| `pre_merge_hook` | (command) | Runs before merge actions (Merge / Merge & Push) |
+| `post_merge_hook` | (command) | Runs after successful merge actions |
 
 <details>
 <summary>Other configuration</summary>
@@ -166,7 +165,7 @@ Use `paw check` to verify prerequisites.
 | tmux | Yes | Terminal multiplexer for managing task windows |
 | claude | Yes | Claude Code CLI for running agents |
 | git | Optional | Needed for worktree mode in git repositories |
-| gh | Optional | PR creation for `auto-pr` mode |
+| gh | Optional | PR creation for the PR finish action |
 
 Install tmux/gh via Homebrew: `brew install tmux gh`. Install the Claude Code CLI from https://claude.ai/claude-code.
 
@@ -239,7 +238,7 @@ Use `paw logs --since 2h --task my-task` for CLI filtering.
 | `PgUp` / `PgDn` | Page scroll |
 | `s` | Toggle tail mode (follow new logs) |
 | `w` | Toggle word wrap |
-| `l` | Cycle log level filter (L0+ → L1+ → ... → L5 only) |
+| `Tab` | Cycle log level filter (L0+ → L1+ → ... → L5 only) |
 | `q` / `Esc` | Close the log viewer |
 </details>
 

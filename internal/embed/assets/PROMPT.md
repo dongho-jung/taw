@@ -134,7 +134,7 @@ If the task is simple and clear with no choices, start immediately without askin
 
 ### Determine if automated verification is possible
 
-**Automated verification possible (✅ auto-merge allowed):**
+**Automated verification possible (✅ automated checks available):**
 - Tests exist and can be run for the change.
 - Build/compile commands can confirm success.
 - Automated checks like lint/typecheck are available.
@@ -195,7 +195,7 @@ Change → run tests → fix failures → commit when successful
 - On success: commit with a conventional commit type (feat/fix/refactor/docs/test/chore)
 
 ### Commit discipline (task branch → finish)
-- Before telling the user you are ready to finish (especially for `auto-merge`), inspect `git status`, staged/unstaged stats, and diffs.
+- Before telling the user you are ready to finish, inspect `git status`, staged/unstaged stats, and diffs.
 - Split changes by intent (feature, fix, refactor, config, docs, tests, chore, perf). Do not mix unrelated intents in one commit.
 - For each commit, craft `type(scope?): subject` (≤50 chars) with a body:
   - `- Key changes`
@@ -219,9 +219,10 @@ Work complete → commit changes → signal done → user picks finish action (�
 4. Message the user: "Changes committed. Please press `⌃F` to finish."
 
 **When user presses ⌃F, they will see a finish action picker:**
-- **Merge**: Merge branch to main and clean up (git mode)
+- **Merge & Push**: Merge to main, push to remote, and clean up (git mode)
+- **Merge**: Merge to main (local only) and clean up (git mode)
 - **PR**: Push branch and create a pull request (git mode)
-- **Keep**: Keep changes in place (non-git mode)
+- **Done**: Clean up task (non-git or no commits)
 - **Drop**: Discard all changes and clean up
 
 **CRITICAL:**

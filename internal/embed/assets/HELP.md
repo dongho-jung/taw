@@ -20,7 +20,7 @@ Claude Code-based autonomous agent work environment
   ⌃N          New task
   ⌃R          Search task history (in new task window)
   ⌃T          Template picker (in new task window)
-  ⌃F          Finish task (shows action picker: merge/pr/keep/drop)
+  ⌃F          Finish task (action picker: merge/merge+push/PR/drop or done)
   ⌃P          Command palette (fuzzy search commands)
   ⌃Q          Quit paw
 
@@ -69,7 +69,7 @@ Claude Code-based autonomous agent work environment
   PgUp/PgDn   Page scroll
   s           Toggle tail mode (follow new logs)
   w           Toggle word wrap
-  l           Cycle log level filter (L0+ → L1+ → ... → L5 only)
+  Tab         Cycle log level filter (L0+ → L1+ → ... → L5 only)
   ⌃O/q/Esc    Close the log viewer
 
 ## Git Viewer (⌃G)
@@ -115,12 +115,13 @@ Configure per-task settings before submission:
 
   Model         Claude model (opus/sonnet/haiku)
   Depends on    Run after another task (success/failure/always)
+  Branch name   Custom branch name (git mode only)
   Worktree hook Override project hook for this task
 
 ## Environment Variables (for agents)
 
   TASK_NAME     Task identifier (branch name)
-  PAW_DIR       .paw directory path
+  PAW_DIR       Workspace directory path
   PROJECT_DIR   Project root path
   WORKTREE_DIR  Worktree path (git mode only)
   WINDOW_ID     tmux window ID
@@ -161,7 +162,7 @@ Switch between running PAW project sessions.
 ### Features
   - Fuzzy search by project name
   - Shows all running PAW sessions except current
-  - Jumps to main window of selected project
+  - Switches to selected session (keeps active window)
 
 ## Prompt Editor (⌃Y)
 

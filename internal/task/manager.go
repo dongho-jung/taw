@@ -150,10 +150,15 @@ func (m *Manager) CreateTask(content string, customBranchName ...string) (*Task,
 	var name string
 
 	// Check for custom branch name
-	if len(customBranchName) > 0 && customBranchName[0] != "" {
+	if len(customBranchName) > 0 && strings.TrimSpace(customBranchName[0]) != "" {
 		name = sanitizeCustomBranchName(customBranchName[0])
-		logging.Debug("Using custom branch name: %s", name)
-	} else {
+		if name != "" {
+			logging.Debug("Using custom branch name: %s", name)
+		} else {
+			logging.Warn("Invalid custom branch name, falling back to generated name: %q", customBranchName[0])
+		}
+	}
+	if name == "" {
 		// Generate task name using Claude
 		logging.Trace("Generating task name with Claude: content_length=%d", len(content))
 		timer := logging.StartTimer("task name generation")

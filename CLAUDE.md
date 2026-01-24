@@ -64,6 +64,8 @@ go test ./... -coverprofile=coverage.out
 go tool cover -html=coverage.out -o coverage.html
 ```
 
+Note: `internal/fileutil/fileutil_test.go` covers atomic writes and corrupt backup handling.
+
 ### Test coverage by package
 
 | Package | Coverage | Notes |
@@ -119,6 +121,7 @@ paw/                           # This repository
 │   ├── claude/                # Claude API client
 │   ├── config/                # Configuration management
 │   ├── constants/             # Constants and magic numbers
+│   ├── fileutil/              # File safety helpers
 │   ├── embed/                 # Embedded assets
 │   │   └── assets/            # Embedded files (compiled into binary)
 │   │       ├── HELP.md        # Help text for users

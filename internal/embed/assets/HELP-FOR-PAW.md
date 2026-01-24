@@ -4,7 +4,7 @@ This guide helps you (the agent) perform PAW-related operations when users ask a
 
 ## Configuration Files
 
-PAW configuration lives in `$PAW_DIR/config` (project scope).
+PAW configuration lives in `$PAW_DIR/config` (project scope). PAW does not load a global config.
 
 ### When to Ask User (Use AskUserQuestion)
 
@@ -51,16 +51,7 @@ pre_worktree_hook: |
 ### Example: User requests "run npm install and build when worktree is created"
 
 1. Ask user: project or global level?
-2. Edit the appropriate config file:
-
-For project level (`$PAW_DIR/config`):
-```yaml
-pre_worktree_hook: |
-  npm install
-  npm run build
-```
-
-For global level (`$HOME/.paw/config`):
+2. Edit the project config file (`$PAW_DIR/config`):
 ```yaml
 pre_worktree_hook: |
   npm install
@@ -140,7 +131,7 @@ paw history show 1
 | Variable | Description |
 |----------|-------------|
 | `TASK_NAME` | Task identifier (branch name) |
-| `PAW_DIR` | `.paw` directory path |
+| `PAW_DIR` | Workspace directory path |
 | `PROJECT_DIR` | Project root path |
 | `WORKTREE_DIR` | Worktree path (git mode) |
 | `PAW_BIN` | PAW binary path |
