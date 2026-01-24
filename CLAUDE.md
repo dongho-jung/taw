@@ -215,8 +215,6 @@ PAW uses auto mode for workspaces:
 - **Git repositories**: global workspace under `~/.local/share/paw/workspaces/{project-id}/`
 - **Non-git directories**: local `.paw/` inside the project
 
-A local `.paw/` directory always takes priority if it already exists.
-
 To force a local workspace for a git repo, run `paw --local`.
 
 ### Theme

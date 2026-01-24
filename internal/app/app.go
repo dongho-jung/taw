@@ -33,9 +33,8 @@ type App struct {
 }
 
 // New creates a new App instance for the given project directory.
-// It resolves the PawDir based on:
-// 1. Local .paw directory if it exists (takes priority for backward compatibility)
-// 2. Auto mode (git repo -> global, non-git -> local)
+// It resolves the PawDir based on auto mode (git repo -> global, non-git -> local)
+// unless overridden.
 func New(projectDir string) (*App, error) {
 	return NewWithGitInfo(projectDir, false)
 }
@@ -61,7 +60,7 @@ func NewWithGitInfoWithWorkspace(projectDir string, isGitRepo bool, pawInProject
 	// Check if debug mode is enabled
 	debug := os.Getenv("PAW_DEBUG") == "1"
 
-	// Resolve workspace directory (local .paw takes priority if exists)
+	// Resolve workspace directory.
 	pawDir := config.GetWorkspaceDir(absPath, pawInProject, isGitRepo)
 	agentsDir := filepath.Join(pawDir, constants.AgentsDirName)
 

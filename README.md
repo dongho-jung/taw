@@ -111,6 +111,7 @@ Tasks merged externally (PR merge, direct branch merge, etc.) are cleaned up aut
 
 PAW writes a default `.paw/config` on first run (no setup wizard). Edit it to configure hooks and logging.
 
+Git repos use the global workspace by default; non-git directories use local `.paw/`.
 To force a local `.paw` workspace for a git repo, run `paw --local`.
 
 <details>

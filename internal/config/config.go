@@ -63,14 +63,9 @@ func ProjectWorkspaceID(projectDir string) string {
 }
 
 // GetWorkspaceDir returns the workspace directory for a project.
-// If localPawDir exists, it takes priority (for backward compatibility).
-// Otherwise, it uses auto mode (git -> global, non-git -> local) unless overridden.
+// It uses auto mode (git -> global, non-git -> local) unless overridden.
 func GetWorkspaceDir(projectDir string, pawInProject PawInProject, isGitRepo bool) string {
-	// Local .paw takes priority if it exists
 	localPawDir := filepath.Join(projectDir, constants.PawDirName)
-	if _, err := os.Stat(localPawDir); err == nil {
-		return localPawDir
-	}
 
 	// Resolve auto mode
 	useLocal := false

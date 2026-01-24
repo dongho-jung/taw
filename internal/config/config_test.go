@@ -296,7 +296,7 @@ func TestProjectWorkspaceID(t *testing.T) {
 	}
 }
 
-func TestGetWorkspaceDir_LocalPriority(t *testing.T) {
+func TestGetWorkspaceDir_IgnoresExistingLocalForGlobal(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Create local .paw directory
@@ -305,10 +305,27 @@ func TestGetWorkspaceDir_LocalPriority(t *testing.T) {
 		t.Fatalf("Failed to create local .paw: %v", err)
 	}
 
-	// Even with pawInProject=global, local should take priority if exists
+	globalDir := GlobalWorkspacesDir()
+	if globalDir == "" {
+		t.Skip("Could not determine home directory")
+	}
+
+	// With pawInProject=global, local should not take priority even if it exists
 	result := GetWorkspaceDir(tempDir, PawInProjectGlobal, true)
-	if result != localPawDir {
-		t.Errorf("GetWorkspaceDir() = %q, want %q (local should take priority)", result, localPawDir)
+	if result == localPawDir {
+		t.Fatalf("GetWorkspaceDir() returned local path %q; expected global workspace", result)
+	}
+	if !strings.HasPrefix(result, globalDir) {
+		t.Errorf("GetWorkspaceDir() = %q, expected to be under %q", result, globalDir)
+	}
+
+	// Auto mode for git repos should also use global workspace
+	autoResult := GetWorkspaceDir(tempDir, PawInProjectAuto, true)
+	if autoResult == localPawDir {
+		t.Fatalf("GetWorkspaceDir() returned local path %q for auto mode git repo; expected global workspace", autoResult)
+	}
+	if !strings.HasPrefix(autoResult, globalDir) {
+		t.Errorf("GetWorkspaceDir() = %q, expected to be under %q for auto mode git repo", autoResult, globalDir)
 	}
 }
 
@@ -319,6 +336,9 @@ func TestGetWorkspaceDir_GlobalLocation(t *testing.T) {
 	result := GetWorkspaceDir(tempDir, PawInProjectGlobal, true)
 
 	globalDir := GlobalWorkspacesDir()
+	if globalDir == "" {
+		t.Skip("Could not determine home directory")
+	}
 	if !strings.HasPrefix(result, globalDir) {
 		t.Errorf("GetWorkspaceDir() = %q, expected to be under %q", result, globalDir)
 	}
@@ -343,6 +363,9 @@ func TestGetWorkspaceDir_AutoGitRepo(t *testing.T) {
 	result := GetWorkspaceDir(tempDir, PawInProjectAuto, true)
 
 	globalDir := GlobalWorkspacesDir()
+	if globalDir == "" {
+		t.Skip("Could not determine home directory")
+	}
 	if !strings.HasPrefix(result, globalDir) {
 		t.Errorf("GetWorkspaceDir() = %q, expected to be under %q for git repo with auto mode", result, globalDir)
 	}
