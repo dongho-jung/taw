@@ -61,7 +61,10 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 	// Command shortcuts - all commands include env vars for proper context resolution
 	cmdNewTask := buildPawRunShell("toggle-new", ctx.SessionName)
 	cmdDoneTask := buildPawRunShell("done-task", ctx.SessionName)
-	cmdQuit := "detach-client"
+	// Restore terminal title on quit by using detach-client -E to run a command after detaching.
+	// This prints an empty OSC 0 sequence which resets the terminal title to its default
+	// (typically the running command or shell name, depending on the terminal emulator).
+	cmdQuit := `detach-client -E "printf '\\033]0;\\007'"`
 	cmdToggleLogs := buildPawRunShell("toggle-log", ctx.SessionName)
 	cmdToggleGitStatus := buildPawRunShell("toggle-git-status", ctx.SessionName)
 	cmdToggleBottom := buildPawRunShell("popup-shell", ctx.SessionName)
