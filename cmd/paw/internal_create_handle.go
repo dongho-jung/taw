@@ -460,7 +460,12 @@ func startNewTaskSession(tm tmux.Client, claudeClient claude.Client, agentPane s
 	time.Sleep(200 * time.Millisecond)
 
 	// Send task instruction - tell Claude to read from file
-	taskInstruction := buildTaskInstruction(t.GetUserPromptPath())
+	taskInstruction, err := buildTaskInstruction(t.GetUserPromptPath())
+	if err != nil {
+		logging.Warn("Failed to build task instruction: %v", err)
+		_ = tm.DisplayMessage("Failed to read task prompt. Check .paw/log for details.", 4000)
+		return
+	}
 	logging.Trace("Sending task instruction: length=%d", len(taskInstruction))
 	if err := claudeClient.SendInputWithRetry(tm, agentPane, taskInstruction, 5); err != nil {
 		logging.Warn("Failed to send task instruction: %v", err)

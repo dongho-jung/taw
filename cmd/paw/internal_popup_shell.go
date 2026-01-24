@@ -332,7 +332,10 @@ func checkAndRecoverStdinInjection(tm tmux.Client, t *task.Task, windowID, agent
 	logging.Log("Detected failed stdin injection for task %s, recovering...", t.Name)
 
 	// Build and send task instruction
-	taskInstruction := buildTaskInstruction(userPromptPath)
+	taskInstruction, err := buildTaskInstruction(userPromptPath)
+	if err != nil {
+		return fmt.Errorf("failed to build task instruction: %w", err)
+	}
 
 	logging.Debug("Sending task instruction")
 

@@ -360,11 +360,14 @@ func getShell() string {
 	return shell
 }
 
-func buildTaskInstruction(userPromptPath string) string {
+func buildTaskInstruction(userPromptPath string) (string, error) {
 	content, err := os.ReadFile(userPromptPath)
 	if err != nil {
-		// Fallback to the old behavior if we can't read the file
-		return fmt.Sprintf("Read and execute the task from '%s'", userPromptPath)
+		return "", fmt.Errorf("failed to read user prompt: %w", err)
 	}
-	return string(content)
+	trimmed := strings.TrimSpace(string(content))
+	if trimmed == "" {
+		return "", fmt.Errorf("user prompt is empty")
+	}
+	return string(content), nil
 }
