@@ -26,9 +26,22 @@ var popupShellCmd = &cobra.Command{
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
-		// Check if shell pane is currently visible - if so, hide it (toggle off)
 		paneID, _ := tm.GetOption("@paw_shell_pane_id")
-		if paneID != "" && tm.HasPane(paneID) {
+		hasShellPane := paneID != "" && tm.HasPane(paneID)
+		if paneID != "" && !hasShellPane {
+			_ = tm.SetOption("@paw_shell_pane_id", "", true)
+			paneID = ""
+		}
+
+		stashedPaneID, _ := tm.GetOption("@paw_stashed_shell_pane_id")
+		hasStashedPane := stashedPaneID != "" && tm.HasPane(stashedPaneID)
+		if stashedPaneID != "" && !hasStashedPane {
+			_ = tm.SetOption("@paw_stashed_shell_pane_id", "", true)
+			stashedPaneID = ""
+		}
+
+		// Check if shell pane is currently visible - if so, hide it (toggle off)
+		if hasShellPane {
 			// Get or create stash window
 			stashWindowID, err := getOrCreateStashWindow(tm, sessionName)
 			if err != nil {
@@ -39,7 +52,7 @@ var popupShellCmd = &cobra.Command{
 			}
 
 			// Move shell pane to stash window
-			if err := tm.JoinPane(paneID, stashWindowID, tmux.JoinOpts{}); err != nil {
+			if err := tm.JoinPane(paneID, stashWindowID, tmux.JoinOpts{Detached: true}); err != nil {
 				// Fallback: kill the pane if join fails
 				_ = tm.KillPane(paneID)
 				_ = tm.SetOption("@paw_shell_pane_id", "", true)
@@ -54,8 +67,7 @@ var popupShellCmd = &cobra.Command{
 		}
 
 		// Toggle ON: Check if there's a stashed shell pane we can restore
-		stashedPaneID, _ := tm.GetOption("@paw_stashed_shell_pane_id")
-		if stashedPaneID != "" && tm.HasPane(stashedPaneID) {
+		if hasStashedPane {
 			// Get current window ID
 			currentWindowID, err := tm.Display("#{window_id}")
 			if err != nil {
@@ -68,6 +80,7 @@ var popupShellCmd = &cobra.Command{
 				Size: "40%",
 				Full: true,
 			}); err != nil {
+				_ = tm.SetOption("@paw_stashed_shell_pane_id", "", true)
 				// Stash is corrupted, create new pane
 				return createNewShellPane(tm, sessionName)
 			}
@@ -91,18 +104,16 @@ func getOrCreateStashWindow(tm tmux.Client, sessionName string) (string, error) 
 	// Check if stash window already exists
 	stashWindowID, _ := tm.GetOption("@paw_stash_window_id")
 	if stashWindowID != "" {
-		// Verify it still exists by checking if we can display its info
-		if _, err := tm.Display("#{window_id}"); err == nil {
-			// Try to list windows to verify stash window exists
-			windows, err := tm.ListWindows()
-			if err == nil {
-				for _, w := range windows {
-					if w.ID == stashWindowID {
-						return stashWindowID, nil
-					}
+		windows, err := tm.ListWindows()
+		if err == nil {
+			for _, w := range windows {
+				if w.ID == stashWindowID {
+					hideStashWindow(tm, stashWindowID)
+					return stashWindowID, nil
 				}
 			}
 		}
+		_ = tm.SetOption("@paw_stash_window_id", "", true)
 	}
 
 	// Create new stash window (detached, so it doesn't become active)
@@ -117,7 +128,16 @@ func getOrCreateStashWindow(tm tmux.Client, sessionName string) (string, error) 
 
 	windowID = strings.TrimSpace(windowID)
 	_ = tm.SetOption("@paw_stash_window_id", windowID, true)
+	hideStashWindow(tm, windowID)
 	return windowID, nil
+}
+
+func hideStashWindow(tm tmux.Client, windowID string) {
+	if windowID == "" {
+		return
+	}
+	_ = tm.Run("set-window-option", "-t", windowID, "window-status-format", "")
+	_ = tm.Run("set-window-option", "-t", windowID, "window-status-current-format", "")
 }
 
 // createNewShellPane creates a new shell pane at the bottom of the current window.
@@ -144,8 +164,15 @@ func createNewShellPane(tm tmux.Client, sessionName string) error {
 		return fmt.Errorf("failed to create shell pane: %w", err)
 	}
 
+	newPaneID = strings.TrimSpace(newPaneID)
+
 	// Store pane ID for toggle
-	_ = tm.SetOption("@paw_shell_pane_id", strings.TrimSpace(newPaneID), true)
+	_ = tm.SetOption("@paw_shell_pane_id", newPaneID, true)
+
+	// Explicitly select the new pane to ensure it's visible
+	// This is needed because after Ctrl+D kills a pane, tmux may leave
+	// the focus in an unexpected state
+	_ = tm.SelectPane(newPaneID)
 
 	return nil
 }

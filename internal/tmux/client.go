@@ -128,9 +128,9 @@ type PopupOpts struct {
 	Height      string
 	Title       string
 	Style       string
-	Close       bool // -E flag: close on exit
-	NoBorder    bool   // -B flag: no border
-	BorderStyle string // -b flag: border lines
+	Close       bool              // -E flag: close on exit
+	NoBorder    bool              // -B flag: no border
+	BorderStyle string            // -b flag: border lines
 	Directory   string            // -d flag: working directory
 	Env         map[string]string // -e flag: environment variables
 }
@@ -160,6 +160,7 @@ type JoinOpts struct {
 	Size       string // -l flag: percentage (e.g., "40%") or lines
 	Before     bool   // -b flag: join before target
 	Full       bool   // -f flag: full-width/height join
+	Detached   bool   // -d flag: don't switch to the joined pane
 }
 
 // BreakOpts contains options for break-pane.
@@ -453,6 +454,10 @@ func (c *tmuxClient) HasPane(target string) bool {
 // target: destination window/pane
 func (c *tmuxClient) JoinPane(source, target string, opts JoinOpts) error {
 	args := []string{"join-pane", "-s", source, "-t", target}
+
+	if opts.Detached {
+		args = append(args, "-d")
+	}
 
 	if opts.Horizontal {
 		args = append(args, "-h")
