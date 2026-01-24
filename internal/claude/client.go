@@ -334,6 +334,9 @@ func (c *claudeClient) WaitForReady(tm tmux.Client, target string) error {
 // SendInput sends input to Claude in the specified tmux pane.
 // Uses Escape followed by CR to properly submit multi-line input.
 func (c *claudeClient) SendInput(tm tmux.Client, target, input string) error {
+	lineCount := strings.Count(input, "\n") + 1
+	logging.Info("SendInput: target=%s lines=%d bytes=%d", target, lineCount, len(input))
+
 	// First send the text literally
 	if err := tm.SendKeysLiteral(target, input); err != nil {
 		return fmt.Errorf("failed to send input: %w", err)
@@ -341,19 +344,38 @@ func (c *claudeClient) SendInput(tm tmux.Client, target, input string) error {
 
 	// Then send Escape followed by Enter to submit
 	// This is how Claude Code handles multi-line input submission
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
 
 	if err := tm.SendKeys(target, "Escape"); err != nil {
 		return fmt.Errorf("failed to send Escape: %w", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(80 * time.Millisecond)
 
 	if err := tm.SendKeys(target, "Enter"); err != nil {
 		return fmt.Errorf("failed to send Enter: %w", err)
 	}
 
+	if lineCount > 1 {
+		time.Sleep(200 * time.Millisecond)
+		if pasteIndicatorVisible(tm, target) {
+			logging.Info("SendInput: paste indicator still visible, sending Enter again")
+			if err := tm.SendKeys(target, "Enter"); err != nil {
+				logging.Warn("SendInput: failed to send extra Enter: %v", err)
+			}
+		}
+	}
+
 	return nil
+}
+
+func pasteIndicatorVisible(tm tmux.Client, target string) bool {
+	content, err := tm.CapturePane(target, 5)
+	if err != nil {
+		logging.Debug("SendInput: capture after send failed: %v", err)
+		return false
+	}
+	return strings.Contains(content, "Pasted text")
 }
 
 // SendTrustResponse sends 'y' if a trust prompt is detected.
