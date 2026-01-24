@@ -15,6 +15,9 @@ import (
 	"github.com/dongho-jung/paw/internal/tmux"
 )
 
+// stashWindowName is the name of the hidden window used to stash the shell pane.
+const stashWindowName = "_paw_stash"
+
 var popupShellCmd = &cobra.Command{
 	Use:   "popup-shell [session]",
 	Short: "Toggle shell pane at bottom 40%",
@@ -23,41 +26,128 @@ var popupShellCmd = &cobra.Command{
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
-		// Check if shell pane exists - if so, close it (toggle off)
+		// Check if shell pane is currently visible - if so, hide it (toggle off)
 		paneID, _ := tm.GetOption("@paw_shell_pane_id")
 		if paneID != "" && tm.HasPane(paneID) {
-			_ = tm.KillPane(paneID)
+			// Get or create stash window
+			stashWindowID, err := getOrCreateStashWindow(tm, sessionName)
+			if err != nil {
+				// Fallback: kill the pane if we can't stash it
+				_ = tm.KillPane(paneID)
+				_ = tm.SetOption("@paw_shell_pane_id", "", true)
+				return nil
+			}
+
+			// Move shell pane to stash window
+			if err := tm.JoinPane(paneID, stashWindowID, tmux.JoinOpts{}); err != nil {
+				// Fallback: kill the pane if join fails
+				_ = tm.KillPane(paneID)
+				_ = tm.SetOption("@paw_shell_pane_id", "", true)
+				_ = tm.SetOption("@paw_stashed_shell_pane_id", "", true)
+				return nil
+			}
+
+			// Store pane ID in stash and clear visible pane ID
+			_ = tm.SetOption("@paw_stashed_shell_pane_id", paneID, true)
 			_ = tm.SetOption("@paw_shell_pane_id", "", true)
 			return nil
 		}
 
-		// Get current pane's working directory
-		panePath, err := tm.Display("#{pane_current_path}")
-		if err != nil || panePath == "" {
-			appCtx, err := getAppFromSession(sessionName)
+		// Toggle ON: Check if there's a stashed shell pane we can restore
+		stashedPaneID, _ := tm.GetOption("@paw_stashed_shell_pane_id")
+		if stashedPaneID != "" && tm.HasPane(stashedPaneID) {
+			// Get current window ID
+			currentWindowID, err := tm.Display("#{window_id}")
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get current window: %w", err)
 			}
-			panePath = appCtx.ProjectDir
+			currentWindowID = strings.TrimSpace(currentWindowID)
+
+			// Bring back the stashed pane
+			if err := tm.JoinPane(stashedPaneID, currentWindowID, tmux.JoinOpts{
+				Size: "40%",
+				Full: true,
+			}); err != nil {
+				// Stash is corrupted, create new pane
+				return createNewShellPane(tm, sessionName)
+			}
+
+			// Update state: pane is now visible
+			_ = tm.SetOption("@paw_shell_pane_id", stashedPaneID, true)
+			_ = tm.SetOption("@paw_stashed_shell_pane_id", "", true)
+
+			// Select the restored shell pane
+			_ = tm.SelectPane(stashedPaneID)
+			return nil
 		}
-		panePath = strings.TrimSpace(panePath)
 
-		// Create shell pane at bottom 40%
-		newPaneID, err := tm.SplitWindowPane(tmux.SplitOpts{
-			Horizontal: false, // vertical split (top/bottom)
-			Size:       "40%",
-			StartDir:   panePath,
-			Full:       true, // span entire window width
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create shell pane: %w", err)
-		}
-
-		// Store pane ID for toggle
-		_ = tm.SetOption("@paw_shell_pane_id", strings.TrimSpace(newPaneID), true)
-
-		return nil
+		// No stashed pane, create a new one
+		return createNewShellPane(tm, sessionName)
 	},
+}
+
+// getOrCreateStashWindow returns the stash window ID, creating it if necessary.
+func getOrCreateStashWindow(tm tmux.Client, sessionName string) (string, error) {
+	// Check if stash window already exists
+	stashWindowID, _ := tm.GetOption("@paw_stash_window_id")
+	if stashWindowID != "" {
+		// Verify it still exists by checking if we can display its info
+		if _, err := tm.Display("#{window_id}"); err == nil {
+			// Try to list windows to verify stash window exists
+			windows, err := tm.ListWindows()
+			if err == nil {
+				for _, w := range windows {
+					if w.ID == stashWindowID {
+						return stashWindowID, nil
+					}
+				}
+			}
+		}
+	}
+
+	// Create new stash window (detached, so it doesn't become active)
+	windowID, err := tm.NewWindow(tmux.WindowOpts{
+		Target:   sessionName,
+		Name:     stashWindowName,
+		Detached: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create stash window: %w", err)
+	}
+
+	windowID = strings.TrimSpace(windowID)
+	_ = tm.SetOption("@paw_stash_window_id", windowID, true)
+	return windowID, nil
+}
+
+// createNewShellPane creates a new shell pane at the bottom of the current window.
+func createNewShellPane(tm tmux.Client, sessionName string) error {
+	// Get current pane's working directory
+	panePath, err := tm.Display("#{pane_current_path}")
+	if err != nil || panePath == "" {
+		appCtx, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+		panePath = appCtx.ProjectDir
+	}
+	panePath = strings.TrimSpace(panePath)
+
+	// Create shell pane at bottom 40%
+	newPaneID, err := tm.SplitWindowPane(tmux.SplitOpts{
+		Horizontal: false, // vertical split (top/bottom)
+		Size:       "40%",
+		StartDir:   panePath,
+		Full:       true, // span entire window width
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create shell pane: %w", err)
+	}
+
+	// Store pane ID for toggle
+	_ = tm.SetOption("@paw_shell_pane_id", strings.TrimSpace(newPaneID), true)
+
+	return nil
 }
 
 var showCurrentTaskCmd = &cobra.Command{

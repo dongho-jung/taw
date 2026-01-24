@@ -68,6 +68,8 @@ type Client interface {
 	SelectPane(target string) error
 	KillPane(target string) error
 	HasPane(target string) bool
+	JoinPane(source, target string, opts JoinOpts) error
+	BreakPane(source string, opts BreakOpts) (string, error)
 	SendKeys(target string, keys ...string) error
 	SendKeysLiteral(target, text string) error
 	CapturePane(target string, lines int) (string, error)
@@ -150,6 +152,21 @@ type SplitOpts struct {
 	Command    string // Command to run in the new pane
 	Before     bool   // -b flag: create pane before target
 	Full       bool   // -f flag: full-width/height split spanning entire window
+}
+
+// JoinOpts contains options for join-pane.
+type JoinOpts struct {
+	Horizontal bool   // -h for horizontal join, default is vertical (-v)
+	Size       string // -l flag: percentage (e.g., "40%") or lines
+	Before     bool   // -b flag: join before target
+	Full       bool   // -f flag: full-width/height join
+}
+
+// BreakOpts contains options for break-pane.
+type BreakOpts struct {
+	TargetWindow string // -t flag: target window for the broken pane
+	Detached     bool   // -d flag: don't make new window the current window
+	Name         string // -n flag: window name
 }
 
 // Window represents a tmux window.
@@ -429,6 +446,54 @@ func (c *tmuxClient) HasPane(target string) bool {
 	// Check if pane exists by trying to get its info
 	_, err := c.RunWithOutput("display-message", "-t", target, "-p", "#{pane_id}")
 	return err == nil
+}
+
+// JoinPane moves a pane from source to target window/pane.
+// source: pane to move (e.g., "%5" or "session:window.pane")
+// target: destination window/pane
+func (c *tmuxClient) JoinPane(source, target string, opts JoinOpts) error {
+	args := []string{"join-pane", "-s", source, "-t", target}
+
+	if opts.Horizontal {
+		args = append(args, "-h")
+	} else {
+		args = append(args, "-v")
+	}
+
+	if opts.Size != "" {
+		args = append(args, "-l", opts.Size)
+	}
+
+	if opts.Before {
+		args = append(args, "-b")
+	}
+
+	if opts.Full {
+		args = append(args, "-f")
+	}
+
+	return c.Run(args...)
+}
+
+// BreakPane breaks a pane out into a new or existing window.
+// source: pane to break out (e.g., "%5" or "session:window.pane")
+// Returns the new pane ID.
+func (c *tmuxClient) BreakPane(source string, opts BreakOpts) (string, error) {
+	args := []string{"break-pane", "-P", "-F", "#{pane_id}", "-s", source}
+
+	if opts.TargetWindow != "" {
+		args = append(args, "-t", opts.TargetWindow)
+	}
+
+	if opts.Detached {
+		args = append(args, "-d")
+	}
+
+	if opts.Name != "" {
+		args = append(args, "-n", opts.Name)
+	}
+
+	return c.RunWithOutput(args...)
 }
 
 func (c *tmuxClient) GetPaneCommand(target string) (string, error) {

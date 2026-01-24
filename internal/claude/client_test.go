@@ -353,6 +353,12 @@ func (m *mockTmuxClient) RunWithOutput(args ...string) (string, error)        { 
 func (m *mockTmuxClient) Display(format string) (string, error)               { return "", nil }
 func (m *mockTmuxClient) DisplayMultiple(formats ...string) ([]string, error) { return nil, nil }
 func (m *mockTmuxClient) DisplayMessage(message string, durationMs int) error { return nil }
+func (m *mockTmuxClient) JoinPane(source, target string, opts tmux.JoinOpts) error {
+	return nil
+}
+func (m *mockTmuxClient) BreakPane(source string, opts tmux.BreakOpts) (string, error) {
+	return "", nil
+}
 
 func TestIsClaudeRunning(t *testing.T) {
 	tests := []struct {
