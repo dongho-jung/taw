@@ -9,7 +9,7 @@ import (
 
 func TestTaskInput_RenderOptionsPanel_Actual(t *testing.T) {
 	// Create actual TaskInput
-	m := NewTaskInputWithTasks(nil)
+	m := NewTaskInputWithOptions(nil, true)
 	m.textareaHeight = 5 // Set consistent height
 	m.isDark = true
 

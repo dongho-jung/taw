@@ -12,7 +12,7 @@ import (
 // 2. Auto-expand as content grows (up to 50% of screen)
 // 3. Scrollbar appears when content exceeds max height
 func TestTaskInput_DynamicHeight(t *testing.T) {
-	m := NewTaskInputWithTasks(nil)
+	m := NewTaskInputWithOptions(nil, true)
 
 	// Simulate window size: 100x40 terminal
 	// Max height should be 50% of (40 - 4) = 18 lines
@@ -96,7 +96,7 @@ func TestTaskInput_DynamicHeight(t *testing.T) {
 
 // TestTaskInput_MinHeight verifies the minimum height is always maintained
 func TestTaskInput_MinHeight(t *testing.T) {
-	m := NewTaskInputWithTasks(nil)
+	m := NewTaskInputWithOptions(nil, true)
 
 	// Simulate window size
 	windowMsg := tea.WindowSizeMsg{
@@ -135,7 +135,7 @@ func TestTaskInput_MaxHeightCalculation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := NewTaskInputWithTasks(nil)
+			m := NewTaskInputWithOptions(nil, true)
 			windowMsg := tea.WindowSizeMsg{
 				Width:  100,
 				Height: tc.screenHeight,

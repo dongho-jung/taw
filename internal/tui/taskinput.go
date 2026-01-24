@@ -170,18 +170,6 @@ type TaskInputResult struct {
 	JumpTarget *JumpTarget // Non-nil if user requested to jump to an external project task
 }
 
-// NewTaskInput creates a new task input model.
-// Deprecated: Use NewTaskInputWithOptions for explicit git mode control.
-func NewTaskInput() *TaskInput {
-	return NewTaskInputWithOptions(nil, true) // Default to git mode for backward compatibility
-}
-
-// NewTaskInputWithTasks creates a new task input model with active task list.
-// Deprecated: Use NewTaskInputWithOptions for explicit git mode control.
-func NewTaskInputWithTasks(activeTasks []string) *TaskInput {
-	return NewTaskInputWithOptions(activeTasks, true) // Default to git mode for backward compatibility
-}
-
 // NewTaskInputWithOptions creates a new task input model with active task list and git mode flag.
 func NewTaskInputWithOptions(activeTasks []string, isGitRepo bool) *TaskInput {
 	// Detect dark mode BEFORE bubbletea starts

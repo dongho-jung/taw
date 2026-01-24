@@ -5,7 +5,7 @@ import (
 )
 
 func TestHandleTextareaMouse_CoordinateCalculation(t *testing.T) {
-	m := NewTaskInputWithTasks(nil)
+	m := NewTaskInputWithOptions(nil, true)
 	m.width = 100
 	m.height = 30
 	m.textareaHeight = 5
@@ -97,7 +97,7 @@ func TestHandleTextareaMouse_CoordinateCalculation(t *testing.T) {
 }
 
 func TestGetKanbanRelativeY(t *testing.T) {
-	m := NewTaskInputWithTasks(nil)
+	m := NewTaskInputWithOptions(nil, true)
 	m.textareaHeight = 5
 
 	// Layout:
@@ -129,7 +129,7 @@ func TestGetKanbanRelativeY(t *testing.T) {
 }
 
 func TestTextareaSelection_DragSelection(t *testing.T) {
-	m := NewTaskInputWithTasks(nil)
+	m := NewTaskInputWithOptions(nil, true)
 	m.width = 100
 	m.height = 30
 	m.textareaHeight = 5
