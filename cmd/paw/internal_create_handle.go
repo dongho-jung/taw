@@ -21,7 +21,6 @@ import (
 	"github.com/dongho-jung/paw/internal/service"
 	"github.com/dongho-jung/paw/internal/task"
 	"github.com/dongho-jung/paw/internal/tmux"
-	"github.com/dongho-jung/paw/internal/tui"
 )
 
 var handleTaskCmd = &cobra.Command{
@@ -225,12 +224,7 @@ var handleTaskCmd = &cobra.Command{
 		} else {
 			contextRef = contextPath
 		}
-		attachments, err := readImageAttachments(t.GetAttachmentsFilePath())
-		if err != nil {
-			logging.Warn("Failed to load attachments: %v", err)
-			attachments = nil
-		}
-		userPrompt := buildUserPrompt(t.Content, contextRef, attachments)
+		userPrompt := buildUserPrompt(t.Content, contextRef)
 
 		// Save prompts (errors are non-fatal but should be logged)
 		if err := os.WriteFile(t.GetSystemPromptPath(), []byte(systemPrompt), 0644); err != nil {
@@ -379,21 +373,12 @@ func buildTaskContextPrompt(appCtx *app.App, taskName, workDir string) string {
 	return userPrompt.String()
 }
 
-func buildUserPrompt(taskContent, contextPath string, attachments []tui.ImageAttachment) string {
+func buildUserPrompt(taskContent, contextPath string) string {
 	var userPrompt strings.Builder
 	if contextPath != "" {
 		userPrompt.WriteString(fmt.Sprintf("@%s\n\n", contextPath))
 	}
 	userPrompt.WriteString(taskContent)
-	if len(attachments) > 0 {
-		userPrompt.WriteString("\n\nAttached images:\n")
-		for _, attachment := range attachments {
-			userPrompt.WriteString(attachment.Label)
-			userPrompt.WriteString(":\n@")
-			userPrompt.WriteString(attachment.Path)
-			userPrompt.WriteString("\n")
-		}
-	}
 	return userPrompt.String()
 }
 

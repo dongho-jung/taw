@@ -5,12 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/v2/key"
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 
 	"github.com/dongho-jung/paw/internal/config"
-	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/service"
 	"github.com/dongho-jung/paw/internal/tmux"
 	"github.com/dongho-jung/paw/internal/tui/textarea"
@@ -67,8 +65,6 @@ type TaskInput struct {
 	isDark      bool     // Cached dark mode detection (must be detected before bubbletea starts)
 	isGitRepo   bool     // Whether the project is a git repository
 	pawDir      string
-	// Image attachments pasted into the task input.
-	imageAttachments []ImageAttachment
 
 	// Dynamic textarea height
 	textareaHeight    int // Current textarea height (visible lines)
@@ -168,11 +164,10 @@ type jumpToTaskMsg struct {
 
 // TaskInputResult contains the result of the task input.
 type TaskInputResult struct {
-	Content          string
-	ImageAttachments []ImageAttachment
-	Options          *config.TaskOptions
-	Cancelled        bool
-	JumpTarget       *JumpTarget // Non-nil if user requested to jump to an external project task
+	Content    string
+	Options    *config.TaskOptions
+	Cancelled  bool
+	JumpTarget *JumpTarget // Non-nil if user requested to jump to an external project task
 }
 
 // NewTaskInputWithOptions creates a new task input model with active task list and git mode flag.
@@ -509,8 +504,8 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Handle Ctrl+C or Cmd+C for copying selection (textarea or kanban)
 		// Cmd+C works on terminals that support the Kitty keyboard protocol
-		keyInfo := msg.Key()
-		isCopyKey := keyStr == "ctrl+c" || (keyInfo.Code == 'c' && keyInfo.Mod&tea.ModSuper != 0)
+		key := msg.Key()
+		isCopyKey := keyStr == "ctrl+c" || (key.Code == 'c' && key.Mod&tea.ModSuper != 0)
 		if isCopyKey {
 			if m.focusPanel == FocusPanelLeft && m.textarea.HasSelection() {
 				_ = m.textarea.CopySelection()
@@ -520,14 +515,6 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.kanban.CopySelection()
 				return m, nil
 			}
-		}
-
-		if m.focusPanel == FocusPanelLeft && key.Matches(msg, m.textarea.KeyMap.Paste) {
-			logging.Info("taskinput: paste key detected on input panel")
-			if m.handleImagePaste() {
-				return m, nil
-			}
-			logging.Debug("taskinput: no image handled, falling back to text paste")
 		}
 
 		// Global keys (work in both panels)

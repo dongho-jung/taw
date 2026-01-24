@@ -100,16 +100,6 @@ func (t *Task) GetTaskContextPath() string {
 	return filepath.Join(t.AgentDir, constants.TaskContextFileName)
 }
 
-// GetAttachmentsDir returns the path to the task attachments directory.
-func (t *Task) GetAttachmentsDir() string {
-	return filepath.Join(t.AgentDir, constants.TaskAttachmentsDirName)
-}
-
-// GetAttachmentsFilePath returns the path to the task attachments metadata file.
-func (t *Task) GetAttachmentsFilePath() string {
-	return filepath.Join(t.AgentDir, constants.TaskAttachmentsFileName)
-}
-
 // GetTabLockDir returns the path to the tab-lock directory.
 func (t *Task) GetTabLockDir() string {
 	return filepath.Join(t.AgentDir, constants.TabLockDirName)

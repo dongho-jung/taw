@@ -64,13 +64,11 @@ func embedScrollbarInTextarea(view string, scrollbar string, visibleLines int) s
 // Result returns the task input result.
 func (m *TaskInput) Result() TaskInputResult {
 	m.applyOptionInputValues()
-	content := strings.TrimSpace(m.textarea.Value())
 	return TaskInputResult{
-		Content:          content,
-		ImageAttachments: m.selectedImageAttachments(content),
-		Options:          m.options,
-		Cancelled:        m.cancelled,
-		JumpTarget:       m.jumpTarget,
+		Content:    strings.TrimSpace(m.textarea.Value()),
+		Options:    m.options,
+		Cancelled:  m.cancelled,
+		JumpTarget: m.jumpTarget,
 	}
 }
 
@@ -127,10 +125,5 @@ func RunTaskInputWithOptions(activeTasks []string, isGitRepo bool, initialConten
 
 	input := finalModel.(*TaskInput)
 	result := input.Result()
-	if result.Cancelled {
-		input.cleanupImageAttachments(nil)
-	} else {
-		input.cleanupImageAttachments(result.ImageAttachments)
-	}
 	return &result, nil
 }

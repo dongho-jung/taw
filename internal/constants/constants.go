@@ -179,32 +179,29 @@ const (
 
 // Directory and file names
 const (
-	PawDirName              = ".paw"
-	AgentsDirName           = "agents"
-	HistoryDirName          = "history"
-	WindowMapFileName       = "window-map.json"
-	ConfigFileName          = "config"
-	LogFileName             = "log"
-	PromptFileName          = "PROMPT.md"
-	TaskFileName            = "task"
-	InputImageDirName       = "input-images"
-	TaskContextFileName     = ".task-context"
-	TaskAttachmentsDirName  = "attachments"
-	TaskAttachmentsFileName = ".attachments.json"
-	TabLockDirName          = ".tab-lock"
-	WindowIDFileName        = "window_id"
-	PRFileName              = ".pr"
-	GitRepoMarker           = ".is-git-repo"
-	GlobalPromptLink        = ".global-prompt"
-	ClaudeLink              = ".claude"
-	BinSymlinkName          = "bin"                 // Symlink to current paw binary (updated on attach)
-	VersionFileName         = ".version"            // Stores PAW version for upgrade detection
-	HistorySelectionFile    = ".history-selection"  // Temp file for Ctrl+R history selection
-	TemplateSelectionFile   = ".template-selection" // Temp file for Ctrl+T template selection
-	TemplateDraftFile       = ".template-draft"     // Temp file for Ctrl+T template creation
-	StatusSignalFileName    = ".status-signal"      // Temp file for Claude to signal status directly
-	ProjectSwitchFileName   = ".project-switch"     // Temp file for project picker to signal switch target
-	ProjectPathFileName     = ".project-path"       // Stores project path for global workspaces
+	PawDirName            = ".paw"
+	AgentsDirName         = "agents"
+	HistoryDirName        = "history"
+	WindowMapFileName     = "window-map.json"
+	ConfigFileName        = "config"
+	LogFileName           = "log"
+	PromptFileName        = "PROMPT.md"
+	TaskFileName          = "task"
+	TaskContextFileName   = ".task-context"
+	TabLockDirName        = ".tab-lock"
+	WindowIDFileName      = "window_id"
+	PRFileName            = ".pr"
+	GitRepoMarker         = ".is-git-repo"
+	GlobalPromptLink      = ".global-prompt"
+	ClaudeLink            = ".claude"
+	BinSymlinkName        = "bin"                 // Symlink to current paw binary (updated on attach)
+	VersionFileName       = ".version"            // Stores PAW version for upgrade detection
+	HistorySelectionFile  = ".history-selection"  // Temp file for Ctrl+R history selection
+	TemplateSelectionFile = ".template-selection" // Temp file for Ctrl+T template selection
+	TemplateDraftFile     = ".template-draft"     // Temp file for Ctrl+T template creation
+	StatusSignalFileName  = ".status-signal"      // Temp file for Claude to signal status directly
+	ProjectSwitchFileName = ".project-switch"     // Temp file for project picker to signal switch target
+	ProjectPathFileName   = ".project-path"       // Stores project path for global workspaces
 )
 
 // Prompts directory and file names

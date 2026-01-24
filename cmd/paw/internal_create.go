@@ -212,20 +212,6 @@ var newTaskCmd = &cobra.Command{
 				optsTmpPath = optsTmpFile.Name()
 			}
 
-			var attachmentsTmpPath string
-			if len(result.ImageAttachments) > 0 {
-				attachmentsTmpPath = tmpFile.Name() + constants.TaskAttachmentsFileName
-				if err := writeImageAttachments(attachmentsTmpPath, result.ImageAttachments); err != nil {
-					_ = os.Remove(tmpFile.Name())
-					if optsTmpPath != "" {
-						_ = os.Remove(optsTmpPath)
-					}
-					removeImageAttachments(result.ImageAttachments)
-					fmt.Printf("Failed to write attachments: %v\n", err)
-					continue
-				}
-			}
-
 			// Spawn task creation in a separate window (non-blocking)
 			pawBin, _ := os.Executable()
 			spawnArgs := []string{"internal", "spawn-task", sessionName, tmpFile.Name()}
@@ -237,12 +223,6 @@ var newTaskCmd = &cobra.Command{
 				_ = os.Remove(tmpFile.Name())
 				if optsTmpPath != "" {
 					_ = os.Remove(optsTmpPath)
-				}
-				if attachmentsTmpPath != "" {
-					_ = os.Remove(attachmentsTmpPath)
-				}
-				if len(result.ImageAttachments) > 0 {
-					removeImageAttachments(result.ImageAttachments)
 				}
 				logging.Warn("Failed to start spawn-task: %v", err)
 				fmt.Printf("Failed to start task: %v\n", err)
@@ -317,16 +297,6 @@ var spawnTaskCmd = &cobra.Command{
 			_ = os.Remove(optsFile)
 		}
 
-		attachmentsPath := contentFile + constants.TaskAttachmentsFileName
-		attachments, err := readImageAttachments(attachmentsPath)
-		if err != nil {
-			logging.Warn("Failed to read attachments file: %v", err)
-			attachments = nil
-		}
-		if err := os.Remove(attachmentsPath); err != nil && !os.IsNotExist(err) {
-			logging.Debug("Failed to remove attachments file: %v", err)
-		}
-
 		// Clean up temp file
 		_ = os.Remove(contentFile)
 
@@ -394,18 +364,6 @@ var spawnTaskCmd = &cobra.Command{
 				logging.Warn("Failed to save task options: %v", err)
 			} else {
 				logging.Debug("Task options saved: model=%s", taskOpts.Model)
-			}
-		}
-
-		if len(attachments) > 0 {
-			moved, err := moveImageAttachments(attachments, newTask.GetAttachmentsDir())
-			if err != nil {
-				logging.Warn("Failed to move attachments: %v", err)
-			}
-			if len(moved) > 0 {
-				if err := writeImageAttachments(newTask.GetAttachmentsFilePath(), moved); err != nil {
-					logging.Warn("Failed to save attachments metadata: %v", err)
-				}
 			}
 		}
 
