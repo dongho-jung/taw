@@ -280,21 +280,37 @@ func trimPreview(preview string) string {
 // trimPreviewFromLines cleans up the preview text from pre-split lines.
 // This avoids redundant strings.Split calls when processing multiple functions.
 func trimPreviewFromLines(lines []string) string {
-	// Get last 3 non-empty lines
-	var nonEmpty []string
+	// Get last 3 non-empty lines using a ring buffer approach
+	// This avoids collecting all non-empty lines and then slicing
+	var ring [3]string
+	count := 0
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed != "" {
-			nonEmpty = append(nonEmpty, trimmed)
+			ring[count%3] = trimmed
+			count++
 		}
 	}
 
-	// Keep only last 3 lines
-	if len(nonEmpty) > 3 {
-		nonEmpty = nonEmpty[len(nonEmpty)-3:]
+	if count == 0 {
+		return ""
 	}
 
-	return strings.Join(nonEmpty, "\n")
+	// Build result from ring buffer
+	n := count
+	if n > 3 {
+		n = 3
+	}
+	result := make([]string, n)
+	start := 0
+	if count > 3 {
+		start = count % 3
+	}
+	for i := 0; i < n; i++ {
+		result[i] = ring[(start+i)%3]
+	}
+
+	return strings.Join(result, "\n")
 }
 
 // extractCurrentAction extracts the agent's current action from pane capture.

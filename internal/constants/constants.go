@@ -330,6 +330,48 @@ var commitTypePrefixes = []commitTypeMapping{
 	{"build/", "build"},
 }
 
+// commitTypeKeywords is a package-level slice for InferCommitType to avoid allocation per call.
+// Order matters: more specific keywords should come first.
+var commitTypeKeywords = []struct {
+	keyword    string
+	commitType string
+}{
+	// Fix-related keywords first (commonly used)
+	{"fix", "fix"},
+	{"bug", "fix"},
+	{"repair", "fix"},
+	{"patch", "fix"},
+	{"resolve", "fix"},
+	// Refactor keywords
+	{"refactor", "refactor"},
+	{"cleanup", "refactor"},
+	{"clean-up", "refactor"},
+	{"restructure", "refactor"},
+	{"reorganize", "refactor"},
+	{"improve", "refactor"},
+	// Docs keywords (before general feat keywords)
+	{"doc", "docs"},
+	{"readme", "docs"},
+	{"comment", "docs"},
+	// Test keywords
+	{"test", "test"},
+	{"spec", "test"},
+	// Performance keywords
+	{"perf", "perf"},
+	{"optim", "perf"},
+	{"speed", "perf"},
+	{"fast", "perf"},
+	// Feature keywords last (most general)
+	{"update", "feat"},
+	{"add", "feat"},
+	{"implement", "feat"},
+	{"create", "feat"},
+	{"new", "feat"},
+	{"introduce", "feat"},
+	{"enable", "feat"},
+	{"support", "feat"},
+}
+
 // InferCommitType determines the conventional commit type from a task name.
 // It looks for common prefixes/keywords to classify the change.
 func InferCommitType(taskName string) string {
@@ -343,48 +385,7 @@ func InferCommitType(taskName string) string {
 	}
 
 	// Check for keywords anywhere in the name
-	// Order matters: more specific keywords should come first
-	keywords := []struct {
-		keyword    string
-		commitType string
-	}{
-		// Fix-related keywords first (commonly used)
-		{"fix", "fix"},
-		{"bug", "fix"},
-		{"repair", "fix"},
-		{"patch", "fix"},
-		{"resolve", "fix"},
-		// Refactor keywords
-		{"refactor", "refactor"},
-		{"cleanup", "refactor"},
-		{"clean-up", "refactor"},
-		{"restructure", "refactor"},
-		{"reorganize", "refactor"},
-		{"improve", "refactor"},
-		// Docs keywords (before general feat keywords)
-		{"doc", "docs"},
-		{"readme", "docs"},
-		{"comment", "docs"},
-		// Test keywords
-		{"test", "test"},
-		{"spec", "test"},
-		// Performance keywords
-		{"perf", "perf"},
-		{"optim", "perf"},
-		{"speed", "perf"},
-		{"fast", "perf"},
-		// Feature keywords last (most general)
-		{"update", "feat"},
-		{"add", "feat"},
-		{"implement", "feat"},
-		{"create", "feat"},
-		{"new", "feat"},
-		{"introduce", "feat"},
-		{"enable", "feat"},
-		{"support", "feat"},
-	}
-
-	for _, kw := range keywords {
+	for _, kw := range commitTypeKeywords {
 		if strings.Contains(lower, kw.keyword) {
 			return kw.commitType
 		}

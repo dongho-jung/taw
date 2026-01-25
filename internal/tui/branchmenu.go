@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
@@ -85,17 +85,20 @@ func (m *BranchMenu) View() tea.View {
 		m.stylesCached = true
 	}
 
-	content := fmt.Sprintf(
-		"%s\n\n  %s  %s\n  %s  %s\n\n%s",
-		m.styleTitle.Render("Branch Actions"),
-		m.styleKey.Render("↑"),
-		m.styleItem.Render("Merge to main (default ← task)"),
-		m.styleKey.Render("↓"),
-		m.styleItem.Render("Sync from main (default → task)"),
-		m.styleDim.Render("Press any other key to cancel"),
-	)
+	var sb strings.Builder
+	sb.WriteString(m.styleTitle.Render("Branch Actions"))
+	sb.WriteString("\n\n  ")
+	sb.WriteString(m.styleKey.Render("↑"))
+	sb.WriteString("  ")
+	sb.WriteString(m.styleItem.Render("Merge to main (default ← task)"))
+	sb.WriteString("\n  ")
+	sb.WriteString(m.styleKey.Render("↓"))
+	sb.WriteString("  ")
+	sb.WriteString(m.styleItem.Render("Sync from main (default → task)"))
+	sb.WriteString("\n\n")
+	sb.WriteString(m.styleDim.Render("Press any other key to cancel"))
 
-	return tea.NewView(content)
+	return tea.NewView(sb.String())
 }
 
 // Action returns the selected action.
