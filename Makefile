@@ -12,7 +12,7 @@ GO_PATH=$(shell which go 2>/dev/null || echo "/opt/homebrew/bin/go")
 # Installation paths
 LOCAL_BIN=~/.local/bin
 
-.PHONY: all build install uninstall install-global uninstall-global install-brew uninstall-brew clean test fmt lint run help
+.PHONY: all build install uninstall install-global uninstall-global install-brew uninstall-brew clean test fmt lint run release release-push help
 
 all: build
 
@@ -140,6 +140,22 @@ deps:
 run: build
 	./$(BINARY_NAME)
 
+## Prepare release commit and tag (requires VERSION=vX.Y.Z)
+release:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make release VERSION=vX.Y.Z"; \
+		exit 1; \
+	fi
+	@./scripts/release.sh "$(VERSION)"
+
+## Prepare release commit and tag, then push (requires VERSION=vX.Y.Z)
+release-push:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make release-push VERSION=vX.Y.Z"; \
+		exit 1; \
+	fi
+	@./scripts/release.sh "$(VERSION)" --push
+
 ## Generate mocks (for testing)
 mocks:
 	@echo "Generating mocks..."
@@ -172,4 +188,6 @@ help:
 	@echo "  lint             Run linter"
 	@echo "  deps             Download dependencies"
 	@echo "  run              Build and run"
+	@echo "  release          Update version map, commit, and tag"
+	@echo "  release-push     Update version map, commit, tag, and push"
 	@echo "  help             Show this help"

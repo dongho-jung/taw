@@ -282,3 +282,7 @@ Use `paw history` to list entries and `paw history show <index|task|file>` to vi
 ## Roadmap
 
 - [ ] **Adopt [bubblezone](https://github.com/lrstanley/bubblezone)** - Simplified mouse click zone detection for TUI components. Currently blocked waiting for bubblezone to support [Bubble Tea v2](https://github.com/charmbracelet/bubbletea/discussions/1156). Once supported, this will replace manual coordinate calculations in the Options panel and other clickable UI elements.
+
+## License
+
+MIT. See `LICENSE`.

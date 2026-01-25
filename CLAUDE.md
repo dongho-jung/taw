@@ -39,7 +39,8 @@ This checks:
 ## Release
 
 - GoReleaser config: `.github/goreleaser.yaml`
-- Tag and push `v*` to trigger the release workflow
+- Run `scripts/release.sh vX.Y.Z` (or `make release VERSION=vX.Y.Z`) to update the version map, commit, and tag
+- Push the release commit and `vX.Y.Z` tag to trigger the release workflow
 
 ## Testing
 
@@ -116,6 +117,8 @@ paw/                           # This repository
 │   ├── internal_utils.go      # Utility commands and helpers (ctrlC, renameWindow)
 │   ├── keybindings.go         # Tmux keybinding definitions
 │   ├── timeparse.go           # Time parsing utilities for logs/history
+│   ├── version_map.go         # Release-generated version-to-commit map
+│   ├── version_test.go        # Build info version/commit fallback tests
 │   ├── wait*.go               # Wait detection for user input prompts
 │   ├── watch_pr.go            # PR merge watcher (auto-cleanup on merge)
 │   └── window_map.go          # Window ID to task name mapping
@@ -180,6 +183,9 @@ paw/                           # This repository
 │       ├── textinput_helpers.go # Text input helper functions (padding, etc.)
 │       └── textarea/          # Custom textarea component (fork of bubbles)
 ├── Makefile                   # Build script
+├── scripts/                   # Release/dev scripts
+│   ├── release.sh             # Release helper (version map + tag)
+│   └── update-version-map.sh  # Generate version-to-commit map
 └── go.mod                     # Go module file
 
 {any-project}/                 # User project (git repo or plain directory)
@@ -399,11 +405,13 @@ PAW uses several techniques to ensure smooth, responsive UI:
 | `internal/tui/projectpicker.go` | Pre-allocated searchables slice |
 | `internal/tui/taskopts.go` | Pre-allocated modelParts slice |
 | `internal/config/taskopts.go` | Package-level validModels slice (avoids allocation per call) |
+| `internal/constants/constants.go` | Package-level `commitTypeKeywords` slice (avoids allocation per call) |
 | `internal/tui/textarea/textarea.go` | Padding string cache (`getPadding()`) for View() rendering |
 | `internal/tui/textarea/textarea.go` | Rune space slice cache (`repeatSpaces()`) with copy-on-read |
 | `internal/tui/textarea/textarea.go` | `strconv.FormatUint` for line hash (no fmt.Sprintf) |
 | `internal/tui/textarea/textarea.go` | `getPadding()` cache for prompt/line number formatting (no fmt.Sprintf) |
 | `internal/service/taskdiscovery.go` | Single `strings.Split()` shared across functions |
+| `internal/service/taskdiscovery.go` | Ring buffer for last-N lines extraction (avoids slice growth) |
 | `internal/tui/theme.go` | `buildSearchBar()` helper for search bar padding (no fmt.Sprintf) |
 | `internal/tui/gitviewer.go` | Uses `buildSearchBar()` for search mode status bar |
 | `internal/tui/diffviewer.go` | Uses `buildSearchBar()` for search mode status bar |
@@ -426,6 +434,7 @@ PAW uses several techniques to ensure smooth, responsive UI:
 | `cmd/paw/internal_create.go` | Pre-allocated names slice in `getActiveTaskNames()` |
 | `cmd/paw/wait_prompt.go` | Pre-lowercased UI hints slice (avoids ToLower in loop) |
 | `internal/tui/endtask.go` | Pre-allocated steps slice with capacity based on git mode |
+| `internal/tui/branchmenu.go` | `strings.Builder` in View() instead of `fmt.Sprintf` |
 
 ### Hot path optimizations
 

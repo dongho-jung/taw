@@ -19,23 +19,26 @@ var SessionName = ""
 var tips = []string{
 	// Keyboard shortcuts - Task commands
 	"Press ⌃N to create a new task",
-	"Press ⌃R to search task history",
+	"Press ⌃R to search task history (new task window)",
+	"Press ⌃T to open template picker (new task window)",
 	"Press ⌃F to finish task (action picker)",
 	"Press Alt+Enter or F5 to submit task",
 	"Press Esc twice quickly to cancel input",
 
 	// Keyboard shortcuts - Navigation
-	"Press ⌥Tab to switch between panels",
+	"Press ⌥Tab to cycle panes/options",
+	"Press ⌥Shift+Tab to cycle panes backward",
 	"Use ⌥←/→ to move between windows",
-	"Press ⌃↑ to toggle between task and main",
-	"Press ⌃↓ to sync with main branch",
+	"Press ⌃J to switch projects (session picker)",
 
 	// Keyboard shortcuts - Toggle panels
 	"Press ⌃P to open command palette",
-	"Press ⌃G to view git status/log",
-	"Press ⌃O to view logs",
+	"Press ⌃G to toggle git viewer",
+	"Press ⌃O to toggle logs",
 	"Press ⌃B to toggle bottom shell",
 	"Press ⌃/ for help",
+	"Press ⌃Y to edit prompts",
+	"Press ⌃Q to quit paw",
 
 	// Mouse interactions
 	"Use mouse to select and copy text",
@@ -50,7 +53,7 @@ var tips = []string{
 
 	// Configuration
 	"Configure notifications in .paw/config",
-	"Run 'paw check' to verify dependencies",
+	"Run 'paw check --fix' to verify dependencies",
 	"Run 'paw attach' to reconnect sessions",
 	"Run 'paw history show' to review past work",
 }
