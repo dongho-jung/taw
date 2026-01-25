@@ -8,7 +8,7 @@ import (
 )
 
 // TestTaskInput_DynamicHeight verifies the textarea height adjustment behavior:
-// 1. Default 5 lines
+// 1. Default 4 lines (reduced for small screen support)
 // 2. Auto-expand as content grows (up to 50% of screen)
 // 3. Scrollbar appears when content exceeds max height
 func TestTaskInput_DynamicHeight(t *testing.T) {
@@ -23,16 +23,16 @@ func TestTaskInput_DynamicHeight(t *testing.T) {
 
 	_, _ = m.Update(windowMsg)
 
-	// Test 1: Initial state - should be 5 lines (default)
-	if m.textareaHeight != 5 {
-		t.Errorf("Initial height should be 5, got %d", m.textareaHeight)
+	// Test 1: Initial state - should be 4 lines (default)
+	if m.textareaHeight != 4 {
+		t.Errorf("Initial height should be 4, got %d", m.textareaHeight)
 	}
 
-	// Test 2: Add 3 lines of content - should stay at 5 lines (min height)
+	// Test 2: Add 3 lines of content - should stay at 4 lines (min height)
 	m.textarea.SetValue("line 1\nline 2\nline 3")
 	m.updateTextareaHeight()
-	if m.textareaHeight != 5 {
-		t.Errorf("Height with 3 lines should be 5 (min), got %d", m.textareaHeight)
+	if m.textareaHeight != 4 {
+		t.Errorf("Height with 3 lines should be 4 (min), got %d", m.textareaHeight)
 	}
 
 	// Test 3: Add 10 lines of content - should expand to 10 lines
@@ -70,11 +70,11 @@ func TestTaskInput_DynamicHeight(t *testing.T) {
 		t.Errorf("Expected scrollbar condition: contentLines (%d) should be > visibleLines (%d)", contentLines, visibleLines)
 	}
 
-	// Test 7: Reduce content back to 5 lines - should shrink back to 5
+	// Test 7: Reduce content back to 5 lines - should be 5 (above min of 4)
 	m.textarea.SetValue("line 1\nline 2\nline 3\nline 4\nline 5")
 	m.updateTextareaHeight()
 	if m.textareaHeight != 5 {
-		t.Errorf("Height should shrink back to 5, got %d", m.textareaHeight)
+		t.Errorf("Height should be 5 for 5 lines of content, got %d", m.textareaHeight)
 	}
 
 	// Test 8: Test with different screen size (smaller terminal)
@@ -105,18 +105,18 @@ func TestTaskInput_MinHeight(t *testing.T) {
 	}
 	_, _ = m.Update(windowMsg)
 
-	// Test with 1 line - should maintain min height of 5
+	// Test with 1 line - should maintain min height of 4
 	m.textarea.SetValue("single line")
 	m.updateTextareaHeight()
-	if m.textareaHeight != 5 {
-		t.Errorf("Height with 1 line should be 5 (min), got %d", m.textareaHeight)
+	if m.textareaHeight != 4 {
+		t.Errorf("Height with 1 line should be 4 (min), got %d", m.textareaHeight)
 	}
 
-	// Test with empty content - should maintain min height of 5
+	// Test with empty content - should maintain min height of 4
 	m.textarea.SetValue("")
 	m.updateTextareaHeight()
-	if m.textareaHeight != 5 {
-		t.Errorf("Height with empty content should be 5 (min), got %d", m.textareaHeight)
+	if m.textareaHeight != 4 {
+		t.Errorf("Height with empty content should be 4 (min), got %d", m.textareaHeight)
 	}
 }
 
@@ -130,7 +130,7 @@ func TestTaskInput_MaxHeightCalculation(t *testing.T) {
 		{"Small screen (20)", 20, 8},   // (20-4) * 50% = 8
 		{"Medium screen (40)", 40, 18}, // (40-4) * 50% = 18
 		{"Large screen (60)", 60, 28},  // (60-4) * 50% = 28
-		{"Very small (10)", 10, 5},     // (10-4) * 50% = 3, but min is 5
+		{"Very small (10)", 10, 4},     // (10-4) * 50% = 3, but min is 4
 	}
 
 	for _, tc := range testCases {

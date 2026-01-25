@@ -50,8 +50,8 @@ const templateTipDuration = 3 * time.Second
 
 // Textarea height constants
 const (
-	textareaMinHeight     = 5  // Minimum textarea height in lines
-	textareaDefaultHeight = 5  // Default starting height (will expand as needed)
+	textareaMinHeight     = 4  // Minimum textarea height in lines (reduced for small screens)
+	textareaDefaultHeight = 4  // Default starting height (will expand as needed)
 	textareaMaxHeightPct  = 50 // Maximum height as percentage of screen height
 )
 
@@ -460,7 +460,7 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Calculate kanban height based on current textarea height
 		topSectionHeight := m.textareaHeight + 2              // +2 for border
-		kanbanHeight := max(8, msg.Height-topSectionHeight-3) // -3 for help text + gap + statusline
+		kanbanHeight := max(6, msg.Height-topSectionHeight-3) // -3 for help text + gap + statusline
 		m.kanban.SetSize(msg.Width, kanbanHeight)
 
 		// Calculate widths for alignment with Kanban columns.
@@ -774,8 +774,8 @@ func (m *TaskInput) View() tea.View {
 	// Build content with version+tip at top-left and help text at top-right
 	var sb strings.Builder
 
-	// Show warning if terminal is smaller than 72x22
-	isNarrow := m.width < 72 || m.height < 22
+	// Show warning if terminal is smaller than 72x16
+	isNarrow := m.width < 72 || m.height < 16
 
 	// Left side: PAW {version} - {projectName}  Tip: {tip} or Warning
 	versionText := m.viewStyleVersion.Render("PAW " + Version)
@@ -830,7 +830,7 @@ func (m *TaskInput) View() tea.View {
 	sb.WriteString("\n")
 
 	// Add Kanban view if there's enough space (no extra gap)
-	if m.height > 20 {
+	if m.height >= 15 {
 		kanbanContent := m.kanban.Render()
 		if kanbanContent != "" {
 			sb.WriteString(kanbanContent)
