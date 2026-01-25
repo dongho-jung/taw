@@ -152,8 +152,9 @@ var finishPickerTUICmd = &cobra.Command{
 		logging.Debug("-> finishPickerTUICmd(session=%s, windowID=%s)", sessionName, windowID)
 		defer logging.Debug("<- finishPickerTUICmd")
 
-		// Detect if there are commits to merge (only for git repos)
+		// Detect if there are commits or pending changes to merge (only for git repos)
 		hasCommits := false
+		hasChanges := false
 		if appCtx.IsGitRepo {
 			tm := tmux.New(sessionName)
 			mgr := task.NewManager(appCtx.AgentsDir, appCtx.ProjectDir, appCtx.PawDir, appCtx.IsGitRepo, appCtx.Config)
@@ -179,16 +180,25 @@ var finishPickerTUICmd = &cobra.Command{
 				gitClient := git.New()
 				mainBranch := gitClient.GetMainBranch(appCtx.ProjectDir)
 				workDir := mgr.GetWorkingDirectory(targetTask)
-				commits, _ := gitClient.GetBranchCommits(workDir, targetTask.Name, mainBranch, 1)
-				hasCommits = len(commits) > 0
-				logging.Debug("finishPickerTUICmd: hasCommits=%v (branch=%s, main=%s)", hasCommits, targetTask.Name, mainBranch)
+				hasChanges = gitClient.HasChanges(workDir)
+				commits, err := gitClient.GetBranchCommits(workDir, targetTask.Name, mainBranch, 1)
+				if err != nil {
+					logging.Warn("finishPickerTUICmd: GetBranchCommits failed: %v", err)
+					if _, headErr := gitClient.GetHeadCommit(workDir); headErr == nil {
+						hasCommits = true
+					}
+				} else {
+					hasCommits = len(commits) > 0
+				}
+				logging.Debug("finishPickerTUICmd: hasCommits=%v hasChanges=%v (branch=%s, main=%s)", hasCommits, hasChanges, targetTask.Name, mainBranch)
 			} else {
 				logging.Warn("finishPickerTUICmd: could not find task for windowID=%s", windowID)
 			}
 		}
 
 		// Run the finish picker
-		action, err := tui.RunFinishPicker(appCtx.IsGitRepo, hasCommits)
+		hasWork := hasCommits || hasChanges
+		action, err := tui.RunFinishPicker(appCtx.IsGitRepo, hasWork)
 		if err != nil {
 			logging.Debug("finishPickerTUICmd: RunFinishPicker failed: %v", err)
 			return err
