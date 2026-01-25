@@ -183,6 +183,38 @@ var endTaskCmd = &cobra.Command{
 				}
 				return nil
 
+			case constants.ActionCreateMain:
+				// Create main branch and merge (for repos without main)
+				if !appCtx.IsWorktreeMode() {
+					logging.Warn("create-main requested in non-worktree mode; skipping")
+					fmt.Println()
+					fmt.Println("  ⚠️  Create main is only available in worktree mode")
+				} else {
+					mainBranch := gitClient.GetMainBranch(appCtx.ProjectDir)
+
+					// Create main branch with empty init commit
+					createSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Creating %s branch", mainBranch))
+					createSpinner.Start()
+
+					if err := gitClient.BranchCreateOrphan(appCtx.ProjectDir, mainBranch); err != nil {
+						createSpinner.Stop(false, err.Error())
+						logging.Warn("Failed to create main branch: %v", err)
+						fmt.Printf("  ⚠️  Failed to create %s branch: %v\n", mainBranch, err)
+						if paneCaptureFile != "" {
+							_ = os.Remove(paneCaptureFile)
+						}
+						return nil
+					}
+					createSpinner.Stop(true, mainBranch)
+					fmt.Printf("  ✓ Created %s branch with init commit\n", mainBranch)
+
+					// Now proceed with merge
+					mergeSuccess := runAutoMerge(appCtx, targetTask, windowID, workDir, gitClient, tm)
+					if !mergeSuccess {
+						return nil // Exit without cleanup - keep worktree and branch
+					}
+				}
+
 			case constants.ActionMergePush, constants.ActionMerge:
 				// Auto-merge (with optional push for "merge-push")
 				if !appCtx.IsWorktreeMode() {

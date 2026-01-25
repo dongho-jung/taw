@@ -156,6 +156,7 @@ var finishPickerTUICmd = &cobra.Command{
 		hasCommits := false
 		hasChanges := false
 		hasRemote := false
+		hasMainBranch := true // Assume main branch exists by default
 		if appCtx.IsGitRepo {
 			tm := tmux.New(sessionName)
 			mgr := task.NewManager(appCtx.AgentsDir, appCtx.ProjectDir, appCtx.PawDir, appCtx.IsGitRepo, appCtx.Config)
@@ -184,6 +185,10 @@ var finishPickerTUICmd = &cobra.Command{
 				mainBranch := gitClient.GetMainBranch(appCtx.ProjectDir)
 				workDir := mgr.GetWorkingDirectory(targetTask)
 				hasChanges = gitClient.HasChanges(workDir)
+
+				// Check if main branch exists
+				hasMainBranch = gitClient.BranchExists(appCtx.ProjectDir, mainBranch)
+
 				commits, err := gitClient.GetBranchCommits(workDir, targetTask.Name, mainBranch, 1)
 				if err != nil {
 					logging.Warn("finishPickerTUICmd: GetBranchCommits failed: %v", err)
@@ -193,7 +198,7 @@ var finishPickerTUICmd = &cobra.Command{
 				} else {
 					hasCommits = len(commits) > 0
 				}
-				logging.Debug("finishPickerTUICmd: hasCommits=%v hasChanges=%v hasRemote=%v (branch=%s, main=%s)", hasCommits, hasChanges, hasRemote, targetTask.Name, mainBranch)
+				logging.Debug("finishPickerTUICmd: hasCommits=%v hasChanges=%v hasRemote=%v hasMainBranch=%v (branch=%s, main=%s)", hasCommits, hasChanges, hasRemote, hasMainBranch, targetTask.Name, mainBranch)
 			} else {
 				logging.Warn("finishPickerTUICmd: could not find task for windowID=%s", windowID)
 			}
@@ -201,7 +206,7 @@ var finishPickerTUICmd = &cobra.Command{
 
 		// Run the finish picker
 		hasWork := hasCommits || hasChanges
-		action, err := tui.RunFinishPicker(appCtx.IsGitRepo, hasWork, hasRemote)
+		action, err := tui.RunFinishPicker(appCtx.IsGitRepo, hasWork, hasRemote, hasMainBranch)
 		if err != nil {
 			logging.Debug("finishPickerTUICmd: RunFinishPicker failed: %v", err)
 			return err
@@ -232,6 +237,8 @@ var finishPickerTUICmd = &cobra.Command{
 			endAction = constants.ActionDone
 		case tui.FinishActionDrop:
 			endAction = constants.ActionDrop
+		case tui.FinishActionCreateMain:
+			endAction = constants.ActionCreateMain
 		default:
 			logging.Debug("finishPickerTUICmd: unknown action=%s", action)
 			return nil

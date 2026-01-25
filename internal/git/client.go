@@ -41,6 +41,7 @@ type Client interface {
 	BranchDelete(dir, branch string, force bool) error
 	BranchMerged(dir, branch, into string) bool
 	BranchCreate(dir, branch, startPoint string) error
+	BranchCreateOrphan(dir, branch string) error // Create orphan branch (no parent)
 	GetCurrentBranch(dir string) (string, error)
 	GetHeadCommit(dir string) (string, error)
 
@@ -330,6 +331,19 @@ func (c *gitClient) BranchCreate(dir, branch, startPoint string) error {
 		args = append(args, startPoint)
 	}
 	return c.run(dir, args...)
+}
+
+// BranchCreateOrphan creates an orphan branch with an empty "init" commit.
+// This is useful for creating a main branch in a repository that doesn't have one.
+func (c *gitClient) BranchCreateOrphan(dir, branch string) error {
+	// Create orphan branch (no parent commits)
+	if err := c.run(dir, "checkout", "--orphan", branch); err != nil {
+		return err
+	}
+	// Remove all files from index (but keep in working directory)
+	_ = c.run(dir, "rm", "-rf", "--cached", ".")
+	// Create empty init commit
+	return c.run(dir, "commit", "--allow-empty", "-m", "init")
 }
 
 func (c *gitClient) GetCurrentBranch(dir string) (string, error) {

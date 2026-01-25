@@ -181,12 +181,13 @@ const (
 
 // End-task action names
 const (
-	ActionDone      = "done"
-	ActionDrop      = "drop"
-	ActionKeep      = "keep"
-	ActionMerge     = "merge"
-	ActionMergePush = "merge-push"
-	ActionPR        = "pr"
+	ActionDone       = "done"
+	ActionDrop       = "drop"
+	ActionKeep       = "keep"
+	ActionMerge      = "merge"
+	ActionMergePush  = "merge-push"
+	ActionPR         = "pr"
+	ActionCreateMain = "create-main" // Create main branch and merge
 )
 
 // Log format constants

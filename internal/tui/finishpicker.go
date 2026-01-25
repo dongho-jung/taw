@@ -14,13 +14,14 @@ type FinishAction string
 
 // Finish action options.
 const (
-	FinishActionCancel    FinishAction = "cancel"
-	FinishActionMergePush FinishAction = "merge-push"
-	FinishActionMerge     FinishAction = "merge"
-	FinishActionPR        FinishAction = "pr"
-	FinishActionKeep      FinishAction = "keep"
-	FinishActionDone      FinishAction = "done"
-	FinishActionDrop      FinishAction = "drop"
+	FinishActionCancel     FinishAction = "cancel"
+	FinishActionMergePush  FinishAction = "merge-push"
+	FinishActionMerge      FinishAction = "merge"
+	FinishActionPR         FinishAction = "pr"
+	FinishActionKeep       FinishAction = "keep"
+	FinishActionDone       FinishAction = "done"
+	FinishActionDrop       FinishAction = "drop"
+	FinishActionCreateMain FinishAction = "create-main" // Create main branch and merge
 )
 
 // FinishOption represents an option in the finish picker.
@@ -79,12 +80,21 @@ func doneOptions() []FinishOption {
 	}
 }
 
+// noMainOptions returns the options when main branch doesn't exist.
+func noMainOptions() []FinishOption {
+	return []FinishOption{
+		{Action: FinishActionCreateMain, Name: "Create main & Merge", Description: "Create main branch with init commit, then merge"},
+		{Action: FinishActionDrop, Name: "Drop", Description: "Discard all changes and clean up", Warning: true},
+	}
+}
+
 // NewFinishPicker creates a new finish picker.
 // isGitRepo: whether the project is a git repository
 // hasCommits: whether there are commits to merge (only relevant if isGitRepo is true)
 // hasRemote: whether the repository has a remote origin
-func NewFinishPicker(isGitRepo, hasCommits, hasRemote bool) *FinishPicker {
-	logging.Debug("-> NewFinishPicker(isGitRepo=%v, hasCommits=%v, hasRemote=%v)", isGitRepo, hasCommits, hasRemote)
+// hasMainBranch: whether the main branch exists (only relevant if isGitRepo is true)
+func NewFinishPicker(isGitRepo, hasCommits, hasRemote, hasMainBranch bool) *FinishPicker {
+	logging.Debug("-> NewFinishPicker(isGitRepo=%v, hasCommits=%v, hasRemote=%v, hasMainBranch=%v)", isGitRepo, hasCommits, hasRemote, hasMainBranch)
 	defer logging.Debug("<- NewFinishPicker")
 
 	// Detect dark mode BEFORE bubbletea starts
@@ -92,7 +102,10 @@ func NewFinishPicker(isGitRepo, hasCommits, hasRemote bool) *FinishPicker {
 
 	var options []FinishOption
 	if isGitRepo && hasCommits {
-		if hasRemote {
+		if !hasMainBranch {
+			// No main branch: offer to create it
+			options = noMainOptions()
+		} else if hasRemote {
 			options = gitOptions()
 		} else {
 			options = gitOptionsNoRemote()
@@ -337,11 +350,11 @@ func (m *FinishPicker) Result() FinishAction {
 }
 
 // RunFinishPicker runs the finish picker and returns the selected action.
-func RunFinishPicker(isGitRepo, hasCommits, hasRemote bool) (FinishAction, error) {
-	logging.Debug("-> RunFinishPicker(isGitRepo=%v, hasCommits=%v, hasRemote=%v)", isGitRepo, hasCommits, hasRemote)
+func RunFinishPicker(isGitRepo, hasCommits, hasRemote, hasMainBranch bool) (FinishAction, error) {
+	logging.Debug("-> RunFinishPicker(isGitRepo=%v, hasCommits=%v, hasRemote=%v, hasMainBranch=%v)", isGitRepo, hasCommits, hasRemote, hasMainBranch)
 	defer logging.Debug("<- RunFinishPicker")
 
-	m := NewFinishPicker(isGitRepo, hasCommits, hasRemote)
+	m := NewFinishPicker(isGitRepo, hasCommits, hasRemote, hasMainBranch)
 	logging.Debug("RunFinishPicker: starting tea.Program")
 	p := tea.NewProgram(m)
 

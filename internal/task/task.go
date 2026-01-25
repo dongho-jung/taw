@@ -52,9 +52,10 @@ var statusTransitions = map[Status]map[Status]bool{
 		StatusWorking:   true,
 	},
 	StatusDone: {
-		StatusDone:    true,
-		StatusWorking: true, // Allow resuming work on a completed task
-		StatusWaiting: true, // Allow moving back to waiting (e.g., PR review)
+		StatusDone:      true,
+		StatusWorking:   true, // Allow resuming work on a completed task
+		StatusWaiting:   true, // Allow moving back to waiting (e.g., PR review)
+		StatusCorrupted: true, // Allow marking as corrupted if merge fails after done
 	},
 }
 
