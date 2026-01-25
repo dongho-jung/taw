@@ -19,20 +19,15 @@ var togglePromptPickerCmd = &cobra.Command{
 	Use:   "toggle-prompt-picker [session]",
 	Short: "Toggle prompt picker top pane",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> togglePromptPickerCmd(session=%s)", args[0])
 		defer logging.Debug("<- togglePromptPickerCmd")
 
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
-		pawBin, err := os.Executable()
-		if err != nil {
-			pawBin = "paw"
-		}
-
 		// Run prompt picker in top pane
-		pickerCmd := shellJoin(pawBin, "internal", "prompt-picker-tui", sessionName)
+		pickerCmd := shellJoin(getPawBin(), "internal", "prompt-picker-tui", sessionName)
 
 		result, err := displayTopPane(tm, "prompt", pickerCmd, "")
 		if err != nil {
@@ -51,7 +46,7 @@ var promptPickerTUICmd = &cobra.Command{
 	Short:  "Run prompt picker TUI (called from popup)",
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
@@ -67,7 +62,7 @@ var promptPickerTUICmd = &cobra.Command{
 		defer logging.Debug("<- promptPickerTUICmd")
 
 		// Build list of prompts
-		prompts := buildPromptList(appCtx.PawDir, appCtx.ProjectDir)
+		prompts := buildPromptList(appCtx.PawDir)
 
 		logging.Debug("promptPickerTUICmd: running prompt picker with %d prompts", len(prompts))
 		action, selected, err := tui.RunPromptPicker(prompts)
@@ -84,7 +79,7 @@ var promptPickerTUICmd = &cobra.Command{
 		logging.Debug("promptPickerTUICmd: selected prompt=%s", selected.ID)
 
 		// Ensure the prompt file exists
-		promptPath, err := ensurePromptFile(appCtx.PawDir, appCtx.ProjectDir, selected)
+		promptPath, err := ensurePromptFile(appCtx.PawDir, selected)
 		if err != nil {
 			logging.Warn("Failed to ensure prompt file: %v", err)
 			return err
@@ -94,7 +89,7 @@ var promptPickerTUICmd = &cobra.Command{
 		editor := getEditor()
 		logging.Debug("promptPickerTUICmd: opening %s in %s", promptPath, editor)
 
-		editorCmd := exec.Command(editor, promptPath)
+		editorCmd := exec.Command(editor, promptPath) //nolint:gosec // G204: editor is from getEditor() which uses EDITOR env var or defaults
 		editorCmd.Stdin = os.Stdin
 		editorCmd.Stdout = os.Stdout
 		editorCmd.Stderr = os.Stderr
@@ -103,7 +98,7 @@ var promptPickerTUICmd = &cobra.Command{
 }
 
 // buildPromptList creates the list of available prompts.
-func buildPromptList(pawDir, projectDir string) []tui.PromptEntry {
+func buildPromptList(pawDir string) []tui.PromptEntry {
 	prompts := []tui.PromptEntry{
 		{
 			ID:          "task-prompt",
@@ -171,7 +166,7 @@ func buildPromptList(pawDir, projectDir string) []tui.PromptEntry {
 }
 
 // ensurePromptFile ensures the prompt file exists, creating it with defaults if needed.
-func ensurePromptFile(pawDir, projectDir string, prompt *tui.PromptEntry) (string, error) {
+func ensurePromptFile(pawDir string, prompt *tui.PromptEntry) (string, error) {
 	promptsDir := filepath.Join(pawDir, constants.PromptsDirName)
 
 	switch prompt.ID {
@@ -191,7 +186,7 @@ Add project-specific instructions here. These will be appended to the system pro
 - Testing requirements
 - Documentation standards
 `
-			if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			if err := os.WriteFile(path, []byte(content), 0644); err != nil { //nolint:gosec // G306: prompt file needs to be readable
 				return "", err
 			}
 		}
@@ -201,7 +196,7 @@ Add project-specific instructions here. These will be appended to the system pro
 		// Copy embedded system prompt to prompts/system.md
 		path := filepath.Join(promptsDir, constants.SystemPromptFile)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
-			if err := os.MkdirAll(promptsDir, 0755); err != nil {
+			if err := os.MkdirAll(promptsDir, 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 				return "", err
 			}
 			// Get embedded system prompt (git mode by default)
@@ -209,7 +204,7 @@ Add project-specific instructions here. These will be appended to the system pro
 			if err != nil {
 				return "", err
 			}
-			if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			if err := os.WriteFile(path, []byte(content), 0644); err != nil { //nolint:gosec // G306: prompt file needs to be readable
 				return "", err
 			}
 		}

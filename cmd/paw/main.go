@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -77,7 +78,7 @@ func checkVersionFlag() bool {
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		printVersion()
 	},
 }
@@ -109,7 +110,7 @@ This command:
 }
 
 // runMain is the main entry point - starts or attaches to a tmux session
-func runMain(cmd *cobra.Command, args []string) error {
+func runMain(_ *cobra.Command, _ []string) error {
 	// Check for -v flag first
 	if checkVersionFlag() {
 		return nil
@@ -184,8 +185,8 @@ func runMain(cmd *cobra.Command, args []string) error {
 	}
 	if application.Config != nil {
 		_ = os.Setenv("PAW_LOG_FORMAT", application.Config.LogFormat)
-		_ = os.Setenv("PAW_LOG_MAX_SIZE_MB", fmt.Sprintf("%d", application.Config.LogMaxSizeMB))
-		_ = os.Setenv("PAW_LOG_MAX_BACKUPS", fmt.Sprintf("%d", application.Config.LogMaxBackups))
+		_ = os.Setenv("PAW_LOG_MAX_SIZE_MB", strconv.Itoa(application.Config.LogMaxSizeMB))
+		_ = os.Setenv("PAW_LOG_MAX_BACKUPS", strconv.Itoa(application.Config.LogMaxBackups))
 	}
 
 	// Setup logging (file) with configured options

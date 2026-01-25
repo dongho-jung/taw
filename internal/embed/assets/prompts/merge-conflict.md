@@ -18,13 +18,12 @@ You are resolving merge conflicts in a git repository.
    - `>>>>>>> branch` - Incoming branch content
 3. Resolve each conflict by keeping the correct code that makes sense for the task
 4. Save each resolved file using the Edit tool
-5. After resolving ALL conflicts, run: `git add -A && git reset HEAD .claude 2>/dev/null || true`
+5. After resolving ALL conflicts, run: `git add -A`
 
 ## Guidelines
 
 - Do NOT abort or skip any files
 - Resolve ALL conflicts before running git add
-- NEVER commit the `.claude` symlink - always unstage it after `git add -A`
 - Make sure the final code is valid and compiles
 - If unsure, prefer keeping BOTH changes merged intelligently
 - Preserve formatting and code style consistency
@@ -47,12 +46,11 @@ Task description:
 2. Look for conflict markers (<<<<<<< HEAD, =======, >>>>>>> branch)
 3. Resolve each conflict by keeping the correct code that makes sense for the task
 4. Save each resolved file using the Edit tool
-5. After resolving ALL conflicts, run: git add -A && git reset HEAD .claude 2>/dev/null || true
+5. After resolving ALL conflicts, run: git add -A
 
 IMPORTANT:
 - Do NOT abort or skip any files
 - Resolve ALL conflicts before running git add
-- NEVER commit .claude symlink - always unstage it after git add -A
 - Make sure the final code is valid and compiles
 - If unsure, prefer keeping BOTH changes merged intelligently
 

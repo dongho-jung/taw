@@ -65,21 +65,21 @@ type LogViewer struct {
 	currentMatchIdx  int    // current match index for n/N navigation
 
 	// Display lines cache (invalidated on lines/minLevel/wordWrap/width change)
-	cachedDisplayLines   []string
-	cacheMinLevel        int
-	cacheWordWrap        bool
-	cacheWidth           int
-	cacheLinesLen        int
-	cacheMatchLineSet    map[int]struct{} // O(1) lookup for isMatchLine
-	cacheLowercaseLines  []string         // pre-lowercased lines for search (same length as cachedDisplayLines)
+	cachedDisplayLines  []string
+	cacheMinLevel       int
+	cacheWordWrap       bool
+	cacheWidth          int
+	cacheLinesLen       int
+	cacheMatchLineSet   map[int]struct{} // O(1) lookup for isMatchLine
+	cacheLowercaseLines []string         // pre-lowercased lines for search (same length as cachedDisplayLines)
 
 	// Style cache (reused across renders to avoid allocations)
-	styleHighlight     lipgloss.Style
-	styleStatus        lipgloss.Style
-	styleSearch        lipgloss.Style
-	styleMatchCurrent  lipgloss.Style
-	styleMatchOther    lipgloss.Style
-	stylesCached       bool
+	styleHighlight    lipgloss.Style
+	styleStatus       lipgloss.Style
+	styleSearch       lipgloss.Style
+	styleMatchCurrent lipgloss.Style
+	styleMatchOther   lipgloss.Style
+	stylesCached      bool
 }
 
 const maxLogLines = 5000
@@ -413,13 +413,13 @@ func (m *LogViewer) scrollUp(n int) {
 // scrollDown scrolls down by n lines.
 func (m *LogViewer) scrollDown(n int) {
 	displayLines := m.getDisplayLines()
-	max := len(displayLines) - m.contentHeight()
-	if max < 0 {
-		max = 0
+	maxPos := len(displayLines) - m.contentHeight()
+	if maxPos < 0 {
+		maxPos = 0
 	}
 	m.scrollPos += n
-	if m.scrollPos > max {
-		m.scrollPos = max
+	if m.scrollPos > maxPos {
+		m.scrollPos = maxPos
 	}
 }
 
@@ -625,15 +625,15 @@ func (m *LogViewer) View() tea.View {
 		line = m.colorizeLogLine(line)
 
 		// Apply search highlighting before padding
-		if m.searchQuery != "" && m.isMatchLine(i) {
-			isCurrentMatch := m.isCurrentMatchLine(i)
+		if m.searchQuery != "" && isMatchLine(m.cacheMatchLineSet, i) {
+			isCurrentMatch := isCurrentMatchLine(m.searchMatches, m.currentMatchIdx, i)
 			line = m.highlightSearchMatches(line, i, isCurrentMatch)
 		}
 
 		// Pad to full width (using visual width)
 		visualWidth := ansi.StringWidth(line)
 		if visualWidth < m.width {
-			line = line + getPadding(m.width-visualWidth)
+			line += getPadding(m.width - visualWidth)
 		}
 
 		// Apply selection highlighting if this line is in selection
@@ -730,21 +730,21 @@ func (m *LogViewer) contentHeight() int {
 // scrollToEnd scrolls to the end of the log.
 func (m *LogViewer) scrollToEnd() {
 	displayLines := m.getDisplayLines()
-	max := len(displayLines) - m.contentHeight()
-	if max < 0 {
-		max = 0
+	maxPos := len(displayLines) - m.contentHeight()
+	if maxPos < 0 {
+		maxPos = 0
 	}
-	m.scrollPos = max
+	m.scrollPos = maxPos
 }
 
 func (m *LogViewer) clampScroll() {
 	displayLines := m.getDisplayLines()
-	max := len(displayLines) - m.contentHeight()
-	if max < 0 {
-		max = 0
+	maxPos := len(displayLines) - m.contentHeight()
+	if maxPos < 0 {
+		maxPos = 0
 	}
-	if m.scrollPos > max {
-		m.scrollPos = max
+	if m.scrollPos > maxPos {
+		m.scrollPos = maxPos
 	}
 	if m.scrollPos < 0 {
 		m.scrollPos = 0
@@ -955,24 +955,6 @@ func (m *LogViewer) prevMatch() {
 	m.scrollToMatch(m.currentMatchIdx)
 }
 
-// isMatchLine returns true if the display line at idx is a match line.
-// Uses O(1) map lookup instead of O(n) slice scan.
-func (m *LogViewer) isMatchLine(idx int) bool {
-	if m.cacheMatchLineSet == nil {
-		return false
-	}
-	_, ok := m.cacheMatchLineSet[idx]
-	return ok
-}
-
-// isCurrentMatchLine returns true if the display line at idx is the current match.
-func (m *LogViewer) isCurrentMatchLine(idx int) bool {
-	if len(m.searchMatches) == 0 || m.currentMatchIdx >= len(m.searchMatches) {
-		return false
-	}
-	return m.searchMatches[m.currentMatchIdx] == idx
-}
-
 // highlightSearchMatches highlights search matches in a line.
 // Uses pre-cached searchQueryLower, cached lowercase lines, and cached styles to avoid allocations.
 func (m *LogViewer) highlightSearchMatches(line string, lineIdx int, isCurrentMatch bool) string {
@@ -1131,7 +1113,7 @@ func (m *LogViewer) copySelection() {
 
 		// Pad for consistent width
 		if lineWidth < m.width {
-			line = line + getPadding(m.width-lineWidth)
+			line += getPadding(m.width - lineWidth)
 		}
 
 		startX, endX := m.getSelectionXRange(screenY)

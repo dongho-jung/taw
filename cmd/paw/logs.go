@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/dongho-jung/paw/internal/app"
+	"github.com/dongho-jung/paw/internal/constants"
 )
 
 var (
@@ -22,7 +23,7 @@ var (
 var logsCmd = &cobra.Command{
 	Use:   "logs",
 	Short: "Show PAW logs with filters",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		application, err := getAppFromCwd()
 		if err != nil {
 			return err
@@ -85,7 +86,7 @@ func getAppFromCwd() (*app.App, error) {
 
 	dir := cwd
 	for {
-		pawDir := filepath.Join(dir, ".paw")
+		pawDir := filepath.Join(dir, constants.PawDirName)
 		if _, err := os.Stat(pawDir); err == nil {
 			application, err := app.New(dir)
 			if err != nil {
@@ -114,7 +115,7 @@ func parseLogLine(line string) (time.Time, string, bool) {
 		}
 		if err := json.Unmarshal([]byte(trimmed), &payload); err == nil {
 			if payload.Task == "" && payload.Context != "" {
-				_, payload.Task = splitContext(payload.Context)
+				payload.Task = extractTaskFromContext(payload.Context)
 			}
 			if payload.Timestamp != "" {
 				if ts, err := time.Parse(time.RFC3339Nano, payload.Timestamp); err == nil {
@@ -137,14 +138,14 @@ func parseLogLine(line string) (time.Time, string, bool) {
 	}
 
 	context := strings.TrimSuffix(parts[2], "]")
-	_, task := splitContext(context)
+	task := extractTaskFromContext(context)
 	return ts, task, true
 }
 
-func splitContext(context string) (string, string) {
+func extractTaskFromContext(context string) string {
 	parts := strings.SplitN(context, ":", 2)
 	if len(parts) == 2 {
-		return parts[0], parts[1]
+		return parts[1]
 	}
-	return context, ""
+	return ""
 }

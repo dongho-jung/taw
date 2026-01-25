@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/dongho-jung/paw/internal/app"
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/tmux"
@@ -10,16 +8,10 @@ import (
 
 // reapplyTmuxConfig re-applies tmux configuration after config reload.
 // This is a subset of setupTmuxConfig that updates settings that depend on config.
-func reapplyTmuxConfig(appCtx *app.App, tm tmux.Client) error {
-	// Get path to paw binary
-	pawBin, err := os.Executable()
-	if err != nil {
-		pawBin = "paw"
-	}
-
+func reapplyTmuxConfig(appCtx *app.App, tm tmux.Client) {
 	// Re-apply keybindings (in case session name changed or for consistency)
 	bindings := buildKeybindings(KeybindingsContext{
-		PawBin:      pawBin,
+		PawBin:      getPawBin(),
 		SessionName: appCtx.SessionName,
 		PawDir:      appCtx.PawDir,
 		ProjectDir:  appCtx.ProjectDir,
@@ -30,18 +22,10 @@ func reapplyTmuxConfig(appCtx *app.App, tm tmux.Client) error {
 			logging.Debug("Failed to bind %s: %v", b.Key, err)
 		}
 	}
-
-	return nil
 }
 
 // setupTmuxConfig configures tmux keybindings and options
-func setupTmuxConfig(appCtx *app.App, tm tmux.Client) error {
-	// Get path to paw binary
-	pawBin, err := os.Executable()
-	if err != nil {
-		pawBin = "paw"
-	}
-
+func setupTmuxConfig(appCtx *app.App, tm tmux.Client) {
 	// Detect terminal theme and apply theme-aware colors (auto only)
 	resolved := resolveThemePreset(ThemeAuto)
 	applyTmuxTheme(tm, resolved)
@@ -113,7 +97,7 @@ func setupTmuxConfig(appCtx *app.App, tm tmux.Client) error {
 
 	// Setup keybindings (English + Korean layouts)
 	bindings := buildKeybindings(KeybindingsContext{
-		PawBin:      pawBin,
+		PawBin:      getPawBin(),
 		SessionName: appCtx.SessionName,
 		PawDir:      appCtx.PawDir,
 		ProjectDir:  appCtx.ProjectDir,
@@ -124,6 +108,4 @@ func setupTmuxConfig(appCtx *app.App, tm tmux.Client) error {
 			logging.Debug("Failed to bind %s: %v", b.Key, err)
 		}
 	}
-
-	return nil
 }

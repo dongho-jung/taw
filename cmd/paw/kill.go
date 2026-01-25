@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -43,11 +44,8 @@ Unlike 'paw clean', this preserves .paw directories, worktrees, and branches.`,
 
 // Note: killAllCmd is registered in main.go as a root command
 
-func runKill(cmd *cobra.Command, args []string) error {
-	sessions, err := findPawSessions()
-	if err != nil {
-		return fmt.Errorf("failed to find PAW sessions: %w", err)
-	}
+func runKill(_ *cobra.Command, args []string) error {
+	sessions := findPawSessions()
 
 	if len(sessions) == 0 {
 		fmt.Println("No running PAW sessions found.")
@@ -56,7 +54,8 @@ func runKill(cmd *cobra.Command, args []string) error {
 
 	var targetSession pawSession
 
-	if len(args) == 1 {
+	switch {
+	case len(args) == 1:
 		// Direct kill of specified session
 		sessionName := args[0]
 		for _, s := range sessions {
@@ -73,28 +72,29 @@ func runKill(cmd *cobra.Command, args []string) error {
 					matches = append(matches, s)
 				}
 			}
-			if len(matches) == 1 {
+			switch {
+			case len(matches) == 1:
 				targetSession = matches[0]
-			} else if len(matches) > 1 {
+			case len(matches) > 1:
 				fmt.Printf("Multiple sessions match '%s':\n", sessionName)
 				for _, m := range matches {
 					fmt.Printf("  - %s\n", m.Name)
 				}
-				return fmt.Errorf("please specify a unique session name")
-			} else {
+				return errors.New("please specify a unique session name")
+			default:
 				fmt.Printf("Session '%s' not found.\n\n", sessionName)
 				fmt.Println("Available sessions:")
 				for _, s := range sessions {
 					fmt.Printf("  - %s\n", s.Name)
 				}
-				return fmt.Errorf("session not found")
+				return errors.New("session not found")
 			}
 		}
-	} else if len(sessions) == 1 {
+	case len(sessions) == 1:
 		// Only one session, confirm and kill
 		targetSession = sessions[0]
 		fmt.Printf("Found session: %s\n", targetSession.Name)
-	} else {
+	default:
 		// Multiple sessions, prompt for selection
 		fmt.Println("Running PAW sessions:")
 		fmt.Println()
@@ -129,11 +129,8 @@ func runKill(cmd *cobra.Command, args []string) error {
 	return forceKillSession(targetSession, true)
 }
 
-func runKillAll(cmd *cobra.Command, args []string) error {
-	sessions, err := findPawSessions()
-	if err != nil {
-		return fmt.Errorf("failed to find PAW sessions: %w", err)
-	}
+func runKillAll(_ *cobra.Command, _ []string) error {
+	sessions := findPawSessions()
 
 	if len(sessions) == 0 {
 		fmt.Println("No running PAW sessions found.")
@@ -212,4 +209,3 @@ func confirmPrompt(prompt string) bool {
 	input = strings.TrimSpace(strings.ToLower(input))
 	return input == "y" || input == "yes"
 }
-

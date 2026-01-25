@@ -13,6 +13,7 @@ import (
 // Model represents the Claude model to use.
 type Model string
 
+// Claude model options.
 const (
 	ModelHaiku  Model = "haiku"
 	ModelSonnet Model = "sonnet"
@@ -34,6 +35,7 @@ func ValidModels() []Model {
 // DependsOnCondition defines when a task should run relative to another task.
 type DependsOnCondition string
 
+// DependsOn condition options.
 const (
 	DependsOnNone    DependsOnCondition = ""
 	DependsOnSuccess DependsOnCondition = "success"
@@ -93,7 +95,7 @@ func (o *TaskOptions) Save(agentDir string) error {
 func LoadTaskOptions(agentDir string) (*TaskOptions, error) {
 	optionsPath := GetOptionsPath(agentDir)
 
-	data, err := os.ReadFile(optionsPath)
+	data, err := os.ReadFile(optionsPath) //nolint:gosec // G304: optionsPath is from GetOptionsPath(agentDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return DefaultTaskOptions(), nil

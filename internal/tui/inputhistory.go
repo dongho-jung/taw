@@ -14,6 +14,7 @@ import (
 // InputHistoryAction represents the selected action.
 type InputHistoryAction int
 
+// Input history action options.
 const (
 	InputHistoryCancel InputHistoryAction = iota
 	InputHistorySelect
@@ -35,15 +36,15 @@ type InputHistoryPicker struct {
 	height           int
 
 	// Style cache (reused across renders)
-	styleTitle        lipgloss.Style
-	styleInput        lipgloss.Style
-	styleItem         lipgloss.Style
-	styleSelected     lipgloss.Style
-	styleHelp         lipgloss.Style
-	styleDim          lipgloss.Style
+	styleTitle         lipgloss.Style
+	styleInput         lipgloss.Style
+	styleItem          lipgloss.Style
+	styleSelected      lipgloss.Style
+	styleHelp          lipgloss.Style
+	styleDim           lipgloss.Style
 	stylePreviewBorder lipgloss.Style
 	stylePreviewTitle  lipgloss.Style
-	stylesCached      bool
+	stylesCached       bool
 }
 
 // NewInputHistoryPicker creates a new input history picker.
@@ -237,6 +238,7 @@ func (m *InputHistoryPicker) View() tea.View {
 	}
 
 	var sb strings.Builder
+	sb.Grow((m.width + 1) * (m.height + 1)) // Pre-allocate for full screen
 	line := 0
 
 	// Title

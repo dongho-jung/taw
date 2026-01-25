@@ -41,7 +41,7 @@ func (s *TemplateService) templatePath() string {
 // LoadTemplates loads templates from file.
 func (s *TemplateService) LoadTemplates() ([]TemplateEntry, error) {
 	path := s.templatePath()
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: path is from templatePath()
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -51,8 +51,9 @@ func (s *TemplateService) LoadTemplates() ([]TemplateEntry, error) {
 
 	var entries []TemplateEntry
 	if err := json.Unmarshal(data, &entries); err != nil {
+		// Corrupt JSON: backup and return empty list for graceful degradation
 		_ = fileutil.BackupCorruptFile(path)
-		return nil, nil
+		return nil, nil //nolint:nilerr // Intentional: return empty list on corrupt file
 	}
 	return entries, nil
 }
@@ -60,7 +61,7 @@ func (s *TemplateService) LoadTemplates() ([]TemplateEntry, error) {
 // SaveTemplates saves templates to file.
 func (s *TemplateService) SaveTemplates(entries []TemplateEntry) error {
 	path := s.templatePath()
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 		return err
 	}
 	data, err := json.MarshalIndent(entries, "", "  ")

@@ -59,7 +59,7 @@ func (m *TaskInput) persistTemplateDraft() {
 	}
 
 	draftPath := filepath.Join(pawDir, constants.TemplateDraftFile)
-	if err := os.WriteFile(draftPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(draftPath, []byte(content), 0644); err != nil { //nolint:gosec // G306: draft file needs to be readable
 		logging.Warn("persistTemplateDraft: failed to write draft (path=%s, err=%v)", draftPath, err)
 		return
 	}
@@ -75,7 +75,7 @@ func (m *TaskInput) checkTemplateSelection() bool {
 	}
 
 	selectionPath := filepath.Join(pawDir, constants.TemplateSelectionFile)
-	data, err := os.ReadFile(selectionPath)
+	data, err := os.ReadFile(selectionPath) //nolint:gosec // G304: selectionPath is constructed from pawDir
 	if err != nil {
 		return false
 	}

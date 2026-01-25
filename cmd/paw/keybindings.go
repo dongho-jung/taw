@@ -23,7 +23,8 @@ func shellPassthrough(key, pawCmd string) string {
 	// If current pane is the shell pane, send the key; otherwise run PAW command
 	// Escape double quotes in pawCmd for proper tmux command nesting
 	escapedCmd := strings.ReplaceAll(pawCmd, `"`, `\"`)
-	return fmt.Sprintf(`if -F "#{==:#{pane_id},#{@paw_shell_pane_id}}" "send-keys %s" "%s"`, key, escapedCmd)
+	// shellPaneIDKey is defined in internal_popup_shell.go
+	return fmt.Sprintf(`if -F "#{==:#{pane_id},#{%s}}" "send-keys %s" "%s"`, shellPaneIDKey, key, escapedCmd)
 }
 
 // buildKeybindings creates tmux keybindings for PAW.
@@ -55,7 +56,7 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 		}
 		cmd := shellJoin(append([]string{ctx.PawBin, "internal"}, args...)...)
 		full := strings.Join(append(envParts, cmd), " ")
-		return fmt.Sprintf("run-shell %s", shellQuote(full))
+		return "run-shell " + shellQuote(full)
 	}
 
 	// Command shortcuts - all commands include env vars for proper context resolution

@@ -268,7 +268,7 @@ func TestSendWithUrgencyDoesNotPanic(t *testing.T) {
 
 func TestSendWithOptionsDoesNotPanic(t *testing.T) {
 	// Verify SendWithOptions doesn't panic with various options
-	opts := NotifyOptions{
+	opts := Options{
 		Urgency: UrgencyCritical,
 		Icon:    IconError,
 	}
@@ -278,15 +278,15 @@ func TestSendWithOptionsDoesNotPanic(t *testing.T) {
 	}
 
 	// Test with default options
-	err = SendWithOptions("Test", "Message", NotifyOptions{})
+	err = SendWithOptions("Test", "Message", Options{})
 	if err != nil {
 		t.Errorf("SendWithOptions() with default options returned error: %v", err)
 	}
 }
 
-func TestNotifyOptionsDefaults(t *testing.T) {
-	// Verify NotifyOptions has sensible zero values
-	opts := NotifyOptions{}
+func TestOptionsDefaults(t *testing.T) {
+	// Verify Options has sensible zero values
+	opts := Options{}
 
 	if opts.Urgency != UrgencyLow {
 		t.Errorf("Default Urgency = %d, want %d (UrgencyLow)", opts.Urgency, UrgencyLow)

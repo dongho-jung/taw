@@ -7,6 +7,7 @@ import (
 
 	"github.com/dongho-jung/paw/internal/app"
 	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/service"
 	"github.com/dongho-jung/paw/internal/task"
@@ -57,13 +58,13 @@ func waitForDependency(appCtx *app.App, tm tmux.Client, windowID string, t *task
 			firstWait = false
 		}
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(constants.DependencyPollInterval)
 	}
 }
 
 // dependencySatisfied checks if the given status satisfies the dependency condition.
 func dependencySatisfied(condition config.DependsOnCondition, status task.Status) bool {
-	switch condition {
+	switch condition { //nolint:exhaustive // DependsOnNone uses default (always satisfied)
 	case config.DependsOnSuccess:
 		return status == task.StatusDone
 	case config.DependsOnFailure:

@@ -63,7 +63,8 @@ func RunCommand(command string, workDir string, env []string, timeout time.Durat
 		return result, fmt.Errorf("command timed out after %s", timeout)
 	}
 
-	if exitErr, ok := err.(*exec.ExitError); ok {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
 		result.ExitCode = exitErr.ExitCode()
 		result.Success = false
 		return result, err

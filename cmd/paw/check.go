@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -45,7 +46,7 @@ type checkResult struct {
 }
 
 // runCheck runs all dependency checks and prints the results.
-func runCheck(cmd *cobra.Command, args []string) error {
+func runCheck(_ *cobra.Command, _ []string) error {
 	fmt.Println("PAW Check")
 	fmt.Println("=========")
 	fmt.Println()
@@ -77,7 +78,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	if hasErrors {
 		fmt.Println("❌ Some required dependencies are missing. Please install them before using PAW.")
-		return fmt.Errorf("required dependencies missing")
+		return errors.New("required dependencies missing")
 	}
 	fmt.Println("✅ All required dependencies are available.")
 	return nil
@@ -135,11 +136,12 @@ func collectCheckResults() []checkResult {
 // printResult prints a single check result with appropriate formatting.
 func printResult(r checkResult) {
 	var icon string
-	if r.ok {
+	switch {
+	case r.ok:
 		icon = "✅"
-	} else if r.required {
+	case r.required:
 		icon = "❌"
-	} else {
+	default:
 		icon = "⚠️ "
 	}
 
@@ -253,7 +255,7 @@ func checkSounds() checkResult {
 	result := checkResult{name: "sounds", required: false}
 
 	soundDir := "/System/Library/Sounds"
-	missing := []string{}
+	var missing []string
 
 	for _, sound := range soundsToCheck {
 		soundPath := filepath.Join(soundDir, sound+".aiff")
@@ -264,7 +266,7 @@ func checkSounds() checkResult {
 
 	if len(missing) > 0 {
 		result.ok = false
-		result.message = fmt.Sprintf("missing: %s", strings.Join(missing, ", "))
+		result.message = "missing: " + strings.Join(missing, ", ")
 		return result
 	}
 
@@ -274,7 +276,7 @@ func checkSounds() checkResult {
 }
 
 func applyFixes(results []checkResult) []checkResult {
-	var fixes []checkResult
+	fixes := make([]checkResult, 0, len(results))
 	for _, r := range results {
 		if r.ok || r.fix == nil {
 			continue

@@ -190,7 +190,7 @@ func (m *Manager) executePreWorktreeHook(worktreeDir string) {
 	hook := m.config.PreWorktreeHook
 	logging.Debug("Executing pre-worktree hook: %s", hook)
 
-	cmd := exec.Command("sh", "-c", hook)
+	cmd := exec.Command("sh", "-c", hook) //nolint:gosec // G204: hook is from user config, intentionally executable
 	cmd.Dir = worktreeDir
 	cmd.Env = os.Environ()
 

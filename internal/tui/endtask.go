@@ -12,6 +12,7 @@ import (
 // StepStatus represents the status of a step.
 type StepStatus string
 
+// Step status values.
 const (
 	StepPending StepStatus = "pending"
 	StepRunning StepStatus = "running"
@@ -61,7 +62,12 @@ func NewEndTaskUI(taskName string, isGitRepo bool) *EndTaskUI {
 	// Detect dark mode BEFORE bubbletea starts
 	isDark := DetectDarkMode()
 
-	steps := []Step{}
+	// Pre-allocate: 6 steps for git repos, 2 for non-git
+	stepCapacity := 2
+	if isGitRepo {
+		stepCapacity = 6
+	}
+	steps := make([]Step, 0, stepCapacity)
 
 	if isGitRepo {
 		steps = append(steps,
@@ -168,7 +174,7 @@ func (m *EndTaskUI) View() tea.View {
 		var icon string
 		var style lipgloss.Style
 
-		switch step.Status {
+		switch step.Status { //nolint:exhaustive // StepPending uses default case
 		case StepOK:
 			icon = "✓"
 			style = m.styleOK

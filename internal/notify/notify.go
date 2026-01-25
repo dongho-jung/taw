@@ -94,8 +94,8 @@ const (
 	termUnknown         = "unknown"
 )
 
-// NotifyOptions contains optional parameters for notifications.
-type NotifyOptions struct {
+// Options contains optional parameters for notifications.
+type Options struct {
 	Urgency Urgency // Notification urgency level (default: UrgencyNormal)
 	Icon    Icon    // Standard icon name (default: none)
 }
@@ -104,16 +104,16 @@ type NotifyOptions struct {
 // Supports multiple terminals (iTerm2, Kitty, WezTerm, Ghostty, rxvt, Windows Terminal,
 // VSCode, foot, Contour) with fallback to Linux notify-send and terminal bell.
 func Send(title, message string) error {
-	return SendWithOptions(title, message, NotifyOptions{Urgency: UrgencyNormal})
+	return SendWithOptions(title, message, Options{Urgency: UrgencyNormal})
 }
 
 // SendWithUrgency shows a desktop notification with the specified urgency level.
 func SendWithUrgency(title, message string, urgency Urgency) error {
-	return SendWithOptions(title, message, NotifyOptions{Urgency: urgency})
+	return SendWithOptions(title, message, Options{Urgency: urgency})
 }
 
 // SendWithOptions shows a desktop notification with custom options.
-func SendWithOptions(title, message string, opts NotifyOptions) error {
+func SendWithOptions(title, message string, opts Options) error {
 	logging.Info("-> SendWithOptions(title=%q, message=%q, urgency=%d, icon=%q)", title, message, opts.Urgency, opts.Icon)
 	defer logging.Info("<- SendWithOptions")
 
@@ -122,7 +122,7 @@ func SendWithOptions(title, message string, opts NotifyOptions) error {
 }
 
 // sendTerminalNotification sends notification using appropriate terminal protocol.
-func sendTerminalNotification(title, message string, opts NotifyOptions) {
+func sendTerminalNotification(title, message string, opts Options) {
 	term := detectTerminal()
 	inTmux := os.Getenv("TMUX") != ""
 
@@ -150,11 +150,8 @@ func sendTerminalNotification(title, message string, opts NotifyOptions) {
 		// rxvt-unicode uses OSC 777
 		sendOSC777(title, message, inTmux)
 	default:
-		// Try notify-send on Linux first, then fall back to OSC 9
-		if runtime.GOOS == "linux" && tryNotifySend(title, message, opts) {
-			// notify-send succeeded, still send bell for terminal alert
-		} else {
-			// Try OSC 9 (most widely supported) for unknown terminals
+		// Try notify-send on Linux first, then fall back to OSC 9 (most widely supported)
+		if runtime.GOOS != "linux" || !tryNotifySend(title, message, opts) {
 			sendOSC9(message, inTmux)
 		}
 	}
@@ -239,7 +236,7 @@ func sendOSC9(message string, inTmux bool) {
 //
 // Supported by: Kitty, foot, Contour
 // See: https://sw.kovidgoyal.net/kitty/desktop-notifications/
-func sendOSC99Enhanced(title, message string, opts NotifyOptions, inTmux bool) {
+func sendOSC99Enhanced(title, message string, opts Options, inTmux bool) {
 	// Build metadata string with all supported options
 	// i=paw: unique notification id (allows updating/closing)
 	// d=0: notification is not done (show it immediately)
@@ -282,7 +279,7 @@ func writeOSC(osc string, inTmux bool) {
 		ttys := getTmuxClientTTYs()
 		if len(ttys) > 0 {
 			for _, tty := range ttys {
-				if f, err := os.OpenFile(tty, os.O_WRONLY, 0); err == nil {
+				if f, err := os.OpenFile(tty, os.O_WRONLY, 0); err == nil { //nolint:gosec // G304: tty is from getTmuxClientTTYs() which validates
 					_, _ = fmt.Fprint(f, osc)
 					_ = f.Close()
 				} else {
@@ -373,7 +370,7 @@ var notifySendPath string
 // tryNotifySend attempts to send notification via Linux notify-send.
 // Returns true if notification was sent successfully.
 // This is used as a fallback for Linux systems when terminal doesn't support OSC notifications.
-func tryNotifySend(title, message string, opts NotifyOptions) bool {
+func tryNotifySend(title, message string, opts Options) bool {
 	// Check if notify-send is available (cached)
 	if notifySendPath == "" {
 		path, err := exec.LookPath("notify-send")
@@ -389,7 +386,7 @@ func tryNotifySend(title, message string, opts NotifyOptions) bool {
 	}
 
 	// Build notify-send command with options
-	args := []string{}
+	var args []string
 
 	// Add urgency level
 	switch opts.Urgency {
@@ -417,7 +414,7 @@ func tryNotifySend(title, message string, opts NotifyOptions) bool {
 	}
 
 	// Run notify-send in background (don't wait)
-	cmd := exec.Command(notifySendPath, args...)
+	cmd := exec.Command(notifySendPath, args...) //nolint:gosec // G204: notifySendPath is resolved via LookPath
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	cmd.Stdin = nil
@@ -441,7 +438,7 @@ func PlaySound(soundType SoundType) {
 		soundPath := fmt.Sprintf("/System/Library/Sounds/%s.aiff", soundType)
 		if _, err := os.Stat(soundPath); err == nil {
 			// Run afplay in background (don't wait)
-			cmd := exec.Command("afplay", soundPath)
+			cmd := exec.Command("afplay", soundPath) //nolint:gosec // G204: soundPath is constructed from trusted constants
 			cmd.Stdout = nil
 			cmd.Stderr = nil
 			cmd.Stdin = nil
@@ -459,7 +456,8 @@ func PlaySound(soundType SoundType) {
 // SendWithActions shows a notification. Action buttons are not supported
 // in terminal-based notifications, so this just sends a simple notification.
 // Always returns -1 (no action selected).
-func SendWithActions(title, message, iconPath string, actions []string, timeoutSec int) (int, error) {
+// Note: iconPath and timeoutSec are ignored for terminal notifications.
+func SendWithActions(title, message, _ string, actions []string, _ int) (int, error) {
 	logging.Info("-> SendWithActions(title=%q, actions=%v)", title, actions)
 	defer logging.Info("<- SendWithActions")
 

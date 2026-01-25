@@ -17,6 +17,7 @@ import (
 // FocusPanel represents which panel is currently focused.
 type FocusPanel int
 
+// Focus panel options.
 const (
 	FocusPanelLeft   FocusPanel = iota // Task input textarea
 	FocusPanelRight                    // Options panel
@@ -26,6 +27,7 @@ const (
 // OptField represents which option field is currently selected.
 type OptField int
 
+// Option field selection values.
 const (
 	OptFieldModel OptField = iota
 	OptFieldBranchName
@@ -55,17 +57,17 @@ const (
 
 // TaskInput provides an inline text input for task content.
 type TaskInput struct {
-	textarea              textarea.Model
-	submitted             bool
-	cancelled             bool
-	requestTaskNamePopup  bool
-	width                 int
-	height                int
-	options     *config.TaskOptions
-	activeTasks []string // Active task names for dependency selection
-	isDark      bool     // Cached dark mode detection (must be detected before bubbletea starts)
-	isGitRepo   bool     // Whether the project is a git repository
-	pawDir      string
+	textarea             textarea.Model
+	submitted            bool
+	cancelled            bool
+	requestTaskNamePopup bool
+	width                int
+	height               int
+	options              *config.TaskOptions
+	activeTasks          []string // Active task names for dependency selection
+	isDark               bool     // Cached dark mode detection (must be detected before bubbletea starts)
+	isGitRepo            bool     // Whether the project is a git repository
+	pawDir               string
 
 	// Dynamic textarea height
 	textareaHeight    int // Current textarea height (visible lines)
@@ -165,11 +167,11 @@ type jumpToTaskMsg struct {
 
 // TaskInputResult contains the result of the task input.
 type TaskInputResult struct {
-	Content               string
-	Options               *config.TaskOptions
-	Cancelled             bool
-	JumpTarget            *JumpTarget // Non-nil if user requested to jump to an external project task
-	RequestTaskNamePopup  bool        // True if user pressed Alt+Enter with empty content
+	Content              string
+	Options              *config.TaskOptions
+	Cancelled            bool
+	JumpTarget           *JumpTarget // Non-nil if user requested to jump to an external project task
+	RequestTaskNamePopup bool        // True if user pressed Alt+Enter with empty content
 }
 
 // NewTaskInputWithOptions creates a new task input model with active task list and git mode flag.
@@ -388,7 +390,7 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// This avoids file I/O on every keystroke which causes stuttering
 		m.checkHistorySelection()
 		if m.checkTemplateSelection() {
-			cmds = append(cmds, tea.Tick(templateTipDuration, func(t time.Time) tea.Msg {
+			cmds = append(cmds, tea.Tick(templateTipDuration, func(_ time.Time) tea.Msg {
 				return templateTipClearMsg{}
 			}))
 		}
@@ -434,7 +436,7 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// (e.g., returning from Ctrl+R history picker or Ctrl+T template picker)
 		m.checkHistorySelection()
 		if m.checkTemplateSelection() {
-			return m, tea.Tick(templateTipDuration, func(t time.Time) tea.Msg {
+			return m, tea.Tick(templateTipDuration, func(_ time.Time) tea.Msg {
 				return templateTipClearMsg{}
 			})
 		}
@@ -533,7 +535,7 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Return a tick command to clear the pending state after timeout
 			m.cancelPressTime = now
 			m.cancelKey = keyStr // Store which key was pressed ("esc" or "ctrl+c")
-			return m, tea.Tick(cancelDoublePressTimeout, func(t time.Time) tea.Msg {
+			return m, tea.Tick(cancelDoublePressTimeout, func(_ time.Time) tea.Msg {
 				return cancelClearMsg{}
 			})
 
@@ -847,7 +849,7 @@ func (m *TaskInput) View() tea.View {
 	if m.focusPanel == FocusPanelLeft {
 		if cursor := m.textarea.Cursor(); cursor != nil {
 			cursor.Y += 2 // Account for help text line + top border
-			cursor.X += 1
+			cursor.X++
 
 			// Clamp cursor Y to textarea visible bounds as a safety measure
 			// This prevents cursor from appearing outside the box in edge cases

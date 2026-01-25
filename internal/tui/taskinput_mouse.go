@@ -211,7 +211,7 @@ func (m *TaskInput) getKanbanRelativeX(x, col int) int {
 // switchFocusTo switches focus to the specified panel.
 func (m *TaskInput) switchFocusTo(panel FocusPanel) {
 	// Blur current panel
-	switch m.focusPanel {
+	switch m.focusPanel { //nolint:exhaustive // FocusPanelRight has no blur action
 	case FocusPanelLeft:
 		m.textarea.Blur()
 	case FocusPanelKanban:
@@ -221,7 +221,7 @@ func (m *TaskInput) switchFocusTo(panel FocusPanel) {
 	m.focusPanel = panel
 
 	// Focus new panel
-	switch panel {
+	switch panel { //nolint:exhaustive // FocusPanelRight has no focus action
 	case FocusPanelLeft:
 		m.textarea.Focus()
 	case FocusPanelKanban:
@@ -232,7 +232,7 @@ func (m *TaskInput) switchFocusTo(panel FocusPanel) {
 // switchFocusToKanbanColumn switches focus to a specific Kanban column.
 func (m *TaskInput) switchFocusToKanbanColumn(col int) {
 	// Blur current panel
-	switch m.focusPanel {
+	switch m.focusPanel { //nolint:exhaustive // FocusPanelRight has no blur action
 	case FocusPanelLeft:
 		m.textarea.Blur()
 	case FocusPanelKanban:
@@ -295,7 +295,7 @@ func (m *TaskInput) handleMouseScroll(msg tea.MouseWheelMsg) {
 	// Scroll the panel under the mouse cursor
 	clickedPanel := m.detectClickedPanel(msg.X, msg.Y)
 
-	switch clickedPanel {
+	switch clickedPanel { //nolint:exhaustive // FocusPanelRight has no scroll action
 	case FocusPanelLeft:
 		// Scroll the textarea by moving the cursor
 		switch msg.Button {

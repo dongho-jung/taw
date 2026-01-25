@@ -4,6 +4,7 @@ package config
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,7 +21,7 @@ func GlobalPawDir() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "paw")
+	return filepath.Join(home, constants.GlobalConfigDir)
 }
 
 // GlobalWorkspacesDir returns the global workspaces directory path ($HOME/.local/share/paw/workspaces).
@@ -30,7 +31,7 @@ func GlobalWorkspacesDir() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".local", "share", "paw", "workspaces")
+	return filepath.Join(home, constants.GlobalDataDir, constants.GlobalWorkspacesDir)
 }
 
 // ProjectWorkspaceID generates a unique workspace ID for a project directory.
@@ -69,7 +70,7 @@ func GetWorkspaceDir(projectDir string, pawInProject PawInProject, isGitRepo boo
 	localPawDir := filepath.Join(projectDir, constants.PawDirName)
 
 	// Resolve auto mode
-	useLocal := false
+	var useLocal bool
 	switch pawInProject {
 	case PawInProjectLocal:
 		useLocal = true
@@ -122,9 +123,9 @@ func LoadGlobal() (*Config, error) {
 func EnsureGlobalDir() error {
 	globalDir := GlobalPawDir()
 	if globalDir == "" {
-		return fmt.Errorf("could not determine home directory")
+		return errors.New("could not determine home directory")
 	}
-	return os.MkdirAll(globalDir, 0755)
+	return os.MkdirAll(globalDir, 0755) //nolint:gosec // G301: standard directory permissions
 }
 
 // EnsureGlobalConfig ensures the global config file exists with default values.
@@ -133,7 +134,7 @@ func EnsureGlobalDir() error {
 func EnsureGlobalConfig() error {
 	globalDir := GlobalPawDir()
 	if globalDir == "" {
-		return fmt.Errorf("could not determine home directory")
+		return errors.New("could not determine home directory")
 	}
 	return ensureConfigInDir(globalDir)
 }
@@ -142,7 +143,7 @@ func EnsureGlobalConfig() error {
 // This is the internal implementation used by EnsureGlobalConfig.
 func ensureConfigInDir(dir string) error {
 	// Ensure directory exists
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -167,6 +168,7 @@ func ensureConfigInDir(dir string) error {
 // PawInProject defines where the workspace is stored.
 type PawInProject string
 
+// PawInProject workspace location options.
 const (
 	PawInProjectAuto   PawInProject = "auto"   // Git repo -> global, non-git -> local
 	PawInProjectGlobal PawInProject = "global" // Always use global workspace
@@ -196,11 +198,11 @@ func (c *Config) Normalize() []string {
 
 	c.LogFormat = strings.TrimSpace(c.LogFormat)
 	if c.LogFormat == "" {
-		c.LogFormat = "text"
+		c.LogFormat = constants.LogFormatText
 	}
-	if c.LogFormat != "text" && c.LogFormat != "jsonl" {
-		warnings = append(warnings, fmt.Sprintf("invalid log_format %q; defaulting to %q", c.LogFormat, "text"))
-		c.LogFormat = "text"
+	if c.LogFormat != constants.LogFormatText && c.LogFormat != constants.LogFormatJSONL {
+		warnings = append(warnings, fmt.Sprintf("invalid log_format %q; defaulting to %q", c.LogFormat, constants.LogFormatText))
+		c.LogFormat = constants.LogFormatText
 	}
 	if c.LogMaxSizeMB <= 0 {
 		c.LogMaxSizeMB = 10
@@ -215,7 +217,7 @@ func (c *Config) Normalize() []string {
 // DefaultConfig returns the default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		LogFormat:     "text",
+		LogFormat:     constants.LogFormatText,
 		LogMaxSizeMB:  10,
 		LogMaxBackups: 3,
 	}
@@ -242,18 +244,13 @@ func Load(pawDir string) (*Config, error) {
 		return DefaultConfig(), nil
 	}
 
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(configPath) //nolint:gosec // G304: configPath is from caller which constructs path
 	if err != nil {
 		logging.Debug("config.Load: failed to read config: %v", err)
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
-	cfg, err := parseConfig(string(data))
-	if err != nil {
-		logging.Debug("config.Load: failed to parse config: %v", err)
-		return nil, err
-	}
-
+	cfg := parseConfig(string(data))
 	logging.Debug("config.Load: loaded")
 	return cfg, nil
 }

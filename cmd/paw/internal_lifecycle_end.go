@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,7 +31,7 @@ var endTaskCmd = &cobra.Command{
 	Use:   "end-task [session] [window-id]",
 	Short: "Finish a task (commit, merge, cleanup)",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> endTaskCmd(session=%s, windowID=%s)", args[0], args[1])
 		defer logging.Debug("<- endTaskCmd")
 
@@ -76,12 +77,12 @@ var endTaskCmd = &cobra.Command{
 		logging.Debug("Configuration: Action=%s", endTaskAction)
 
 		// Handle drop and done actions - skip git operations
-		skipGitOps := (endTaskAction == "drop" || endTaskAction == "done")
+		skipGitOps := (endTaskAction == constants.ActionDrop || endTaskAction == constants.ActionDone)
 		switch endTaskAction {
-		case "drop":
+		case constants.ActionDrop:
 			fmt.Println("  Dropping task (discarding changes)...")
 			logging.Log("drop action: discarding changes for task %s", targetTask.Name)
-		case "done":
+		case constants.ActionDone:
 			fmt.Println("  Finishing task...")
 			logging.Log("done action: cleaning up task %s", targetTask.Name)
 		}
@@ -92,7 +93,7 @@ var endTaskCmd = &cobra.Command{
 
 			// Handle action-based behavior
 			switch endTaskAction {
-			case "pr":
+			case constants.ActionPR:
 				// Push and create PR
 				if !appCtx.IsWorktreeMode() {
 					logging.Warn("PR creation requested in non-worktree mode; skipping")
@@ -101,88 +102,88 @@ var endTaskCmd = &cobra.Command{
 						_ = os.Remove(paneCaptureFile)
 					}
 					return nil
-				} else {
-					fallbackBranch := targetTask.Name
-					branchName, ok := resolvePushBranch(gitClient, workDir, fallbackBranch)
-					if !ok {
-						fmt.Println("  ⚠️  Failed to determine branch for PR creation")
-						if paneCaptureFile != "" {
-							_ = os.Remove(paneCaptureFile)
-						}
-						return nil
-					}
+				}
 
-					pushSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s to remote", branchName))
-					pushSpinner.Start()
-
-					pushTimer := logging.StartTimer("git push")
-					if err := gitClient.Push(workDir, "origin", branchName, true); err != nil {
-						pushTimer.StopWithResult(false, err.Error())
-						pushSpinner.Stop(false, err.Error())
-						fmt.Printf("  ⚠️  Failed to push branch: %v\n", err)
-						if paneCaptureFile != "" {
-							_ = os.Remove(paneCaptureFile)
-						}
-						return nil
-					}
-
-					pushTimer.StopWithResult(true, fmt.Sprintf("branch=%s", branchName))
-					pushSpinner.Stop(true, branchName)
-
-					ghClient := github.New()
-					if !ghClient.IsInstalled() {
-						fmt.Println("  ⚠️  gh CLI not found; cannot create PR")
-						if paneCaptureFile != "" {
-							_ = os.Remove(paneCaptureFile)
-						}
-						return nil
-					}
-
-					mainBranch := gitClient.GetMainBranch(appCtx.ProjectDir)
-					prTitle := buildPRTitle(targetTask.Name)
-					commits, err := gitClient.GetBranchCommits(workDir, branchName, mainBranch, 20)
-					if err != nil {
-						logging.Warn("Failed to read branch commits: %v", err)
-						commits = nil
-					}
-					prBody := buildPRBody(targetTask.Name, commits)
-
-					prSpinner := tui.NewSimpleSpinner("Creating pull request")
-					prSpinner.Start()
-					prTimer := logging.StartTimer("gh pr create")
-					prNumber, prURL, err := ghClient.CreatePR(workDir, prTitle, prBody, mainBranch)
-					if err != nil {
-						prTimer.StopWithResult(false, err.Error())
-						prSpinner.Stop(false, err.Error())
-						fmt.Printf("  ⚠️  Failed to create PR: %v\n", err)
-						if paneCaptureFile != "" {
-							_ = os.Remove(paneCaptureFile)
-						}
-						return nil
-					}
-					prTimer.StopWithResult(true, fmt.Sprintf("pr=%d", prNumber))
-					prSpinner.Stop(true, fmt.Sprintf("#%d", prNumber))
-					fmt.Printf("  ✓ PR created: %s\n", prURL)
-
-					if err := targetTask.SavePRNumber(prNumber); err != nil {
-						logging.Warn("Failed to save PR number: %v", err)
-					}
-
-					reviewName := constants.EmojiReview + constants.TruncateForWindowName(targetTask.Name)
-					if err := renameWindowWithStatus(tm, windowID, reviewName, appCtx.PawDir, targetTask.Name, "end-task", task.StatusWaiting); err != nil {
-						logging.Warn("Failed to rename window for PR review: %v", err)
-					}
-
-					startPRWatch(appCtx, sessionName, windowID, targetTask.Name, prNumber)
-					showPRPopup(tm, sessionName, prNumber, prURL)
-
+				fallbackBranch := targetTask.Name
+				branchName, ok := resolvePushBranch(gitClient, workDir, fallbackBranch)
+				if !ok {
+					fmt.Println("  ⚠️  Failed to determine branch for PR creation")
 					if paneCaptureFile != "" {
 						_ = os.Remove(paneCaptureFile)
 					}
 					return nil
 				}
 
-			case "merge-push", "merge":
+				pushSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s to remote", branchName))
+				pushSpinner.Start()
+
+				pushTimer := logging.StartTimer("git push")
+				if err := gitClient.Push(workDir, "origin", branchName, true); err != nil {
+					pushTimer.StopWithResult(false, err.Error())
+					pushSpinner.Stop(false, err.Error())
+					fmt.Printf("  ⚠️  Failed to push branch: %v\n", err)
+					if paneCaptureFile != "" {
+						_ = os.Remove(paneCaptureFile)
+					}
+					return nil
+				}
+
+				pushTimer.StopWithResult(true, "branch="+branchName)
+				pushSpinner.Stop(true, branchName)
+
+				ghClient := github.New()
+				if !ghClient.IsInstalled() {
+					fmt.Println("  ⚠️  gh CLI not found; cannot create PR")
+					if paneCaptureFile != "" {
+						_ = os.Remove(paneCaptureFile)
+					}
+					return nil
+				}
+
+				mainBranch := gitClient.GetMainBranch(appCtx.ProjectDir)
+				prTitle := buildPRTitle(targetTask.Name)
+				commits, err := gitClient.GetBranchCommits(workDir, branchName, mainBranch, 20)
+				if err != nil {
+					logging.Warn("Failed to read branch commits: %v", err)
+					commits = nil
+				}
+				prBody := buildPRBody(targetTask.Name, commits)
+
+				prSpinner := tui.NewSimpleSpinner("Creating pull request")
+				prSpinner.Start()
+				prTimer := logging.StartTimer("gh pr create")
+				prNumber, prURL, err := ghClient.CreatePR(workDir, prTitle, prBody, mainBranch)
+				if err != nil {
+					prTimer.StopWithResult(false, err.Error())
+					prSpinner.Stop(false, err.Error())
+					fmt.Printf("  ⚠️  Failed to create PR: %v\n", err)
+					if paneCaptureFile != "" {
+						_ = os.Remove(paneCaptureFile)
+					}
+					return nil
+				}
+				prTimer.StopWithResult(true, fmt.Sprintf("pr=%d", prNumber))
+				prSpinner.Stop(true, fmt.Sprintf("#%d", prNumber))
+				fmt.Printf("  ✓ PR created: %s\n", prURL)
+
+				if err := targetTask.SavePRNumber(prNumber); err != nil {
+					logging.Warn("Failed to save PR number: %v", err)
+				}
+
+				reviewName := constants.EmojiReview + constants.TruncateForWindowName(targetTask.Name)
+				if err := renameWindowWithStatus(tm, windowID, reviewName, appCtx.PawDir, targetTask.Name, "end-task", task.StatusWaiting); err != nil {
+					logging.Warn("Failed to rename window for PR review: %v", err)
+				}
+
+				startPRWatch(appCtx, sessionName, windowID, targetTask.Name, prNumber)
+				showPRPopup(tm, sessionName, prNumber, prURL)
+
+				if paneCaptureFile != "" {
+					_ = os.Remove(paneCaptureFile)
+				}
+				return nil
+
+			case constants.ActionMergePush, constants.ActionMerge:
 				// Auto-merge (with optional push for "merge-push")
 				if !appCtx.IsWorktreeMode() {
 					logging.Warn("merge requested in non-worktree mode; skipping merge")
@@ -195,7 +196,7 @@ var endTaskCmd = &cobra.Command{
 					}
 
 					// Push main to remote if "merge-push" action
-					if endTaskAction == "merge-push" {
+					if endTaskAction == constants.ActionMergePush {
 						mainBranch := gitClient.GetMainBranch(appCtx.ProjectDir)
 						pushSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s to remote", mainBranch))
 						pushSpinner.Start()
@@ -220,7 +221,7 @@ var endTaskCmd = &cobra.Command{
 		fmt.Println()
 
 		// Skip post-task processing for drop action only (done action should run hooks)
-		if endTaskAction != "drop" {
+		if endTaskAction != constants.ActionDrop {
 			if appCtx.Config != nil && appCtx.Config.PostTaskHook != "" {
 				hookEnv := appCtx.GetEnvVars(targetTask.Name, workDir, windowID)
 				hookSpinner := tui.NewSimpleSpinner("Running post-task hook")
@@ -253,7 +254,7 @@ var endTaskCmd = &cobra.Command{
 		// Send desktop notification
 		_ = notify.Send("Task completed", fmt.Sprintf("✅ %s completed successfully", targetTask.Name))
 		logging.Trace("endTaskCmd: displaying completion message for task=%s", targetTask.Name)
-		if err := tm.DisplayMessage(fmt.Sprintf("✅ Task completed: %s", targetTask.Name), 2000); err != nil {
+		if err := tm.DisplayMessage("✅ Task completed: "+targetTask.Name, constants.DisplayMsgStandard); err != nil {
 			logging.Trace("Failed to display message: %v", err)
 		}
 
@@ -286,7 +287,7 @@ var endTaskUICmd = &cobra.Command{
 	Use:   "end-task-ui [session] [window-id]",
 	Short: "Finish task with UI feedback (creates visible pane)",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		windowID := args[1]
 
@@ -333,10 +334,7 @@ var endTaskUICmd = &cobra.Command{
 		}
 
 		// Get the paw binary path
-		pawBin, err := os.Executable()
-		if err != nil {
-			pawBin = "paw"
-		}
+		pawBin := getPawBin()
 
 		// Get working directory from pane
 		panePath, err := tm.Display("#{pane_current_path}")
@@ -359,10 +357,10 @@ var endTaskUICmd = &cobra.Command{
 		}, " ")
 		endTaskCmdStr += "; echo; echo 'Press Enter to close...'; read"
 
-		// Create a top pane (40% height) spanning full window width
+		// Create a top pane spanning full window width
 		_, err = tm.SplitWindowPane(tmux.SplitOpts{
 			Horizontal: false, // vertical split (top/bottom)
-			Size:       "40%",
+			Size:       constants.TopPaneSize,
 			StartDir:   panePath,
 			Command:    endTaskCmdStr,
 			Before:     true, // create pane above (top)
@@ -467,7 +465,7 @@ func runAutoMerge(appCtx *app.App, targetTask *task.Task, windowID, workDir stri
 	currentBranch, _ := gitClient.GetCurrentBranch(appCtx.ProjectDir)
 
 	// Perform the actual merge
-	mergeSuccess := performMerge(appCtx, targetTask, windowID, workDir, mainBranch, currentBranch, hasLocalChanges, gitClient, mergeTimer)
+	mergeSuccess := performMerge(appCtx, targetTask, windowID, workDir, mainBranch, currentBranch, gitClient, mergeTimer)
 
 	// Restore stashed changes by message (not blind pop)
 	if hasLocalChanges {
@@ -491,7 +489,7 @@ func runAutoMerge(appCtx *app.App, targetTask *task.Task, windowID, workDir stri
 // acquireMergeLock attempts to acquire the merge lock file.
 func acquireMergeLock(lockFile, taskName string) bool {
 	for retries := 0; retries < constants.MergeLockMaxRetries; retries++ {
-		f, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		f, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644) //nolint:gosec // G302: lock file just needs to exist
 		if err == nil {
 			_, writeErr := fmt.Fprintf(f, "%s\n%d", taskName, os.Getpid())
 			closeErr := f.Close()
@@ -519,7 +517,7 @@ func acquireMergeLock(lockFile, taskName string) bool {
 }
 
 // performMerge executes the git merge operation.
-func performMerge(appCtx *app.App, targetTask *task.Task, windowID, workDir, mainBranch, currentBranch string, hasLocalChanges bool, gitClient git.Client, mergeTimer *logging.Timer) bool {
+func performMerge(appCtx *app.App, targetTask *task.Task, windowID, workDir, mainBranch, currentBranch string, gitClient git.Client, mergeTimer *logging.Timer) bool {
 	// Fetch latest from origin
 	fetchSpinner := tui.NewSimpleSpinner("Fetching from origin")
 	fetchSpinner.Start()
@@ -532,7 +530,7 @@ func performMerge(appCtx *app.App, targetTask *task.Task, windowID, workDir, mai
 	}
 
 	// Checkout main
-	checkoutSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Checking out %s", mainBranch))
+	checkoutSpinner := tui.NewSimpleSpinner("Checking out " + mainBranch)
 	checkoutSpinner.Start()
 	logging.Debug("Checking out %s...", mainBranch)
 	if err := gitClient.Checkout(appCtx.ProjectDir, mainBranch); err != nil {
@@ -601,7 +599,7 @@ func performMerge(appCtx *app.App, targetTask *task.Task, windowID, workDir, mai
 
 	// Restore original branch if different from main
 	if currentBranch != "" && currentBranch != mainBranch {
-		restoreSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Restoring %s", currentBranch))
+		restoreSpinner := tui.NewSimpleSpinner("Restoring " + currentBranch)
 		restoreSpinner.Start()
 		if err := gitClient.Checkout(appCtx.ProjectDir, currentBranch); err != nil {
 			logging.Warn("Failed to restore branch: %v", err)
@@ -704,7 +702,7 @@ func handleMergeFailure(appCtx *app.App, targetTask *task.Task, windowID string,
 	notify.PlaySound(notify.SoundError)
 	_ = notify.Send("Merge failed", fmt.Sprintf("⚠️ %s - manual resolution needed", targetTask.Name))
 	logging.Trace("endTaskCmd: displaying merge failure message for task=%s", targetTask.Name)
-	if err := tm.DisplayMessage(fmt.Sprintf("⚠️ Merge failed: %s - manual resolution needed", targetTask.Name), 3000); err != nil {
+	if err := tm.DisplayMessage(fmt.Sprintf("⚠️ Merge failed: %s - manual resolution needed", targetTask.Name), constants.DisplayMsgImportant); err != nil {
 		logging.Trace("Failed to display message: %v", err)
 	}
 	return false
@@ -736,8 +734,8 @@ func buildPRBody(taskName string, commits []git.CommitInfo) string {
 			if subj == "" {
 				continue
 			}
-			if len(subj) > 72 {
-				subj = subj[:69] + "..."
+			if len(subj) > constants.CommitSubjectMaxLen {
+				subj = subj[:constants.CommitSubjectTruncatedLen] + "..."
 			}
 			sb.WriteString("- " + subj + "\n")
 		}
@@ -747,12 +745,9 @@ func buildPRBody(taskName string, commits []git.CommitInfo) string {
 }
 
 func startPRWatch(appCtx *app.App, sessionName, windowID, taskName string, prNumber int) {
-	pawBin, err := os.Executable()
-	if err != nil {
-		pawBin = "paw"
-	}
+	pawBin := getPawBin()
 
-	watchCmd := exec.Command(pawBin, "internal", "watch-pr", sessionName, windowID, taskName, fmt.Sprintf("%d", prNumber))
+	watchCmd := exec.Command(pawBin, "internal", "watch-pr", sessionName, windowID, taskName, strconv.Itoa(prNumber)) //nolint:gosec // G204: pawBin is from getPawBin()
 	watchCmd.Dir = appCtx.ProjectDir
 	watchCmd.Env = append(os.Environ(),
 		"PAW_DIR="+appCtx.PawDir,
@@ -766,12 +761,7 @@ func startPRWatch(appCtx *app.App, sessionName, windowID, taskName string, prNum
 }
 
 func showPRPopup(tm tmux.Client, sessionName string, prNumber int, prURL string) {
-	pawBin, err := os.Executable()
-	if err != nil {
-		pawBin = "paw"
-	}
-
-	popupCmd := shellJoin(pawBin, "internal", "pr-popup-tui", sessionName, fmt.Sprintf("%d", prNumber), prURL)
+	popupCmd := shellJoin(getPawBin(), "internal", "pr-popup-tui", sessionName, strconv.Itoa(prNumber), prURL)
 	_ = tm.DisplayPopup(tmux.PopupOpts{
 		Width:  constants.PopupWidthPR,
 		Height: constants.PopupHeightPR,

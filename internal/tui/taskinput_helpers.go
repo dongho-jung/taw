@@ -89,7 +89,7 @@ func (m *TaskInput) checkHistorySelection() {
 	}
 
 	selectionPath := filepath.Join(pawDir, constants.HistorySelectionFile)
-	data, err := os.ReadFile(selectionPath)
+	data, err := os.ReadFile(selectionPath) //nolint:gosec // G304: selectionPath is constructed from pawDir
 	if err != nil {
 		// File doesn't exist or can't be read - this is normal (no pending selection)
 		return

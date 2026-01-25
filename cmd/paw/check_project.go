@@ -122,7 +122,7 @@ func projectChecks(appCtx *app.App) []checkResult {
 		required: false,
 		message:  boolMessage(historyExists, historyDir, "missing"),
 		fix: func() error {
-			return os.MkdirAll(historyDir, 0755)
+			return os.MkdirAll(historyDir, 0755) //nolint:gosec // G301: standard directory permissions
 		},
 	})
 
@@ -134,7 +134,7 @@ func projectChecks(appCtx *app.App) []checkResult {
 		required: false,
 		message:  boolMessage(agentsExists, agentsDir, "missing"),
 		fix: func() error {
-			return os.MkdirAll(agentsDir, 0755)
+			return os.MkdirAll(agentsDir, 0755) //nolint:gosec // G301: standard directory permissions
 		},
 	})
 
@@ -155,7 +155,7 @@ func projectChecks(appCtx *app.App) []checkResult {
 					name:     "config values",
 					ok:       false,
 					required: false,
-					message:  fmt.Sprintf("normalize warnings: %s", stringsJoin(warnings)),
+					message:  "normalize warnings: " + stringsJoin(warnings),
 				})
 			} else {
 				results = append(results, checkResult{

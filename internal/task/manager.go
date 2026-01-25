@@ -172,7 +172,7 @@ func (m *Manager) CreateTask(content string, customBranchName ...string) (*Task,
 			logging.Warn("Claude name generation failed, using fallback: error=%v, fallback=%s", err, fallbackName)
 			name = fallbackName
 		} else {
-			timer.StopWithResult(true, fmt.Sprintf("name=%s", name))
+			timer.StopWithResult(true, "name="+name)
 			logging.Debug("Task name generated: %s", name)
 		}
 	}
@@ -220,7 +220,7 @@ func (m *Manager) createTaskDirectory(baseName string) (string, error) {
 		}
 
 		dir := filepath.Join(m.agentsDir, name)
-		err := os.Mkdir(dir, 0755)
+		err := os.Mkdir(dir, 0755) //nolint:gosec // G301: standard directory permissions
 		if err == nil {
 			return dir, nil
 		}
@@ -229,7 +229,7 @@ func (m *Manager) createTaskDirectory(baseName string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("failed to create unique task directory after 100 attempts")
+	return "", errors.New("failed to create unique task directory after 100 attempts")
 }
 
 // GetTask retrieves a task by name.
@@ -272,7 +272,7 @@ func (m *Manager) ListTasks() ([]*Task, error) {
 		return nil, fmt.Errorf("failed to read agents directory: %w", err)
 	}
 
-	var tasks []*Task
+	tasks := make([]*Task, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue

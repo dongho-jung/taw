@@ -1,3 +1,5 @@
+// Package textarea provides a multi-line text input component for bubbletea.
+// This is a fork of bubbles/textarea with PAW-specific optimizations.
 package textarea
 
 import (
@@ -260,9 +262,9 @@ type line struct {
 // Uses FNV-1a hash which is fast and suitable for hash tables (compared to SHA256).
 func (w line) Hash() string {
 	hasher := fnv.New64a()
-	hasher.Write([]byte(string(w.runes)))
+	_, _ = hasher.Write([]byte(string(w.runes))) // FNV Write never returns error
 	// Include width in the hash by writing it as bytes
-	hasher.Write([]byte{byte(w.width), byte(w.width >> 8)})
+	_, _ = hasher.Write([]byte{byte(w.width), byte(w.width >> 8)}) // FNV Write never returns error
 	return strconv.FormatUint(hasher.Sum64(), 16)
 }
 
@@ -864,7 +866,7 @@ func (m *Model) deleteSelection() bool {
 	} else {
 		head := append([]rune{}, m.value[start.row][:start.col]...)
 		tail := m.value[end.row][end.col:]
-		merged := append(head, tail...)
+		merged := append(head, tail...) //nolint:gocritic // appendAssign: intentionally creating new slice
 		m.value = append(m.value[:start.row+1], m.value[end.row+1:]...)
 		m.value[start.row] = merged
 	}
@@ -991,11 +993,9 @@ func (m *Model) deleteWordRight() {
 func (m *Model) characterRight() {
 	if m.col < len(m.value[m.row]) {
 		m.SetCursorColumn(m.col + 1)
-	} else {
-		if m.row < len(m.value)-1 {
-			m.row++
-			m.CursorStart()
-		}
+	} else if m.row < len(m.value)-1 {
+		m.row++
+		m.CursorStart()
 	}
 }
 
@@ -1911,7 +1911,7 @@ func (m *Model) mergeLineAbove(row int) {
 	}
 
 	m.col = len(m.value[row-1])
-	m.row = m.row - 1
+	m.row--
 
 	// To perform a merge, we will need to combine the two lines and then
 	m.value[row-1] = append(m.value[row-1], m.value[row]...)

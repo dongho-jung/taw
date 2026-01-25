@@ -62,7 +62,7 @@ var versionHashRegex = regexp.MustCompile(`-g[0-9a-f]+(-dirty)?$`)
 // GetTip returns a random usage tip.
 // Each call returns a different random tip.
 func GetTip() string {
-	return tips[rand.IntN(len(tips))]
+	return tips[rand.IntN(len(tips))] //nolint:gosec // G404: weak random is fine for non-security UI tips
 }
 
 // SetVersion sets the PAW version string, stripping the git hash suffix.

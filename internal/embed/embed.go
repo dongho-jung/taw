@@ -10,6 +10,8 @@ import (
 )
 
 //go:embed assets/*
+
+// Assets contains all embedded files for PAW.
 var Assets embed.FS
 
 // GetHelp returns the help content.
@@ -60,14 +62,14 @@ func WritePawHelpFile(pawDir string) error {
 		return err
 	}
 	targetPath := filepath.Join(pawDir, "HELP-FOR-PAW.md")
-	return os.WriteFile(targetPath, []byte(content), 0644)
+	return os.WriteFile(targetPath, []byte(content), 0644) //nolint:gosec // G306: help file needs to be readable
 }
 
 // WriteClaudeFiles writes the embedded claude directory to the target path.
 // This copies Claude settings to .paw/.claude/
 func WriteClaudeFiles(targetDir string) error {
 	// Create target directory
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
+	if err := os.MkdirAll(targetDir, 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 		return err
 	}
 
@@ -91,7 +93,7 @@ func WriteClaudeFiles(targetDir string) error {
 		targetPath := filepath.Join(targetDir, relPath)
 
 		if d.IsDir() {
-			return os.MkdirAll(targetPath, 0755)
+			return os.MkdirAll(targetPath, 0755) //nolint:gosec // G301: standard directory permissions
 		}
 
 		// Read embedded file
@@ -101,7 +103,7 @@ func WriteClaudeFiles(targetDir string) error {
 		}
 
 		// Write to target
-		return os.WriteFile(targetPath, data, 0644)
+		return os.WriteFile(targetPath, data, 0644) //nolint:gosec // G306: config files need to be readable
 	})
 }
 
@@ -147,7 +149,7 @@ func WriteDefaultPrompt(promptsDir, name string) (string, error) {
 	}
 
 	// Create prompts directory if needed
-	if err := os.MkdirAll(promptsDir, 0755); err != nil {
+	if err := os.MkdirAll(promptsDir, 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 		return "", err
 	}
 
@@ -158,7 +160,7 @@ func WriteDefaultPrompt(promptsDir, name string) (string, error) {
 	}
 
 	// Write file
-	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil { //nolint:gosec // G306: prompt files need to be readable
 		return "", err
 	}
 
@@ -183,25 +185,26 @@ func InstallPreCommitHook(hooksDir string) error {
 	}
 
 	// Create hooks directory if needed
-	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+	if err := os.MkdirAll(hooksDir, 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 		return err
 	}
 
 	// Check if pre-commit hook already exists
-	existingContent, err := os.ReadFile(hookPath)
+	existingContent, err := os.ReadFile(hookPath) //nolint:gosec // G304: hookPath is constructed from gitDir
 	if err == nil {
 		// Check if PAW hook is already installed
 		if containsPawHook(existingContent) {
 			return nil // Already installed
 		}
 		// Append PAW hook to existing hook
-		newContent := append(existingContent, '\n')
-		newContent = append(newContent, pawHook...)
-		return os.WriteFile(hookPath, newContent, 0755)
+		existingContent = append(existingContent, '\n')
+		existingContent = append(existingContent, pawHook...)
+		newContent := existingContent
+		return os.WriteFile(hookPath, newContent, 0755) //nolint:gosec // G306: hook needs to be executable
 	}
 
 	// No existing hook, write PAW hook directly
-	return os.WriteFile(hookPath, pawHook, 0755)
+	return os.WriteFile(hookPath, pawHook, 0755) //nolint:gosec // G306: hook needs to be executable
 }
 
 // containsPawHook checks if the PAW pre-commit hook is already in the content.

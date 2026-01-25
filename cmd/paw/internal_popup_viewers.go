@@ -18,12 +18,17 @@ import (
 )
 
 const (
-	// TopPaneSize is the default height for top panes (40% of window)
-	TopPaneSize = "40%"
 	// tmux option keys for tracking top pane state
 	topPaneIDKey     = "@paw_top_pane_id"
 	topPaneTypeKey   = "@paw_top_pane_type"
 	topPaneWindowKey = "@paw_top_pane_window"
+)
+
+// tmux format strings for DisplayMultiple calls
+var (
+	topPaneIDFmt     = "#{" + topPaneIDKey + "}"
+	topPaneTypeFmt   = "#{" + topPaneTypeKey + "}"
+	topPaneWindowFmt = "#{" + topPaneWindowKey + "}"
 )
 
 // topPaneSizes maps pane types to their specific sizes.
@@ -34,7 +39,7 @@ const (
 var topPaneSizes = map[string]string{
 	"finish":  "13", // 13 lines: title(1) + blank(1) + 4 options(8) + margin(1) + help(1) + buffer(1)
 	"palette": "13", // 13 lines: title(1) + blank(1) + input(3) + blank(1) + 2 commands(4) + margin(1) + help(1) + buffer(1)
-	// Scrollable/AltScreen panes (log, help, git, diff, history, template, prompt) use TopPaneSize ("40%")
+	// Scrollable/AltScreen panes (log, help, git, diff, history, template, prompt) use constants.TopPaneSize
 }
 
 // topPaneShortcuts maps pane types to their toggle shortcuts for user feedback
@@ -92,9 +97,9 @@ func displayTopPaneWithInfo(tm tmux.Client, paneType, command, workDir string, w
 		// Use pre-fetched window ID, only fetch pane state options
 		currentWindowID = windowInfo.WindowID
 		values, err := tm.DisplayMultiple(
-			"#{@paw_top_pane_id}",
-			"#{@paw_top_pane_window}",
-			"#{@paw_top_pane_type}",
+			topPaneIDFmt,
+			topPaneWindowFmt,
+			topPaneTypeFmt,
 		)
 		if err != nil || len(values) < 3 {
 			logging.Debug("displayTopPane: DisplayMultiple failed: %v", err)
@@ -107,9 +112,9 @@ func displayTopPaneWithInfo(tm tmux.Client, paneType, command, workDir string, w
 		// Batch query: Get current window ID and all pane state options in a single tmux call
 		values, err := tm.DisplayMultiple(
 			"#{window_id}",
-			"#{@paw_top_pane_id}",
-			"#{@paw_top_pane_window}",
-			"#{@paw_top_pane_type}",
+			topPaneIDFmt,
+			topPaneWindowFmt,
+			topPaneTypeFmt,
 		)
 		if err != nil || len(values) < 4 {
 			logging.Debug("displayTopPane: DisplayMultiple failed: %v", err)
@@ -178,7 +183,7 @@ func createTopPane(tm tmux.Client, paneType, command, workDir, currentWindowID s
 	}
 
 	// Determine pane size: use specific size for content-fitting panes, default for others
-	paneSize := TopPaneSize
+	paneSize := constants.TopPaneSize
 	if size, ok := topPaneSizes[paneType]; ok {
 		paneSize = size
 	}
@@ -212,7 +217,7 @@ var toggleLogCmd = &cobra.Command{
 	Use:   "toggle-log [session]",
 	Short: "Toggle log viewer top pane",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> toggleLogCmd(session=%s)", args[0])
 		defer logging.Debug("<- toggleLogCmd")
 
@@ -247,7 +252,7 @@ var logViewerCmd = &cobra.Command{
 	Short:  "Run the log viewer",
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logFile := args[0]
 		return tui.RunLogViewer(logFile)
 	},
@@ -257,7 +262,7 @@ var toggleHelpCmd = &cobra.Command{
 	Use:   "toggle-help [session]",
 	Short: "Toggle help top pane",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> toggleHelpCmd(session=%s)", args[0])
 		defer logging.Debug("<- toggleHelpCmd")
 
@@ -284,7 +289,7 @@ var helpViewerCmd = &cobra.Command{
 	Short:  "Run the help viewer",
 	Args:   cobra.NoArgs,
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		// Get help content from embedded assets
 		helpContent, err := embed.GetHelp()
 		if err != nil {
@@ -300,11 +305,11 @@ var taskViewerCmd = &cobra.Command{
 	Short:  "Run the task content viewer",
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		taskFilePath := args[0]
 
 		// Read task file content
-		content, err := os.ReadFile(taskFilePath)
+		content, err := os.ReadFile(taskFilePath) //nolint:gosec // G304: taskFilePath is from cmd args
 		if err != nil {
 			return fmt.Errorf("failed to read task file: %w", err)
 		}
@@ -318,58 +323,63 @@ var gitViewerCmd = &cobra.Command{
 	Short:  "Run the git viewer",
 	Args:   cobra.ExactArgs(2),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		workDir := args[0]
 		mainBranch := args[1]
 		return tui.RunGitViewer(workDir, mainBranch)
 	},
 }
 
+// runGitViewerTopPane is a helper for git-based top pane viewers (git status, diff).
+// It handles common setup: session validation, git repo check, pane path resolution,
+// and main branch detection.
+func runGitViewerTopPane(sessionName, viewerName, internalCmd string) error {
+	tm := tmux.New(sessionName)
+
+	appCtx, err := getAppFromSession(sessionName)
+	if err != nil {
+		return err
+	}
+
+	// Check if this is a git repo
+	if !appCtx.IsGitRepo {
+		_ = tm.DisplayMessage("Not a git repository", constants.DisplayMsgStandard)
+		return nil
+	}
+
+	// Get current pane's working directory (for worktree context)
+	panePath, err := tm.Display("#{pane_current_path}")
+	if err != nil || panePath == "" {
+		panePath = appCtx.ProjectDir
+	}
+	panePath = strings.TrimSpace(panePath)
+
+	// Get the main branch name dynamically
+	gitClient := git.New()
+	mainBranch := gitClient.GetMainBranch(panePath)
+
+	// Run viewer in top pane
+	viewerCmd := shellJoin(getPawBin(), "internal", internalCmd, panePath, mainBranch)
+
+	result, err := displayTopPane(tm, viewerName, viewerCmd, panePath)
+	if err != nil {
+		logging.Debug("toggle%sCmd: displayTopPane failed: %v", viewerName, err)
+		return err
+	}
+	if result == TopPaneBlocked {
+		logging.Debug("toggle%sCmd: blocked by another top pane", viewerName)
+	}
+	return nil
+}
+
 var toggleGitStatusCmd = &cobra.Command{
 	Use:   "toggle-git-status [session]",
 	Short: "Toggle git viewer top pane",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> toggleGitStatusCmd(session=%s)", args[0])
 		defer logging.Debug("<- toggleGitStatusCmd")
-
-		sessionName := args[0]
-		tm := tmux.New(sessionName)
-
-		appCtx, err := getAppFromSession(sessionName)
-		if err != nil {
-			return err
-		}
-
-		// Check if this is a git repo
-		if !appCtx.IsGitRepo {
-			_ = tm.DisplayMessage("Not a git repository", 2000)
-			return nil
-		}
-
-		// Get current pane's working directory (for worktree context)
-		panePath, err := tm.Display("#{pane_current_path}")
-		if err != nil || panePath == "" {
-			panePath = appCtx.ProjectDir
-		}
-		panePath = strings.TrimSpace(panePath)
-
-		// Get the main branch name dynamically
-		gitClient := git.New()
-		mainBranch := gitClient.GetMainBranch(panePath)
-
-		// Run git viewer in top pane (closes with q/Esc/Ctrl+G)
-		gitCmd := shellJoin(getPawBin(), "internal", "git-viewer", panePath, mainBranch)
-
-		result, err := displayTopPane(tm, "git", gitCmd, panePath)
-		if err != nil {
-			logging.Debug("toggleGitStatusCmd: displayTopPane failed: %v", err)
-			return err
-		}
-		if result == TopPaneBlocked {
-			logging.Debug("toggleGitStatusCmd: blocked by another top pane")
-		}
-		return nil
+		return runGitViewerTopPane(args[0], "git", "git-viewer")
 	},
 }
 
@@ -377,47 +387,10 @@ var toggleShowDiffCmd = &cobra.Command{
 	Use:   "toggle-show-diff [session]",
 	Short: "Toggle diff viewer top pane",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> toggleShowDiffCmd(session=%s)", args[0])
 		defer logging.Debug("<- toggleShowDiffCmd")
-
-		sessionName := args[0]
-		tm := tmux.New(sessionName)
-
-		appCtx, err := getAppFromSession(sessionName)
-		if err != nil {
-			return err
-		}
-
-		// Check if this is a git repo
-		if !appCtx.IsGitRepo {
-			_ = tm.DisplayMessage("Not a git repository", 2000)
-			return nil
-		}
-
-		// Get current pane's working directory (for worktree context)
-		panePath, err := tm.Display("#{pane_current_path}")
-		if err != nil || panePath == "" {
-			panePath = appCtx.ProjectDir
-		}
-		panePath = strings.TrimSpace(panePath)
-
-		// Get the main branch name dynamically
-		gitClient := git.New()
-		mainBranch := gitClient.GetMainBranch(panePath)
-
-		// Run diff viewer in top pane (closes with q/Esc/Ctrl+D)
-		diffCmd := shellJoin(getPawBin(), "internal", "diff-viewer", panePath, mainBranch)
-
-		result, err := displayTopPane(tm, "diff", diffCmd, panePath)
-		if err != nil {
-			logging.Debug("toggleShowDiffCmd: displayTopPane failed: %v", err)
-			return err
-		}
-		if result == TopPaneBlocked {
-			logging.Debug("toggleShowDiffCmd: blocked by another top pane")
-		}
-		return nil
+		return runGitViewerTopPane(args[0], "diff", "diff-viewer")
 	},
 }
 
@@ -426,7 +399,7 @@ var diffViewerCmd = &cobra.Command{
 	Short:  "Run the diff viewer",
 	Args:   cobra.ExactArgs(2),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		workDir := args[0]
 		mainBranch := args[1]
 		return tui.RunDiffViewer(workDir, mainBranch)
@@ -437,7 +410,7 @@ var toggleHistoryCmd = &cobra.Command{
 	Use:   "toggle-history [session]",
 	Short: "Toggle history picker top pane",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> toggleHistoryCmd(session=%s)", args[0])
 		defer logging.Debug("<- toggleHistoryCmd")
 
@@ -469,7 +442,7 @@ var historyPickerCmd = &cobra.Command{
 	Short:  "Run the history picker",
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
@@ -517,7 +490,7 @@ var historyPickerCmd = &cobra.Command{
 
 			// Write selection to temp file for TaskInput to pick up
 			selectionPath := filepath.Join(appCtx.PawDir, constants.HistorySelectionFile)
-			if err := os.WriteFile(selectionPath, []byte(selected), 0644); err != nil {
+			if err := os.WriteFile(selectionPath, []byte(selected), 0644); err != nil { //nolint:gosec // G306: selection file needs to be readable
 				logging.Warn("Failed to write history selection: %v", err)
 			} else {
 				logging.Debug("Wrote history selection to %s", selectionPath)
@@ -532,7 +505,7 @@ var toggleTemplateCmd = &cobra.Command{
 	Use:   "toggle-template [session]",
 	Short: "Toggle template picker top pane",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> toggleTemplateCmd(session=%s)", args[0])
 		defer logging.Debug("<- toggleTemplateCmd")
 
@@ -563,7 +536,7 @@ var templatePickerCmd = &cobra.Command{
 	Short:  "Run the template picker",
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
@@ -584,7 +557,7 @@ var templatePickerCmd = &cobra.Command{
 
 		draftPath := filepath.Join(appCtx.PawDir, constants.TemplateDraftFile)
 		draftContent := ""
-		if data, err := os.ReadFile(draftPath); err == nil {
+		if data, err := os.ReadFile(draftPath); err == nil { //nolint:gosec // G304: draftPath is constructed from pawDir
 			draftContent = string(data)
 			logging.Debug("templatePickerCmd: loaded draft (path=%s, bytes=%d)", draftPath, len(data))
 		} else {
@@ -612,7 +585,7 @@ var templatePickerCmd = &cobra.Command{
 
 		if action == tui.TemplatePickerSelect && selected != nil {
 			selectionPath := filepath.Join(appCtx.PawDir, constants.TemplateSelectionFile)
-			if err := os.WriteFile(selectionPath, []byte(selected.Content), 0644); err != nil {
+			if err := os.WriteFile(selectionPath, []byte(selected.Content), 0644); err != nil { //nolint:gosec // G306: selection file needs to be readable
 				logging.Warn("Failed to write template selection: %v", err)
 			} else {
 				logging.Debug("templatePickerCmd: wrote selection (path=%s, bytes=%d)", selectionPath, len(selected.Content))
@@ -627,7 +600,7 @@ var toggleProjectPickerCmd = &cobra.Command{
 	Use:   "toggle-project-picker [session]",
 	Short: "Show project picker popup to switch between PAW sessions",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> toggleProjectPickerCmd(session=%s)", args[0])
 		defer logging.Debug("<- toggleProjectPickerCmd")
 
@@ -669,15 +642,11 @@ var projectPickerCmd = &cobra.Command{
 	Short:  "Run the project picker",
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		currentSession := args[0]
 
 		// Find all PAW sessions
-		sessions, err := findPawSessions()
-		if err != nil {
-			fmt.Println("Failed to find PAW sessions.")
-			return nil
-		}
+		sessions := findPawSessions()
 
 		// Filter out current session
 		var projects []tui.ProjectPickerItem
@@ -713,7 +682,7 @@ var projectPickerCmd = &cobra.Command{
 
 			// Write the target session name to a file
 			switchPath := filepath.Join(appCtx.PawDir, constants.ProjectSwitchFileName)
-			if err := os.WriteFile(switchPath, []byte(selected.Name), 0644); err != nil {
+			if err := os.WriteFile(switchPath, []byte(selected.Name), 0644); err != nil { //nolint:gosec // G306: switch file needs to be readable
 				logging.Warn("projectPickerCmd: failed to write switch target: %v", err)
 				return nil
 			}
@@ -729,7 +698,7 @@ var projectPickerWrapperCmd = &cobra.Command{
 	Short:  "Run project picker and handle session switch",
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		currentSession := args[0]
 
 		appCtx, err := getAppFromSession(currentSession)
@@ -746,11 +715,7 @@ var projectPickerWrapperCmd = &cobra.Command{
 		defer logging.Debug("<- projectPickerWrapperCmd")
 
 		// Find all PAW sessions
-		sessions, err := findPawSessions()
-		if err != nil {
-			fmt.Println("Failed to find PAW sessions.")
-			return nil
-		}
+		sessions := findPawSessions()
 
 		// Filter out current session
 		var projects []tui.ProjectPickerItem

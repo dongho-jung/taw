@@ -23,7 +23,7 @@ var mergeTaskCmd = &cobra.Command{
 	Use:   "merge-task [session] [window-id]",
 	Short: "Merge task to main branch (keeps task window)",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		windowID := args[1]
 
@@ -139,7 +139,7 @@ var mergeTaskCmd = &cobra.Command{
 		lockFile := filepath.Join(appCtx.PawDir, "merge.lock")
 		lockAcquired := false
 		for retries := 0; retries < constants.MergeLockMaxRetries; retries++ {
-			f, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+			f, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644) //nolint:gosec // G302: lock file just needs to exist
 			if err == nil {
 				_, writeErr := fmt.Fprintf(f, "%s\n%d", targetTask.Name, os.Getpid())
 				closeErr := f.Close()
@@ -206,7 +206,7 @@ var mergeTaskCmd = &cobra.Command{
 		}
 
 		// Checkout main
-		checkoutSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Checking out %s", mainBranch))
+		checkoutSpinner := tui.NewSimpleSpinner("Checking out " + mainBranch)
 		checkoutSpinner.Start()
 		if err := gitClient.Checkout(appCtx.ProjectDir, mainBranch); err != nil {
 			checkoutSpinner.Stop(false, err.Error())
@@ -224,7 +224,7 @@ var mergeTaskCmd = &cobra.Command{
 			}
 
 			// Squash merge
-			mergeSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Merging %s", targetTask.Name))
+			mergeSpinner := tui.NewSimpleSpinner("Merging " + targetTask.Name)
 			mergeSpinner.Start()
 			branchCommits, _ := gitClient.GetBranchCommits(appCtx.ProjectDir, targetTask.Name, mainBranch, 20)
 			mergeMsg := git.GenerateMergeCommitMessage(targetTask.Name, branchCommits)
@@ -304,7 +304,7 @@ var mergeTaskCmd = &cobra.Command{
 					mergeSpinner.Stop(true, "")
 				}
 
-				pushMainSpinner := tui.NewSimpleSpinner(fmt.Sprintf("Pushing %s", mainBranch))
+				pushMainSpinner := tui.NewSimpleSpinner("Pushing " + mainBranch)
 				pushMainSpinner.Start()
 				if err := gitClient.Push(appCtx.ProjectDir, "origin", mainBranch, false); err != nil {
 					pushMainSpinner.Stop(false, err.Error())
@@ -347,13 +347,13 @@ var mergeTaskCmd = &cobra.Command{
 			fmt.Printf("  ✅ Merged to %s (task window kept)\n", mainBranch)
 			logging.Log("Merged task %s to %s", targetTask.Name, mainBranch)
 			notify.PlaySound(notify.SoundTaskCompleted)
-			_ = tm.DisplayMessage(fmt.Sprintf("✅ Merged: %s → %s", targetTask.Name, mainBranch), 2000)
+			_ = tm.DisplayMessage(fmt.Sprintf("✅ Merged: %s → %s", targetTask.Name, mainBranch), constants.DisplayMsgStandard)
 		} else {
 			fmt.Println("  ✗ Merge failed - manual resolution needed")
 			corruptedName := windowNameForStatus(targetTask.Name, task.StatusCorrupted)
 			_ = renameWindowWithStatus(tm, windowID, corruptedName, appCtx.PawDir, targetTask.Name, "merge-task", task.StatusCorrupted)
 			notify.PlaySound(notify.SoundError)
-			_ = tm.DisplayMessage(fmt.Sprintf("⚠️ Merge failed: %s", targetTask.Name), 3000)
+			_ = tm.DisplayMessage("⚠️ Merge failed: "+targetTask.Name, constants.DisplayMsgImportant)
 		}
 
 		return nil
@@ -364,7 +364,7 @@ var mergeTaskUICmd = &cobra.Command{
 	Use:   "merge-task-ui [session]",
 	Short: "Merge task with UI feedback (creates visible pane)",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
@@ -389,15 +389,12 @@ var mergeTaskUICmd = &cobra.Command{
 
 		// Check if this is a task window
 		if !constants.IsTaskWindow(windowName) {
-			_ = tm.DisplayMessage("Not a task window", 1500)
+			_ = tm.DisplayMessage("Not a task window", constants.DisplayMsgQuick)
 			return nil
 		}
 
 		// Get paw binary path
-		pawBin, err := os.Executable()
-		if err != nil {
-			pawBin = "paw"
-		}
+		pawBin := getPawBin()
 
 		// Get working directory from pane
 		panePath, err := tm.Display("#{pane_current_path}")
@@ -409,10 +406,10 @@ var mergeTaskUICmd = &cobra.Command{
 		mergeTaskCmdStr := shellJoin(pawBin, "internal", "merge-task", sessionName, windowID)
 		mergeTaskCmdStr += "; echo; echo 'Press Enter to close...'; read"
 
-		// Create a top pane (40% height)
+		// Create a top pane
 		_, err = tm.SplitWindowPane(tmux.SplitOpts{
 			Horizontal: false,
-			Size:       "40%",
+			Size:       constants.TopPaneSize,
 			StartDir:   panePath,
 			Command:    mergeTaskCmdStr,
 			Before:     true,

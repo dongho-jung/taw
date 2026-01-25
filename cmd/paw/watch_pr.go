@@ -20,7 +20,7 @@ var watchPRCmd = &cobra.Command{
 	Use:   "watch-pr [session] [window-id] [task-name] [pr-number]",
 	Short: "Watch PR status and clean up when merged",
 	Args:  cobra.ExactArgs(4),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		windowID := args[1]
 		taskName := args[2]

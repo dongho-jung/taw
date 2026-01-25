@@ -115,7 +115,7 @@ type HString string
 // Uses FNV-1a hash which is fast and suitable for hash tables.
 func (h HString) Hash() string {
 	hasher := fnv.New64a()
-	hasher.Write([]byte(h))
+	_, _ = hasher.Write([]byte(h)) // FNV Write never returns error
 	return strconv.FormatUint(hasher.Sum64(), 16)
 }
 
@@ -126,6 +126,6 @@ type HInt int
 // Uses FNV-1a hash which is fast and suitable for hash tables.
 func (h HInt) Hash() string {
 	hasher := fnv.New64a()
-	hasher.Write([]byte(strconv.Itoa(int(h))))
+	_, _ = hasher.Write([]byte(strconv.Itoa(int(h)))) // FNV Write never returns error
 	return strconv.FormatUint(hasher.Sum64(), 16)
 }

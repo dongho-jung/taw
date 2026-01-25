@@ -225,7 +225,7 @@ func TestTaskOptionsJSONMarshal(t *testing.T) {
 	}
 
 	// Verify JSON contains expected fields
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}

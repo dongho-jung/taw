@@ -16,12 +16,12 @@ func runGitCmd(dir string, args ...string) *exec.Cmd {
 	// Filter out git environment variables to ensure isolation from parent repository
 	var cleanEnv []string
 	gitVars := map[string]bool{
-		"GIT_DIR":                           true,
-		"GIT_WORK_TREE":                     true,
-		"GIT_INDEX_FILE":                    true,
-		"GIT_OBJECT_DIRECTORY":              true,
-		"GIT_ALTERNATE_OBJECT_DIRECTORIES":  true,
-		"GIT_CEILING_DIRECTORIES":           true,
+		"GIT_DIR":                          true,
+		"GIT_WORK_TREE":                    true,
+		"GIT_INDEX_FILE":                   true,
+		"GIT_OBJECT_DIRECTORY":             true,
+		"GIT_ALTERNATE_OBJECT_DIRECTORIES": true,
+		"GIT_CEILING_DIRECTORIES":          true,
 	}
 	for _, env := range os.Environ() {
 		// Keep all non-git environment variables

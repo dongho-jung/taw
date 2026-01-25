@@ -44,7 +44,7 @@ var watchWaitCmd = &cobra.Command{
 	Use:   "watch-wait [session] [window-id] [task-name]",
 	Short: "Watch agent output and notify when user input is needed",
 	Args:  cobra.ExactArgs(3),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		windowID := args[1]
 		taskName := args[2]

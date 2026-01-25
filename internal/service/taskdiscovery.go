@@ -2,11 +2,11 @@
 package service
 
 import (
-	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +32,7 @@ type DiscoveredTask struct {
 // DiscoveredStatus represents the status of a discovered task.
 type DiscoveredStatus string
 
+// Discovered task status values.
 const (
 	DiscoveredWorking DiscoveredStatus = "working"
 	DiscoveredWaiting DiscoveredStatus = "waiting"
@@ -51,7 +52,7 @@ func NewTaskDiscoveryService() *TaskDiscoveryService {
 		socketDir += u.Uid
 	} else {
 		// Fallback: use effective UID
-		socketDir += fmt.Sprintf("%d", os.Getuid())
+		socketDir += strconv.Itoa(os.Getuid())
 	}
 
 	return &TaskDiscoveryService{
@@ -137,7 +138,7 @@ func (s *TaskDiscoveryService) discoverFromSocket(socketName string) []*Discover
 		return nil
 	}
 
-	var tasks []*DiscoveredTask
+	tasks := make([]*DiscoveredTask, 0, len(windows))
 
 	for _, w := range windows {
 		// Parse window name to extract task name and status
@@ -270,6 +271,7 @@ func extractWindowEmoji(windowName string) string {
 }
 
 // trimPreview cleans up the preview text.
+//
 // Deprecated: Use trimPreviewFromLines for better performance.
 func trimPreview(preview string) string {
 	return trimPreviewFromLines(strings.Split(preview, "\n"))
@@ -296,6 +298,7 @@ func trimPreviewFromLines(lines []string) string {
 }
 
 // extractCurrentAction extracts the agent's current action from pane capture.
+//
 // Deprecated: Use extractCurrentActionFromLines for better performance.
 func extractCurrentAction(capture string) string {
 	return extractCurrentActionFromLines(strings.Split(capture, "\n"))
@@ -336,6 +339,7 @@ func extractCurrentActionFromLines(lines []string) string {
 }
 
 // extractDurationAndTokens extracts duration and token count from pane capture.
+//
 // Deprecated: Use extractDurationAndTokensFromLines for better performance.
 func extractDurationAndTokens(capture string) (duration, tokens string) {
 	return extractDurationAndTokensFromLines(strings.Split(capture, "\n"))

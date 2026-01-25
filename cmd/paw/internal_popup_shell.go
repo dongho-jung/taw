@@ -15,28 +15,33 @@ import (
 	"github.com/dongho-jung/paw/internal/tmux"
 )
 
-// stashWindowName is the name of the hidden window used to stash the shell pane.
-const stashWindowName = "_paw_stash"
+// Shell pane tmux option keys
+const (
+	shellPaneIDKey        = "@paw_shell_pane_id"
+	stashedShellPaneIDKey = "@paw_stashed_shell_pane_id"
+	stashWindowIDKey      = "@paw_stash_window_id"
+	stashWindowName       = "_paw_stash" // name of the hidden window used to stash the shell pane
+)
 
 var popupShellCmd = &cobra.Command{
 	Use:   "popup-shell [session]",
-	Short: "Toggle shell pane at bottom 40%",
+	Short: "Toggle shell pane at bottom",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		tm := tmux.New(sessionName)
 
-		paneID, _ := tm.GetOption("@paw_shell_pane_id")
+		paneID, _ := tm.GetOption(shellPaneIDKey)
 		hasShellPane := paneID != "" && tm.HasPane(paneID)
 		if paneID != "" && !hasShellPane {
-			_ = tm.SetOption("@paw_shell_pane_id", "", true)
+			_ = tm.SetOption(shellPaneIDKey, "", true)
 			paneID = ""
 		}
 
-		stashedPaneID, _ := tm.GetOption("@paw_stashed_shell_pane_id")
+		stashedPaneID, _ := tm.GetOption(stashedShellPaneIDKey)
 		hasStashedPane := stashedPaneID != "" && tm.HasPane(stashedPaneID)
 		if stashedPaneID != "" && !hasStashedPane {
-			_ = tm.SetOption("@paw_stashed_shell_pane_id", "", true)
+			_ = tm.SetOption(stashedShellPaneIDKey, "", true)
 			stashedPaneID = ""
 		}
 
@@ -47,7 +52,7 @@ var popupShellCmd = &cobra.Command{
 			if err != nil {
 				// Fallback: kill the pane if we can't stash it
 				_ = tm.KillPane(paneID)
-				_ = tm.SetOption("@paw_shell_pane_id", "", true)
+				_ = tm.SetOption(shellPaneIDKey, "", true)
 				return nil
 			}
 
@@ -56,16 +61,16 @@ var popupShellCmd = &cobra.Command{
 				// JoinPane failed - the pane is likely dead (killed by Ctrl+D or similar)
 				// Clean up the invalid state
 				_ = tm.KillPane(paneID)
-				_ = tm.SetOption("@paw_shell_pane_id", "", true)
-				_ = tm.SetOption("@paw_stashed_shell_pane_id", "", true)
+				_ = tm.SetOption(shellPaneIDKey, "", true)
+				_ = tm.SetOption(stashedShellPaneIDKey, "", true)
 				// Since the pane was dead, the user actually wanted to SHOW a shell
 				// (they thought there was no shell). Create a new one.
 				return createNewShellPane(tm, sessionName)
 			}
 
 			// Store pane ID in stash and clear visible pane ID
-			_ = tm.SetOption("@paw_stashed_shell_pane_id", paneID, true)
-			_ = tm.SetOption("@paw_shell_pane_id", "", true)
+			_ = tm.SetOption(stashedShellPaneIDKey, paneID, true)
+			_ = tm.SetOption(shellPaneIDKey, "", true)
 			return nil
 		}
 
@@ -80,17 +85,17 @@ var popupShellCmd = &cobra.Command{
 
 			// Bring back the stashed pane
 			if err := tm.JoinPane(stashedPaneID, currentWindowID, tmux.JoinOpts{
-				Size: "40%",
+				Size: constants.TopPaneSize,
 				Full: true,
 			}); err != nil {
-				_ = tm.SetOption("@paw_stashed_shell_pane_id", "", true)
+				_ = tm.SetOption(stashedShellPaneIDKey, "", true)
 				// Stash is corrupted, create new pane
 				return createNewShellPane(tm, sessionName)
 			}
 
 			// Update state: pane is now visible
-			_ = tm.SetOption("@paw_shell_pane_id", stashedPaneID, true)
-			_ = tm.SetOption("@paw_stashed_shell_pane_id", "", true)
+			_ = tm.SetOption(shellPaneIDKey, stashedPaneID, true)
+			_ = tm.SetOption(stashedShellPaneIDKey, "", true)
 
 			// Select the restored shell pane
 			_ = tm.SelectPane(stashedPaneID)
@@ -105,7 +110,7 @@ var popupShellCmd = &cobra.Command{
 // getOrCreateStashWindow returns the stash window ID, creating it if necessary.
 func getOrCreateStashWindow(tm tmux.Client, sessionName string) (string, error) {
 	// Check if stash window already exists
-	stashWindowID, _ := tm.GetOption("@paw_stash_window_id")
+	stashWindowID, _ := tm.GetOption(stashWindowIDKey)
 	if stashWindowID != "" {
 		windows, err := tm.ListWindows()
 		if err == nil {
@@ -116,7 +121,7 @@ func getOrCreateStashWindow(tm tmux.Client, sessionName string) (string, error) 
 				}
 			}
 		}
-		_ = tm.SetOption("@paw_stash_window_id", "", true)
+		_ = tm.SetOption(stashWindowIDKey, "", true)
 	}
 
 	// Create new stash window (detached, so it doesn't become active)
@@ -130,7 +135,7 @@ func getOrCreateStashWindow(tm tmux.Client, sessionName string) (string, error) 
 	}
 
 	windowID = strings.TrimSpace(windowID)
-	_ = tm.SetOption("@paw_stash_window_id", windowID, true)
+	_ = tm.SetOption(stashWindowIDKey, windowID, true)
 	hideStashWindow(tm, windowID)
 	return windowID, nil
 }
@@ -156,10 +161,10 @@ func createNewShellPane(tm tmux.Client, sessionName string) error {
 	}
 	panePath = strings.TrimSpace(panePath)
 
-	// Create shell pane at bottom 40%
+	// Create shell pane at bottom
 	newPaneID, err := tm.SplitWindowPane(tmux.SplitOpts{
 		Horizontal: false, // vertical split (top/bottom)
-		Size:       "40%",
+		Size:       constants.TopPaneSize,
 		StartDir:   panePath,
 		Full:       true, // span entire window width
 	})
@@ -170,7 +175,7 @@ func createNewShellPane(tm tmux.Client, sessionName string) error {
 	newPaneID = strings.TrimSpace(newPaneID)
 
 	// Store pane ID for toggle
-	_ = tm.SetOption("@paw_shell_pane_id", newPaneID, true)
+	_ = tm.SetOption(shellPaneIDKey, newPaneID, true)
 
 	// Explicitly select the new pane to ensure it's visible
 	// This is needed because after Ctrl+D kills a pane, tmux may leave
@@ -185,7 +190,7 @@ var showCurrentTaskCmd = &cobra.Command{
 	Short:  "Display current task content in a popup",
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
@@ -213,7 +218,7 @@ var showCurrentTaskCmd = &cobra.Command{
 		// Check if this is a task window (has task emoji prefix)
 		taskName, isTaskWindow := constants.ExtractTaskName(windowName)
 		if !isTaskWindow {
-			_ = tm.DisplayMessage("Not a task window", 2000)
+			_ = tm.DisplayMessage("Not a task window", constants.DisplayMsgStandard)
 			return nil
 		}
 
@@ -223,7 +228,7 @@ var showCurrentTaskCmd = &cobra.Command{
 		mgr := task.NewManager(appCtx.AgentsDir, appCtx.ProjectDir, appCtx.PawDir, appCtx.IsGitRepo, appCtx.Config)
 		t, err := mgr.FindTaskByTruncatedName(taskName)
 		if err != nil {
-			_ = tm.DisplayMessage(fmt.Sprintf("Task not found: %s", taskName), 2000)
+			_ = tm.DisplayMessage("Task not found: "+taskName, constants.DisplayMsgStandard)
 			logging.Debug("Task not found for truncated name: %s", taskName)
 			return nil
 		}
@@ -233,7 +238,7 @@ var showCurrentTaskCmd = &cobra.Command{
 		// Get task file path
 		taskFilePath := t.GetTaskFilePath()
 		if _, err := os.Stat(taskFilePath); os.IsNotExist(err) {
-			_ = tm.DisplayMessage("Task file not found", 2000)
+			_ = tm.DisplayMessage("Task file not found", constants.DisplayMsgStandard)
 			return nil
 		}
 
@@ -259,7 +264,7 @@ var restorePanesCmd = &cobra.Command{
 	Short:  "Restore missing panes in current task window",
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
@@ -287,7 +292,7 @@ var restorePanesCmd = &cobra.Command{
 		// Check if this is a task window (has task emoji prefix)
 		taskName, isTaskWindow := constants.ExtractTaskName(windowName)
 		if !isTaskWindow {
-			_ = tm.DisplayMessage("Not a task window", 2000)
+			_ = tm.DisplayMessage("Not a task window", constants.DisplayMsgStandard)
 			return nil
 		}
 
@@ -297,7 +302,7 @@ var restorePanesCmd = &cobra.Command{
 		mgr := task.NewManager(appCtx.AgentsDir, appCtx.ProjectDir, appCtx.PawDir, appCtx.IsGitRepo, appCtx.Config)
 		t, err := mgr.FindTaskByTruncatedName(taskName)
 		if err != nil {
-			_ = tm.DisplayMessage(fmt.Sprintf("Task not found: %s", taskName), 2000)
+			_ = tm.DisplayMessage("Task not found: "+taskName, constants.DisplayMsgStandard)
 			logging.Debug("Task not found for truncated name: %s", taskName)
 			return nil
 		}
@@ -320,16 +325,16 @@ var restorePanesCmd = &cobra.Command{
 		// Check which pane is missing and restore
 		switch paneCount {
 		case "2":
-			_ = tm.DisplayMessage("All panes are present", 2000)
+			_ = tm.DisplayMessage("All panes are present", constants.DisplayMsgStandard)
 			return nil
 		case "0":
 			// Both panes missing - respawn the window
 			logging.Log("Both panes missing, respawning agent pane")
 
 			// Start agent pane
-			startAgentScript := filepath.Join(agentDir, "start-agent")
+			startAgentScript := filepath.Join(agentDir, constants.StartAgentScriptName)
 			if _, err := os.Stat(startAgentScript); os.IsNotExist(err) {
-				_ = tm.DisplayMessage("start-agent script not found", 2000)
+				_ = tm.DisplayMessage(constants.StartAgentScriptName+" script not found", constants.DisplayMsgStandard)
 				return nil
 			}
 
@@ -344,7 +349,7 @@ var restorePanesCmd = &cobra.Command{
 				logging.Warn("Failed to create user pane: %v", err)
 			}
 
-			_ = tm.DisplayMessage("Restored both panes", 2000)
+			_ = tm.DisplayMessage("Restored both panes", constants.DisplayMsgStandard)
 		case "1":
 			// One pane exists - need to determine which one is missing
 			// Check if the existing pane is running claude (agent) or shell (user)
@@ -356,7 +361,7 @@ var restorePanesCmd = &cobra.Command{
 
 			logging.Debug("Existing pane command: %s", paneCmd)
 
-			if paneCmd == "claude" || strings.Contains(paneCmd, "start-agent") {
+			if paneCmd == "claude" || strings.Contains(paneCmd, constants.StartAgentScriptName) {
 				// Agent pane exists, user pane is missing
 				logging.Log("User pane missing, creating it")
 				taskFilePath := t.GetTaskFilePath()
@@ -364,15 +369,15 @@ var restorePanesCmd = &cobra.Command{
 				if err := tm.SplitWindow(windowID, true, workDir, userPaneCmd); err != nil {
 					return fmt.Errorf("failed to create user pane: %w", err)
 				}
-				_ = tm.DisplayMessage("Restored user pane", 2000)
+				_ = tm.DisplayMessage("Restored user pane", constants.DisplayMsgStandard)
 			} else {
 				// User pane exists (or unknown), agent pane is missing
 				logging.Log("Agent pane missing, creating it")
 
 				// Need to create agent pane before the user pane
-				startAgentScript := filepath.Join(agentDir, "start-agent")
+				startAgentScript := filepath.Join(agentDir, constants.StartAgentScriptName)
 				if _, err := os.Stat(startAgentScript); os.IsNotExist(err) {
-					_ = tm.DisplayMessage("start-agent script not found", 2000)
+					_ = tm.DisplayMessage(constants.StartAgentScriptName+" script not found", constants.DisplayMsgStandard)
 					return nil
 				}
 
@@ -387,11 +392,11 @@ var restorePanesCmd = &cobra.Command{
 				if err != nil {
 					return fmt.Errorf("failed to create agent pane: %w", err)
 				}
-				_ = tm.DisplayMessage("Restored agent pane", 2000)
+				_ = tm.DisplayMessage("Restored agent pane", constants.DisplayMsgStandard)
 			}
 		default:
 			logging.Warn("Unexpected pane count (%s), skipping restore", paneCount)
-			_ = tm.DisplayMessage(fmt.Sprintf("Unexpected pane count: %s", paneCount), 2000)
+			_ = tm.DisplayMessage("Unexpected pane count: "+paneCount, constants.DisplayMsgStandard)
 			return nil
 		}
 
@@ -399,7 +404,7 @@ var restorePanesCmd = &cobra.Command{
 
 		// Check for stdin injection failure: if agent pane exists but session marker doesn't,
 		// it means the task instruction was never sent
-		if err := checkAndRecoverStdinInjection(tm, t, windowID, agentDir); err != nil {
+		if err := checkAndRecoverStdinInjection(tm, t, windowID); err != nil {
 			logging.Warn("Failed to recover stdin injection: %v", err)
 		}
 
@@ -409,7 +414,7 @@ var restorePanesCmd = &cobra.Command{
 
 // checkAndRecoverStdinInjection detects and recovers from failed stdin injection.
 // If Claude is running but the session marker doesn't exist, it sends the task instruction.
-func checkAndRecoverStdinInjection(tm tmux.Client, t *task.Task, windowID, agentDir string) error {
+func checkAndRecoverStdinInjection(tm tmux.Client, t *task.Task, windowID string) error {
 	agentPane := windowID + ".0"
 
 	// Check if session marker exists (indicates task instruction was sent successfully)
@@ -458,7 +463,7 @@ func checkAndRecoverStdinInjection(tm tmux.Client, t *task.Task, windowID, agent
 		logging.Debug("Session marker created after stdin recovery")
 	}
 
-	_ = tm.DisplayMessage(fmt.Sprintf("Recovered task instruction for: %s", t.Name), 2000)
+	_ = tm.DisplayMessage("Recovered task instruction for: "+t.Name, constants.DisplayMsgStandard)
 	logging.Log("Successfully recovered stdin injection for task: %s", t.Name)
 
 	return nil

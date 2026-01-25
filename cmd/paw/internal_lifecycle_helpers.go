@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/git"
@@ -40,12 +40,11 @@ Task description:
 2. Look for conflict markers (<<<<<<< HEAD, =======, >>>>>>> branch)
 3. Resolve each conflict by keeping the correct code that makes sense for the task
 4. Save each resolved file using the Edit tool
-5. After resolving ALL conflicts, run: git add -A && git reset HEAD .claude 2>/dev/null || true
+5. After resolving ALL conflicts, run: git add -A
 
 IMPORTANT:
 - Do NOT abort or skip any files
 - Resolve ALL conflicts before running git add
-- NEVER commit .claude symlink - always unstage it after git add -A
 - Make sure the final code is valid and compiles
 - If unsure, prefer keeping BOTH changes merged intelligently
 
@@ -54,8 +53,8 @@ Start resolving the conflicts now.`, filesStr, taskName, taskContent)
 	logging.Debug("resolveConflictsWithClaude: starting conflict resolution for %d files with opus", len(conflictFiles))
 	logging.Trace("resolveConflictsWithClaude: prompt=%s", prompt)
 
-	// Set a timeout for conflict resolution (10 minutes)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	// Set a timeout for conflict resolution
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ConflictResolutionTimeout)
 	defer cancel()
 
 	// Run claude with opus model
@@ -105,7 +104,7 @@ Task description:
 4. Resolve any issues you find:
    - If there are conflicts, resolve them by editing the files
    - If there's a failed merge state, decide whether to complete or abort it
-   - If files need to be staged, stage them with: git add -A && git reset HEAD .claude 2>/dev/null || true
+   - If files need to be staged, stage them with: git add -A
 5. After resolving all issues, verify the repository is in a clean state
 6. If you need to complete a merge, commit it with an appropriate message
 
@@ -120,8 +119,8 @@ Start analyzing and resolving the merge issue now.`, projectDir, branchToMerge, 
 	logging.Debug("autoResolveMergeFailure: starting auto-resolution for task %s with opus", taskName)
 	logging.Trace("autoResolveMergeFailure: prompt length=%d", len(prompt))
 
-	// Set a timeout for auto-resolution (10 minutes)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	// Set a timeout for auto-resolution
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ConflictResolutionTimeout)
 	defer cancel()
 
 	// Run claude with opus model
@@ -146,7 +145,7 @@ Start analyzing and resolving the merge issue now.`, projectDir, branchToMerge, 
 	hasOngoingMerge := gitClient.HasOngoingMerge(projectDir)
 	if hasOngoingMerge {
 		logging.Warn("autoResolveMergeFailure: merge still in progress after Claude")
-		return fmt.Errorf("merge still in progress after auto-resolution")
+		return errors.New("merge still in progress after auto-resolution")
 	}
 
 	logging.Debug("autoResolveMergeFailure: claude completed successfully, repository is clean")
@@ -201,11 +200,12 @@ func resolvePushBranch(gitClient git.Client, workDir, fallback string) (string, 
 		return branchName, true
 	}
 
-	if err != nil {
+	switch {
+	case err != nil:
 		logging.Warn("Failed to determine current branch: %v", err)
-	} else if branchName == "" {
+	case branchName == "":
 		logging.Warn("Current branch name is empty for %s", workDir)
-	} else {
+	default:
 		logging.Warn("Detected detached HEAD for %s", workDir)
 	}
 
@@ -220,7 +220,7 @@ func resolvePushBranch(gitClient git.Client, workDir, fallback string) (string, 
 // isStaleLock checks if the merge lock file is stale (the process that created it is no longer running).
 // Returns true if the lock is stale and should be removed.
 func isStaleLock(lockFile string) bool {
-	content, err := os.ReadFile(lockFile)
+	content, err := os.ReadFile(lockFile) //nolint:gosec // G304: lockFile is from pawDir/.lock
 	if err != nil {
 		// Can't read lock file - assume it's not stale
 		return false

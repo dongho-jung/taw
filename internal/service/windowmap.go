@@ -15,12 +15,12 @@ import (
 func UpdateWindowMap(pawDir, taskName string) (string, error) {
 	token := constants.TruncateForWindowName(taskName)
 	mapPath := filepath.Join(pawDir, constants.WindowMapFileName)
-	if err := os.MkdirAll(filepath.Dir(mapPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(mapPath), 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 		return token, fmt.Errorf("failed to create window map directory: %w", err)
 	}
 
 	mapping := map[string]string{}
-	if data, err := os.ReadFile(mapPath); err == nil {
+	if data, err := os.ReadFile(mapPath); err == nil { //nolint:gosec // G304: mapPath is constructed from pawDir
 		if err := json.Unmarshal(data, &mapping); err != nil {
 			_ = fileutil.BackupCorruptFile(mapPath)
 			mapping = map[string]string{}
@@ -42,7 +42,7 @@ func UpdateWindowMap(pawDir, taskName string) (string, error) {
 // LoadWindowMap reads the window token map from disk.
 func LoadWindowMap(pawDir string) (map[string]string, error) {
 	mapPath := filepath.Join(pawDir, constants.WindowMapFileName)
-	data, err := os.ReadFile(mapPath)
+	data, err := os.ReadFile(mapPath) //nolint:gosec // G304: mapPath is constructed from pawDir
 	if err != nil {
 		if os.IsNotExist(err) {
 			return map[string]string{}, nil
@@ -52,8 +52,9 @@ func LoadWindowMap(pawDir string) (map[string]string, error) {
 
 	mapping := map[string]string{}
 	if err := json.Unmarshal(data, &mapping); err != nil {
+		// Corrupt JSON: backup and return empty map for graceful degradation
 		_ = fileutil.BackupCorruptFile(mapPath)
-		return map[string]string{}, nil
+		return map[string]string{}, nil //nolint:nilerr // Intentional: return empty map on corrupt file
 	}
 	return mapping, nil
 }

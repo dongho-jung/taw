@@ -10,18 +10,16 @@ import (
 
 	"github.com/dongho-jung/paw/internal/app"
 	"github.com/dongho-jung/paw/internal/config"
+	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/task"
 	"github.com/dongho-jung/paw/internal/tmux"
 )
 
 // runCleanAll removes all PAW resources across all projects
-func runCleanAll(cmd *cobra.Command, args []string) error {
+func runCleanAll(_ *cobra.Command, _ []string) error {
 	// Find all running PAW sessions
-	sessions, err := findPawSessions()
-	if err != nil {
-		return fmt.Errorf("failed to find PAW sessions: %w", err)
-	}
+	sessions := findPawSessions()
 
 	// Find all PAW workspaces in global directory
 	homeDir, err := os.UserHomeDir()
@@ -29,7 +27,7 @@ func runCleanAll(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	workspacesDir := filepath.Join(homeDir, ".local", "share", "paw", "workspaces")
+	workspacesDir := filepath.Join(homeDir, constants.GlobalDataDir, constants.GlobalWorkspacesDir)
 	var workspaces []string
 
 	entries, err := os.ReadDir(workspacesDir)
@@ -105,7 +103,7 @@ func cleanWorkspaceGitResources(wsPath, projectDir string) {
 		return
 	}
 
-	agentsDir := filepath.Join(wsPath, "agents")
+	agentsDir := filepath.Join(wsPath, constants.AgentsDirName)
 
 	// Load config if available
 	cfg, err := config.Load(wsPath)
@@ -127,7 +125,7 @@ func cleanWorkspaceGitResources(wsPath, projectDir string) {
 }
 
 // runClean removes all PAW resources
-func runClean(cmd *cobra.Command, args []string) error {
+func runClean(_ *cobra.Command, _ []string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -256,7 +254,7 @@ func updateGitignore(projectDir string) {
 	}
 
 	// Append missing rules
-	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) //nolint:gosec // G302: gitignore needs standard permissions
 	if err != nil {
 		return
 	}

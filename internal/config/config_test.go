@@ -13,10 +13,7 @@ func TestParseConfig_SingleLineHook(t *testing.T) {
 	content := `work_mode: worktree
 pre_worktree_hook: npm install
 `
-	cfg, err := parseConfig(content)
-	if err != nil {
-		t.Fatalf("parseConfig failed: %v", err)
-	}
+	cfg := parseConfig(content)
 
 	if cfg.PreWorktreeHook != "npm install" {
 		t.Errorf("expected 'npm install', got '%s'", cfg.PreWorktreeHook)
@@ -29,10 +26,7 @@ pre_worktree_hook: |
   npm install
   npm run build
 `
-	cfg, err := parseConfig(content)
-	if err != nil {
-		t.Fatalf("parseConfig failed: %v", err)
-	}
+	cfg := parseConfig(content)
 
 	expected := "npm install\nnpm run build"
 	if cfg.PreWorktreeHook != expected {
@@ -47,10 +41,7 @@ pre_worktree_hook: |
 
   npm run build
 `
-	cfg, err := parseConfig(content)
-	if err != nil {
-		t.Fatalf("parseConfig failed: %v", err)
-	}
+	cfg := parseConfig(content)
 
 	expected := "npm install\n\nnpm run build"
 	if cfg.PreWorktreeHook != expected {
@@ -81,10 +72,7 @@ func TestRoundTrip_SingleLineHook(t *testing.T) {
 	// Prepend with required fields
 	content := "work_mode: worktree\n" + formatted
 
-	cfg, err := parseConfig(content)
-	if err != nil {
-		t.Fatalf("parseConfig failed: %v", err)
-	}
+	cfg := parseConfig(content)
 
 	if cfg.PreWorktreeHook != hook {
 		t.Errorf("roundtrip failed: expected %q, got %q", hook, cfg.PreWorktreeHook)
@@ -98,10 +86,7 @@ func TestRoundTrip_MultiLineHook(t *testing.T) {
 	// Prepend with required fields
 	content := "work_mode: worktree\n" + formatted
 
-	cfg, err := parseConfig(content)
-	if err != nil {
-		t.Fatalf("parseConfig failed: %v", err)
-	}
+	cfg := parseConfig(content)
 
 	if cfg.PreWorktreeHook != hook {
 		t.Errorf("roundtrip failed: expected %q, got %q", hook, cfg.PreWorktreeHook)
@@ -221,10 +206,7 @@ func TestParseConfig_Comments(t *testing.T) {
 pre_worktree_hook: npm install
 # Another comment
 `
-	cfg, err := parseConfig(content)
-	if err != nil {
-		t.Fatalf("parseConfig failed: %v", err)
-	}
+	cfg := parseConfig(content)
 
 	if cfg.PreWorktreeHook != "npm install" {
 		t.Errorf("PreWorktreeHook = %q, want %q", cfg.PreWorktreeHook, "npm install")
@@ -236,10 +218,7 @@ func TestParseConfig_EmptyLines(t *testing.T) {
 pre_worktree_hook: npm install
 
 `
-	cfg, err := parseConfig(content)
-	if err != nil {
-		t.Fatalf("parseConfig failed: %v", err)
-	}
+	cfg := parseConfig(content)
 
 	if cfg.PreWorktreeHook != "npm install" {
 		t.Errorf("PreWorktreeHook = %q, want %q", cfg.PreWorktreeHook, "npm install")

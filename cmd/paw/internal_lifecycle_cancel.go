@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -23,7 +22,7 @@ var cancelTaskCmd = &cobra.Command{
 	Use:   "cancel-task [session] [window-id]",
 	Short: "Cancel a task (with revert if merged)",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		windowID := args[1]
 
@@ -196,7 +195,7 @@ var cancelTaskUICmd = &cobra.Command{
 	Use:   "cancel-task-ui [session] [window-id]",
 	Short: "Cancel task with UI feedback (creates visible pane)",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		windowID := args[1]
 
@@ -215,10 +214,7 @@ var cancelTaskUICmd = &cobra.Command{
 		tm := tmux.New(sessionName)
 
 		// Get the paw binary path
-		pawBin, err := os.Executable()
-		if err != nil {
-			pawBin = "paw"
-		}
+		pawBin := getPawBin()
 
 		// Get working directory from pane
 		panePath, err := tm.Display("#{pane_current_path}")
@@ -235,10 +231,10 @@ var cancelTaskUICmd = &cobra.Command{
 		}, " ")
 		cancelTaskCmdStr += "; echo; echo 'Press Enter to close...'; read"
 
-		// Create a top pane (40% height) spanning full window width
+		// Create a top pane spanning full window width
 		_, err = tm.SplitWindowPane(tmux.SplitOpts{
 			Horizontal: false,
-			Size:       "40%",
+			Size:       constants.TopPaneSize,
 			StartDir:   panePath,
 			Command:    cancelTaskCmdStr,
 			Before:     true,

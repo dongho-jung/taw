@@ -185,10 +185,10 @@ func TestExtractTaskName(t *testing.T) {
 		{"/path/to/241231_120000_task.cancelled", "task"},
 	}
 
-	for _, tc := range tests {
-		result := ExtractTaskName(tc.filename)
-		if result != tc.expected {
-			t.Errorf("ExtractTaskName(%q) = %q, want %q", tc.filename, result, tc.expected)
+	for _, tt := range tests {
+		result := ExtractTaskName(tt.filename)
+		if result != tt.expected {
+			t.Errorf("ExtractTaskName(%q) = %q, want %q", tt.filename, result, tt.expected)
 		}
 	}
 }
@@ -204,10 +204,10 @@ func TestIsCancelled(t *testing.T) {
 		{"/path/to/history/241231_120000_task.cancelled", true},
 	}
 
-	for _, tc := range tests {
-		result := IsCancelled(tc.filename)
-		if result != tc.expected {
-			t.Errorf("IsCancelled(%q) = %v, want %v", tc.filename, result, tc.expected)
+	for _, tt := range tests {
+		result := IsCancelled(tt.filename)
+		if result != tt.expected {
+			t.Errorf("IsCancelled(%q) = %v, want %v", tt.filename, result, tt.expected)
 		}
 	}
 }

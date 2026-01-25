@@ -67,6 +67,8 @@ Claude Code-based autonomous agent work environment
   g           Jump to top
   G           Jump to bottom
   PgUp/PgDn   Page scroll
+  /           Start search
+  n/N         Next/previous match
   s           Toggle tail mode (follow new logs)
   w           Toggle word wrap
   Tab         Cycle log level filter (L0+ → L1+ → ... → L5 only)

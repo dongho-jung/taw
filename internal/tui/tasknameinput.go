@@ -11,6 +11,7 @@ import (
 // TaskNameInputAction represents the selected action.
 type TaskNameInputAction int
 
+// Task name input action options.
 const (
 	TaskNameInputCancel TaskNameInputAction = iota
 	TaskNameInputSubmit
@@ -82,7 +83,7 @@ func validateTaskName(name string) string {
 
 	// Check for valid characters (lowercase letters, numbers, hyphens)
 	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-') {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
 			return "Use only lowercase letters, numbers, and hyphens"
 		}
 	}

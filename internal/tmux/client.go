@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +20,7 @@ import (
 
 // bufferPool reuses bytes.Buffer instances to reduce allocations in RunWithOutput.
 var bufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(bytes.Buffer)
 	},
 }
@@ -38,7 +39,7 @@ func init() {
 
 	tmpDir := os.TempDir()
 	configPath = filepath.Join(tmpDir, "paw-tmux.conf")
-	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil { //nolint:gosec // G306: tmux config needs to be readable
 		// Fallback: use /dev/null to ignore user's config
 		configPath = "/dev/null"
 	}
@@ -184,6 +185,9 @@ type tmuxClient struct {
 	sessionName string
 }
 
+// Compile-time check that tmuxClient implements Client interface.
+var _ Client = (*tmuxClient)(nil)
+
 // New creates a new tmux client with the given socket name.
 func New(sessionName string) Client {
 	return &tmuxClient{
@@ -194,12 +198,12 @@ func New(sessionName string) Client {
 
 func (c *tmuxClient) cmd(args ...string) *exec.Cmd {
 	allArgs := append([]string{"-f", configPath, "-L", c.socket}, args...)
-	return exec.Command("tmux", allArgs...)
+	return exec.Command("tmux", allArgs...) //nolint:gosec // G204: args are controlled by internal PAW code
 }
 
 func (c *tmuxClient) cmdContext(ctx context.Context, args ...string) *exec.Cmd {
 	allArgs := append([]string{"-f", configPath, "-L", c.socket}, args...)
-	return exec.CommandContext(ctx, "tmux", allArgs...)
+	return exec.CommandContext(ctx, "tmux", allArgs...) //nolint:gosec // G204: args are controlled by internal PAW code
 }
 
 func (c *tmuxClient) Run(args ...string) error {
@@ -255,10 +259,10 @@ func (c *tmuxClient) NewSession(opts SessionOpts) error {
 		args = append(args, "-c", opts.StartDir)
 	}
 	if opts.Width > 0 {
-		args = append(args, "-x", fmt.Sprintf("%d", opts.Width))
+		args = append(args, "-x", strconv.Itoa(opts.Width))
 	}
 	if opts.Height > 0 {
-		args = append(args, "-y", fmt.Sprintf("%d", opts.Height))
+		args = append(args, "-y", strconv.Itoa(opts.Height))
 	}
 	// Command must be the last argument
 	if opts.Command != "" {
@@ -348,8 +352,9 @@ func (c *tmuxClient) ListWindows() ([]Window, error) {
 		return nil, nil
 	}
 
-	var windows []Window
-	for _, line := range strings.Split(output, "\n") {
+	lines := strings.Split(output, "\n")
+	windows := make([]Window, 0, len(lines))
+	for _, line := range lines {
 		parts := strings.Split(line, "|")
 		if len(parts) < 4 {
 			continue
@@ -715,5 +720,5 @@ func (c *tmuxClient) SetMultipleOptions(options map[string]string) error {
 // DisplayMessage shows a message in the status bar for the specified duration.
 func (c *tmuxClient) DisplayMessage(message string, durationMs int) error {
 	logging.Trace("tmux.DisplayMessage: message=%s durationMs=%d", message, durationMs)
-	return c.Run("display-message", "-d", fmt.Sprintf("%d", durationMs), message)
+	return c.Run("display-message", "-d", strconv.Itoa(durationMs), message)
 }

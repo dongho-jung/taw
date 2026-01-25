@@ -12,7 +12,7 @@ import (
 var windowMapCmd = &cobra.Command{
 	Use:   "window-map",
 	Short: "Show window token to task name mappings",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		application, err := getAppFromCwd()
 		if err != nil {
 			return err

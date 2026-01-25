@@ -168,13 +168,38 @@ const (
 
 // Tmux command timeout
 const (
-	TmuxCommandTimeout = 10 * time.Second
+	TmuxCommandTimeout  = 10 * time.Second
+	PaneWaitTimeout     = 5 * time.Second  // Timeout for waiting for pane to be ready
+	ScrollToSpinnerWait = 30 * time.Second // Timeout for scrolling to first Claude spinner
 )
 
 // Default configuration values
 const (
 	DefaultMainBranch = "main"
 	DefaultWorkMode   = "worktree"
+)
+
+// End-task action names
+const (
+	ActionDone      = "done"
+	ActionDrop      = "drop"
+	ActionKeep      = "keep"
+	ActionMerge     = "merge"
+	ActionMergePush = "merge-push"
+	ActionPR        = "pr"
+)
+
+// Log format constants
+const (
+	LogFormatText  = "text"
+	LogFormatJSONL = "jsonl"
+)
+
+// Global PAW directories (relative to $HOME)
+const (
+	GlobalConfigDir     = ".config/paw"       // Global config directory ($HOME/.config/paw)
+	GlobalDataDir       = ".local/share/paw"  // Base directory for global PAW data
+	GlobalWorkspacesDir = "workspaces"        // Subdirectory for project workspaces
 )
 
 // Directory and file names
@@ -194,15 +219,26 @@ const (
 	GitRepoMarker         = ".is-git-repo"
 	GlobalPromptLink      = ".global-prompt"
 	ClaudeLink            = ".claude"
-	BinSymlinkName        = "bin"                 // Symlink to current paw binary (updated on attach)
-	VersionFileName       = ".version"            // Stores PAW version for upgrade detection
-	HistorySelectionFile  = ".history-selection"  // Temp file for Ctrl+R history selection
-	TemplateSelectionFile = ".template-selection" // Temp file for Ctrl+T template selection
-	TemplateDraftFile     = ".template-draft"     // Temp file for Ctrl+T template creation
-	StatusSignalFileName  = ".status-signal"      // Temp file for Claude to signal status directly
-	ProjectSwitchFileName   = ".project-switch"      // Temp file for project picker to signal switch target
-	ProjectPathFileName     = ".project-path"        // Stores project path for global workspaces
-	TaskNameSelectionFile   = ".task-name-selection" // Temp file for Alt+Enter task name input
+	BinSymlinkName        = "bin"                  // Symlink to current paw binary (updated on attach)
+	VersionFileName       = ".version"             // Stores PAW version for upgrade detection
+	HistorySelectionFile  = ".history-selection"   // Temp file for Ctrl+R history selection
+	TemplateSelectionFile = ".template-selection"  // Temp file for Ctrl+T template selection
+	TemplateDraftFile     = ".template-draft"      // Temp file for Ctrl+T template creation
+	StatusSignalFileName  = ".status-signal"       // Temp file for Claude to signal status directly
+	ProjectSwitchFileName = ".project-switch"      // Temp file for project picker to signal switch target
+	ProjectPathFileName   = ".project-path"        // Stores project path for global workspaces
+	TaskNameSelectionFile = ".task-name-selection" // Temp file for Alt+Enter task name input
+
+	// Task agent directory file names
+	OriginLinkName          = "origin"           // Symlink to project root
+	WorktreeDirName         = "worktree"         // Git worktree directory
+	StatusFileName          = ".status"          // Task status file (working/waiting/done)
+	SessionStartedFile      = ".session-started" // Session marker file
+	AgentSystemPromptFile   = ".system-prompt"   // Agent's system prompt file (in agent dir)
+	AgentUserPromptFile     = ".user-prompt"     // Agent's user prompt file (in agent dir)
+	VerifyLogFile           = ".verify.log"      // Verify log file
+	VerifyJSONFile          = ".verify.json"     // Verify JSON result file
+	StartAgentScriptName    = "start-agent"      // Agent start script
 )
 
 // Prompts directory and file names
@@ -231,6 +267,11 @@ const (
 const (
 	MergeLockMaxRetries    = 900             // Maximum retries to acquire merge lock (15 minutes)
 	MergeLockRetryInterval = 1 * time.Second // Interval between lock retries
+)
+
+// Task dependency settings
+const (
+	DependencyPollInterval = 5 * time.Second // Interval for checking dependency status
 )
 
 // Commit message templates
@@ -411,4 +452,29 @@ const (
 	// Compact size for the task name input popup.
 	PopupWidthTaskName  = "60%"
 	PopupHeightTaskName = "10"
+)
+
+// Pane sizes for split panes
+const (
+	// TopPaneSize is the default height for top/bottom split panes (40% of window).
+	TopPaneSize = "40%"
+)
+
+// Git commit message limits (conventional commit style)
+const (
+	CommitSubjectMaxLen       = 72 // Max length for commit subject line
+	CommitSubjectTruncatedLen = 69 // Length when truncated (leaves room for "...")
+)
+
+// Display message durations (milliseconds) for tmux status bar messages.
+const (
+	DisplayMsgQuick     = 1500 // Quick feedback messages
+	DisplayMsgStandard  = 2000 // Standard informational messages
+	DisplayMsgImportant = 3000 // Important messages (errors, warnings, dependency status)
+	DisplayMsgCritical  = 4000 // Critical messages requiring user attention
+)
+
+// Conflict resolution settings.
+const (
+	ConflictResolutionTimeout = 10 * time.Minute // Timeout for merge conflict resolution
 )

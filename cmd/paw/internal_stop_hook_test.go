@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dongho-jung/paw/internal/task"
@@ -147,11 +148,7 @@ func TestHasDoneMarker(t *testing.T) {
 
 // generateLines creates N lines of filler content for testing distance limits.
 func generateLines(n int) string {
-	var result string
-	for i := 0; i < n; i++ {
-		result += "Line filler content...\n"
-	}
-	return result
+	return strings.Repeat("Line filler content...\n", n)
 }
 
 func TestHasWaitingMarker(t *testing.T) {
@@ -313,11 +310,12 @@ func TestWaitingPriorityOverDone(t *testing.T) {
 
 			// Verify priority logic: waiting/ask > done > classify
 			var gotPrio string
-			if gotWaiting || gotAskUser {
+			switch {
+			case gotWaiting || gotAskUser:
 				gotPrio = "waiting"
-			} else if gotDone {
+			case gotDone:
 				gotPrio = "done"
-			} else {
+			default:
 				gotPrio = "classify"
 			}
 

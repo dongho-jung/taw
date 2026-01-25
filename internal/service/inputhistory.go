@@ -87,7 +87,7 @@ func (s *InputHistoryService) SaveInput(content string) error {
 func (s *InputHistoryService) LoadHistory() ([]InputHistoryEntry, error) {
 	historyPath := s.getHistoryPath()
 
-	data, err := os.ReadFile(historyPath)
+	data, err := os.ReadFile(historyPath) //nolint:gosec // G304: historyPath is from getHistoryPath()
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -97,8 +97,9 @@ func (s *InputHistoryService) LoadHistory() ([]InputHistoryEntry, error) {
 
 	var entries []InputHistoryEntry
 	if err := json.Unmarshal(data, &entries); err != nil {
+		// Corrupt JSON: backup and return empty list for graceful degradation
 		_ = fileutil.BackupCorruptFile(historyPath)
-		return nil, nil
+		return nil, nil //nolint:nilerr // Intentional: return empty list on corrupt file
 	}
 
 	// Sort by timestamp descending (most recent first)
@@ -127,7 +128,7 @@ func (s *InputHistoryService) GetAllContents() ([]string, error) {
 // saveEntries saves entries to the history file.
 func (s *InputHistoryService) saveEntries(entries []InputHistoryEntry) error {
 	historyPath := s.getHistoryPath()
-	if err := os.MkdirAll(filepath.Dir(historyPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(historyPath), 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 		return err
 	}
 

@@ -27,7 +27,7 @@ var handleTaskCmd = &cobra.Command{
 	Use:   "handle-task [session] [agent-dir]",
 	Short: "Handle a task (create window, start Claude)",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> handleTaskCmd(session=%s, agentDir=%s)", args[0], args[1])
 		defer logging.Debug("<- handleTaskCmd")
 
@@ -198,7 +198,7 @@ var handleTaskCmd = &cobra.Command{
 		}
 
 		// Split window for user pane (error is non-fatal)
-		userPaneCmd := shellCommand(fmt.Sprintf("exec %s", shellQuote(getShell())))
+		userPaneCmd := shellCommand("exec " + shellQuote(getShell()))
 		if err := tm.SplitWindow(windowID, true, workDir, userPaneCmd); err != nil {
 			logging.Warn("Failed to split window: %v", err)
 		} else {
@@ -211,7 +211,7 @@ var handleTaskCmd = &cobra.Command{
 		systemPrompt := claude.BuildSystemPrompt(globalPrompt, string(projectPrompt))
 
 		// Get paw binary path for end-task script
-		pawBin, _ := os.Executable()
+		pawBin := getPawBin()
 		// Use symlink path for PAW_BIN so running agents can use updated binary
 		pawBinSymlink := filepath.Join(appCtx.PawDir, constants.BinSymlinkName)
 
@@ -219,7 +219,7 @@ var handleTaskCmd = &cobra.Command{
 		taskContext := buildTaskContextPrompt(appCtx, taskName, workDir)
 		contextPath := t.GetTaskContextPath()
 		contextRef := ""
-		if err := os.WriteFile(contextPath, []byte(taskContext), 0644); err != nil {
+		if err := os.WriteFile(contextPath, []byte(taskContext), 0644); err != nil { //nolint:gosec // G306: context file needs to be readable by Claude
 			logging.Warn("Failed to save task context: %v", err)
 		} else {
 			contextRef = contextPath
@@ -227,10 +227,10 @@ var handleTaskCmd = &cobra.Command{
 		userPrompt := buildUserPrompt(t.Content, contextRef)
 
 		// Save prompts (errors are non-fatal but should be logged)
-		if err := os.WriteFile(t.GetSystemPromptPath(), []byte(systemPrompt), 0644); err != nil {
+		if err := os.WriteFile(t.GetSystemPromptPath(), []byte(systemPrompt), 0644); err != nil { //nolint:gosec // G306: prompt file needs to be readable
 			logging.Warn("Failed to save system prompt: %v", err)
 		}
-		if err := os.WriteFile(t.GetUserPromptPath(), []byte(userPrompt), 0644); err != nil {
+		if err := os.WriteFile(t.GetUserPromptPath(), []byte(userPrompt), 0644); err != nil { //nolint:gosec // G306: prompt file needs to be readable
 			logging.Warn("Failed to save user prompt: %v", err)
 		}
 
@@ -243,20 +243,20 @@ var handleTaskCmd = &cobra.Command{
 export PAW_DIR=%s
 exec %s
 `, shellQuote(appCtx.PawDir), shellJoin(pawBin, "internal", "end-task", sessionName, windowID))
-		if err := os.WriteFile(endTaskScriptPath, []byte(endTaskContent), 0755); err != nil {
+		if err := os.WriteFile(endTaskScriptPath, []byte(endTaskContent), 0755); err != nil { //nolint:gosec // G306: script needs to be executable
 			logging.Warn("Failed to create end-task script: %v", err)
 		} else {
 			logging.Debug("End-task script created: %s", endTaskScriptPath)
 		}
 
 		// Create start-agent script to avoid shell escaping issues with tmux
-		startAgentScriptPath := filepath.Join(t.AgentDir, "start-agent")
+		startAgentScriptPath := filepath.Join(t.AgentDir, constants.StartAgentScriptName)
 		startAgentContent := buildStartAgentScript(appCtx, t, taskOpts, windowID, workDir, systemPrompt, pawBin, pawBinSymlink, sessionName, isReopen)
 
-		if err := os.WriteFile(startAgentScriptPath, []byte(startAgentContent), 0755); err != nil {
-			logging.Warn("Failed to create start-agent script: %v", err)
+		if err := os.WriteFile(startAgentScriptPath, []byte(startAgentContent), 0755); err != nil { //nolint:gosec // G306: script needs to be executable
+			logging.Warn("Failed to create %s script: %v", constants.StartAgentScriptName, err)
 		} else {
-			logging.Debug("Start-agent script created: %s (resume=%v)", startAgentScriptPath, isReopen)
+			logging.Debug("%s script created: %s (resume=%v)", constants.StartAgentScriptName, startAgentScriptPath, isReopen)
 		}
 
 		agentPane := windowID + ".0"
@@ -307,11 +307,11 @@ exec %s
 			logging.Log("Session resumed: task=%s, windowID=%s", taskName, windowID)
 		} else {
 			// New task: clear screen and send task instruction
-			startNewTaskSession(tm, claudeClient, agentPane, t, taskOpts, taskName, windowID)
+			startNewTaskSession(tm, claudeClient, agentPane, t, taskName, windowID)
 		}
 
 		// Start wait watcher to handle window status + notifications when user input is needed
-		watchCmd := exec.Command(pawBin, "internal", "watch-wait", sessionName, windowID, taskName)
+		watchCmd := exec.Command(pawBin, "internal", "watch-wait", sessionName, windowID, taskName) //nolint:gosec // G204: pawBin is from getPawBin()
 		watchCmd.Dir = appCtx.ProjectDir
 		// CRITICAL: Pass PAW_DIR and PROJECT_DIR so watch-wait can find the correct workspace
 		// Without these, watch-wait relies on cwd-based resolution which fails for global workspaces
@@ -330,13 +330,13 @@ exec %s
 		if isReopen {
 			_ = notify.Send("Session resumed", fmt.Sprintf("🔄 %s resumed", taskName))
 			logging.Trace("handleTaskCmd: displaying session resumed message for task=%s", taskName)
-			if err := tm.DisplayMessage(fmt.Sprintf("🔄 Session resumed: %s", taskName), 2000); err != nil {
+			if err := tm.DisplayMessage("🔄 Session resumed: "+taskName, constants.DisplayMsgStandard); err != nil {
 				logging.Trace("Failed to display message: %v", err)
 			}
 		} else {
 			_ = notify.Send("Task started", fmt.Sprintf("🤖 %s started", taskName))
 			logging.Trace("handleTaskCmd: displaying task started message for task=%s", taskName)
-			if err := tm.DisplayMessage(fmt.Sprintf("🤖 Task started: %s", taskName), 2000); err != nil {
+			if err := tm.DisplayMessage("🤖 Task started: "+taskName, constants.DisplayMsgStandard); err != nil {
 				logging.Trace("Failed to display message: %v", err)
 			}
 		}
@@ -394,12 +394,12 @@ func buildStartAgentScript(appCtx *app.App, t *task.Task, taskOpts *config.TaskO
 	// Always pass the model flag since Claude CLI's default (sonnet) differs from PAW's default (opus)
 	modelFlag := ""
 	if taskOpts.Model != "" {
-		modelFlag = fmt.Sprintf(" --model %s", shellQuote(string(taskOpts.Model)))
+		modelFlag = " --model " + shellQuote(string(taskOpts.Model))
 	}
 
 	// Settings file path - use agent directory's .claude symlink
 	// This keeps settings outside git worktree while still being accessible
-	settingsPath := filepath.Join(t.AgentDir, ".claude", "settings.local.json")
+	settingsPath := filepath.Join(t.AgentDir, constants.ClaudeLink, "settings.local.json")
 
 	if isReopen {
 		// Resume mode: use --continue to automatically continue previous session
@@ -447,7 +447,7 @@ __PROMPT_END__
 }
 
 // startNewTaskSession handles the setup for a new (non-resumed) task session.
-func startNewTaskSession(tm tmux.Client, claudeClient claude.Client, agentPane string, t *task.Task, taskOpts *config.TaskOptions, taskName, windowID string) {
+func startNewTaskSession(tm tmux.Client, claudeClient claude.Client, agentPane string, t *task.Task, taskName, windowID string) {
 	// Clear scrollback history and screen before sending task instruction
 	if err := tm.ClearHistory(agentPane); err != nil {
 		logging.Trace("Failed to clear history: %v", err)
@@ -463,7 +463,7 @@ func startNewTaskSession(tm tmux.Client, claudeClient claude.Client, agentPane s
 	taskInstruction, err := buildTaskInstruction(t.GetUserPromptPath())
 	if err != nil {
 		logging.Warn("Failed to build task instruction: %v", err)
-		_ = tm.DisplayMessage("Failed to read task prompt. Check .paw/log for details.", 4000)
+		_ = tm.DisplayMessage("Failed to read task prompt. Check .paw/log for details.", constants.DisplayMsgCritical)
 		return
 	}
 	logging.Trace("Sending task instruction: length=%d", len(taskInstruction))
@@ -486,7 +486,7 @@ func startNewTaskSession(tm tmux.Client, claudeClient claude.Client, agentPane s
 
 	// Wait for Claude's first output (⏺ spinner) and clear scrollback history
 	go func() {
-		if err := claudeClient.ScrollToFirstSpinner(tm, agentPane, 30*time.Second); err != nil {
+		if err := claudeClient.ScrollToFirstSpinner(tm, agentPane, constants.ScrollToSpinnerWait); err != nil {
 			logging.Trace("Failed to scroll to first spinner: %v", err)
 		} else {
 			logging.Debug("Scrollback trimmed to first spinner for task: %s", taskName)

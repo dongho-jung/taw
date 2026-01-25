@@ -16,7 +16,7 @@ var prPopupTUICmd = &cobra.Command{
 	Short:  "Run PR popup TUI (called from popup)",
 	Args:   cobra.ExactArgs(3),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		prNumberStr := args[1]
 		prURL := args[2]

@@ -12,6 +12,7 @@ import (
 // FinishAction represents the selected finish action.
 type FinishAction string
 
+// Finish action options.
 const (
 	FinishActionCancel    FinishAction = "cancel"
 	FinishActionMergePush FinishAction = "merge-push"
@@ -296,7 +297,7 @@ func (m *FinishPicker) View() tea.View {
 	for i, opt := range m.options {
 		name := opt.Name
 		if opt.Warning {
-			name = name + " (!)"
+			name += " (!)"
 		}
 
 		if i == m.cursor {

@@ -3,6 +3,7 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -98,11 +99,11 @@ func (s *HistoryService) SaveCancelledWithDetails(taskName, taskContent, paneCon
 // RecordStatusTransition records a status transition for a task.
 func (s *HistoryService) RecordStatusTransition(taskName string, from, to task.Status, source, detail string, valid bool) error {
 	statusDir := filepath.Join(s.historyDir, "status")
-	if err := os.MkdirAll(statusDir, 0755); err != nil {
+	if err := os.MkdirAll(statusDir, 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 		return fmt.Errorf("failed to create status history directory: %w", err)
 	}
 
-	record := map[string]interface{}{
+	record := map[string]any{
 		"ts":     time.Now().Format(time.RFC3339Nano),
 		"task":   taskName,
 		"from":   string(from),
@@ -118,7 +119,7 @@ func (s *HistoryService) RecordStatusTransition(taskName string, from, to task.S
 	}
 
 	statusFile := filepath.Join(statusDir, taskName+".jsonl")
-	f, err := os.OpenFile(statusFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(statusFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644) //nolint:gosec // G302: status history file needs to be readable by other tools
 	if err != nil {
 		return fmt.Errorf("failed to open status history file: %w", err)
 	}
@@ -133,12 +134,12 @@ func (s *HistoryService) RecordStatusTransition(taskName string, from, to task.S
 
 // save saves a task to history.
 func (s *HistoryService) save(taskName, taskContent, paneContent string, cancelled bool, meta *HistoryMetadata, hookOutputs map[string]string) error {
-	if err := os.MkdirAll(s.historyDir, 0755); err != nil {
+	if err := os.MkdirAll(s.historyDir, 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 		return fmt.Errorf("failed to create history directory: %w", err)
 	}
 
 	if paneContent == "" {
-		return fmt.Errorf("empty pane content")
+		return errors.New("empty pane content")
 	}
 
 	// Generate summary using Claude
@@ -216,7 +217,7 @@ func (s *HistoryService) save(taskName, taskContent, paneContent string, cancell
 
 // LoadTaskContent loads the task content from a history file.
 func (s *HistoryService) LoadTaskContent(historyFile string) (string, error) {
-	data, err := os.ReadFile(historyFile)
+	data, err := os.ReadFile(historyFile) //nolint:gosec // G304: historyFile is from controlled history directory
 	if err != nil {
 		return "", fmt.Errorf("failed to read history file: %w", err)
 	}
@@ -259,7 +260,7 @@ func (s *HistoryService) ListHistoryFiles() ([]string, error) {
 		return nil, fmt.Errorf("failed to read history directory: %w", err)
 	}
 
-	var files []string
+	files := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			files = append(files, filepath.Join(s.historyDir, entry.Name()))

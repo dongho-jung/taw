@@ -21,6 +21,7 @@ type Command struct {
 // CommandPaletteAction represents the selected action.
 type CommandPaletteAction int
 
+// Command palette action options.
 const (
 	CommandPaletteCancel CommandPaletteAction = iota
 	CommandPaletteExecute

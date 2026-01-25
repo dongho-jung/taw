@@ -25,7 +25,7 @@ var toggleNewCmd = &cobra.Command{
 	Use:   "toggle-new [session]",
 	Short: "Toggle the new task window",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
@@ -69,14 +69,13 @@ var toggleNewCmd = &cobra.Command{
 
 		// Wait for shell to be ready before sending keys
 		paneID := windowID + ".0"
-		if err := tm.WaitForPane(paneID, 5*time.Second, 1); err != nil {
+		if err := tm.WaitForPane(paneID, constants.PaneWaitTimeout, 1); err != nil {
 			logging.Warn("toggleNewCmd: WaitForPane timed out, continuing anyway: %v", err)
 		}
 
 		// Send new-task command to the new window
 		// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
-		pawBin, _ := os.Executable()
-		newTaskCmdStr := buildNewTaskCommand(appCtx, pawBin, sessionName)
+		newTaskCmdStr := buildNewTaskCommand(appCtx, getPawBin(), sessionName)
 		if err := tm.SendKeysLiteral(windowID, newTaskCmdStr); err != nil {
 			return fmt.Errorf("failed to send keys: %w", err)
 		}
@@ -92,7 +91,7 @@ var newTaskCmd = &cobra.Command{
 	Use:   "new-task [session]",
 	Short: "Create a new task",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
@@ -219,7 +218,14 @@ var newTaskCmd = &cobra.Command{
 					fmt.Printf("Failed to create options temp file: %v\n", err)
 					continue
 				}
-				optsData, _ := json.Marshal(result.Options)
+				optsData, err := json.Marshal(result.Options)
+				if err != nil {
+					_ = optsTmpFile.Close()
+					_ = os.Remove(optsTmpFile.Name())
+					_ = os.Remove(tmpFile.Name())
+					fmt.Printf("Failed to marshal task options: %v\n", err)
+					continue
+				}
 				if _, err := optsTmpFile.Write(optsData); err != nil {
 					_ = optsTmpFile.Close()
 					_ = os.Remove(optsTmpFile.Name())
@@ -232,12 +238,11 @@ var newTaskCmd = &cobra.Command{
 			}
 
 			// Spawn task creation in a separate window (non-blocking)
-			pawBin, _ := os.Executable()
 			spawnArgs := []string{"internal", "spawn-task", sessionName, tmpFile.Name()}
 			if optsTmpPath != "" {
 				spawnArgs = append(spawnArgs, optsTmpPath)
 			}
-			spawnCmd := exec.Command(pawBin, spawnArgs...)
+			spawnCmd := exec.Command(getPawBin(), spawnArgs...) //nolint:gosec // G204: pawBin is from getPawBin()
 			if err := spawnCmd.Start(); err != nil {
 				_ = os.Remove(tmpFile.Name())
 				if optsTmpPath != "" {
@@ -265,11 +270,11 @@ var newTaskCmd = &cobra.Command{
 
 // getActiveTaskNames returns a list of active task names from the agents directory.
 func getActiveTaskNames(agentsDir string) []string {
-	var names []string
 	entries, err := os.ReadDir(agentsDir)
 	if err != nil {
-		return names
+		return nil
 	}
+	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			names = append(names, entry.Name())
@@ -282,7 +287,7 @@ var spawnTaskCmd = &cobra.Command{
 	Use:   "spawn-task [session] [content-file] [options-file]",
 	Short: "Spawn a task in a separate window (shows progress)",
 	Args:  cobra.RangeArgs(2, 3),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> spawnTaskCmd(session=%s, contentFile=%s)", args[0], args[1])
 		defer logging.Debug("<- spawnTaskCmd")
 
@@ -294,7 +299,7 @@ var spawnTaskCmd = &cobra.Command{
 		}
 
 		// Read content from temp file
-		contentBytes, err := os.ReadFile(contentFile)
+		contentBytes, err := os.ReadFile(contentFile) //nolint:gosec // G304: contentFile is from cmd args, used for IPC
 		if err != nil {
 			return fmt.Errorf("failed to read content file: %w", err)
 		}
@@ -303,7 +308,7 @@ var spawnTaskCmd = &cobra.Command{
 		// Read options from temp file if provided
 		var taskOpts *config.TaskOptions
 		if optsFile != "" {
-			optsBytes, err := os.ReadFile(optsFile)
+			optsBytes, err := os.ReadFile(optsFile) //nolint:gosec // G304: optsFile is from cmd args, used for IPC
 			if err != nil {
 				logging.Warn("Failed to read options file: %v", err)
 			} else {
@@ -329,7 +334,7 @@ var spawnTaskCmd = &cobra.Command{
 		defer cleanup()
 
 		tm := tmux.New(sessionName)
-		pawBin, _ := os.Executable()
+		pawBin := getPawBin()
 
 		// Create a temporary "⏳" window for progress display
 		progressWindowName := "⏳..."
@@ -387,7 +392,7 @@ var spawnTaskCmd = &cobra.Command{
 		}
 
 		// Handle task (creates actual window, starts Claude)
-		handleCmd := exec.Command(pawBin, "internal", "handle-task", sessionName, newTask.AgentDir)
+		handleCmd := exec.Command(pawBin, "internal", "handle-task", sessionName, newTask.AgentDir) //nolint:gosec // G204: pawBin is from getPawBin()
 		// Pass PAW_DIR and PROJECT_DIR so getAppFromSession can find the project
 		// (required for global workspaces where there's no local .paw directory)
 		handleCmd.Env = append(os.Environ(),
@@ -400,12 +405,12 @@ var spawnTaskCmd = &cobra.Command{
 		}
 
 		// Wait for handle-task to create the window
-		windowIDFile := filepath.Join(newTask.AgentDir, ".tab-lock", "window_id")
-		for i := 0; i < 60; i++ { // 30 seconds max (60 * 500ms)
+		windowIDFile := filepath.Join(newTask.AgentDir, constants.TabLockDirName, constants.WindowIDFileName)
+		for i := 0; i < constants.WindowIDWaitMaxAttempts; i++ {
 			if _, err := os.Stat(windowIDFile); err == nil {
 				break
 			}
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(constants.WindowIDWaitInterval)
 		}
 
 		logging.Debug("Task window created for: %s", newTask.Name)
@@ -440,16 +445,9 @@ func ensureMainWindowInSession(sessionName string) error {
 			}
 			syncSessionEnv(tm, appCtx)
 
-			// Get paw binary path
-			pawBin, err := os.Executable()
-			if err != nil {
-				logging.Warn("Failed to get executable for respawn: %v", err)
-				return nil
-			}
-
 			// Respawn the pane to ensure new-task is running
 			// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
-			newTaskCmd := buildNewTaskCommand(appCtx, pawBin, sessionName)
+			newTaskCmd := buildNewTaskCommand(appCtx, getPawBin(), sessionName)
 			if err := tm.RespawnPane(w.ID+".0", appCtx.ProjectDir, newTaskCmd); err != nil {
 				logging.Warn("Failed to respawn main window: %v", err)
 			}
@@ -467,15 +465,9 @@ func ensureMainWindowInSession(sessionName string) error {
 	}
 	syncSessionEnv(tm, appCtx)
 
-	// Get paw binary path
-	pawBin, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable: %w", err)
-	}
-
 	// Build the new-task command
 	// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
-	newTaskCmd := buildNewTaskCommand(appCtx, pawBin, sessionName)
+	newTaskCmd := buildNewTaskCommand(appCtx, getPawBin(), sessionName)
 
 	// Create new window with command directly (more reliable than sending keys)
 	// Using Command option ensures the command runs immediately without race conditions
@@ -496,10 +488,9 @@ func ensureMainWindowInSession(sessionName string) error {
 // Returns the entered task name, or empty string if cancelled/failed.
 func showTaskNamePopup(sessionName string, appCtx *app.App) string {
 	tm := tmux.New(sessionName)
-	pawBin, _ := os.Executable()
 
 	// Build the task name input TUI command
-	tuiCmd := shellJoin(pawBin, "internal", "task-name-input-tui", sessionName)
+	tuiCmd := shellJoin(getPawBin(), "internal", "task-name-input-tui", sessionName)
 
 	// Show the popup
 	err := tm.DisplayPopup(tmux.PopupOpts{
@@ -521,7 +512,7 @@ func showTaskNamePopup(sessionName string, appCtx *app.App) string {
 
 	// Read the selection file
 	selectionPath := filepath.Join(appCtx.PawDir, constants.TaskNameSelectionFile)
-	data, err := os.ReadFile(selectionPath)
+	data, err := os.ReadFile(selectionPath) //nolint:gosec // G304: selectionPath is constructed from pawDir
 	if err != nil {
 		logging.Debug("showTaskNamePopup: no selection file: %v", err)
 		return ""
@@ -564,7 +555,13 @@ func createTaskWithName(sessionName string, appCtx *app.App, taskName string) er
 		_ = os.Remove(tmpFile.Name())
 		return fmt.Errorf("failed to create options temp file: %w", err)
 	}
-	optsData, _ := json.Marshal(taskOpts)
+	optsData, err := json.Marshal(taskOpts)
+	if err != nil {
+		_ = optsTmpFile.Close()
+		_ = os.Remove(optsTmpFile.Name())
+		_ = os.Remove(tmpFile.Name())
+		return fmt.Errorf("failed to marshal task options: %w", err)
+	}
 	if _, err := optsTmpFile.Write(optsData); err != nil {
 		_ = optsTmpFile.Close()
 		_ = os.Remove(optsTmpFile.Name())
@@ -577,9 +574,8 @@ func createTaskWithName(sessionName string, appCtx *app.App, taskName string) er
 	inputHistorySvc := service.NewInputHistoryService(appCtx.PawDir)
 
 	// Spawn task creation in a separate window (non-blocking)
-	pawBin, _ := os.Executable()
 	spawnArgs := []string{"internal", "spawn-task", sessionName, tmpFile.Name(), optsTmpFile.Name()}
-	spawnCmd := exec.Command(pawBin, spawnArgs...)
+	spawnCmd := exec.Command(getPawBin(), spawnArgs...) //nolint:gosec // G204: pawBin is from getPawBin()
 	if err := spawnCmd.Start(); err != nil {
 		_ = os.Remove(tmpFile.Name())
 		_ = os.Remove(optsTmpFile.Name())

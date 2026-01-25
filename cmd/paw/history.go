@@ -42,7 +42,7 @@ var (
 var historyCmd = &cobra.Command{
 	Use:   "history",
 	Short: "List and view task history",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		application, err := getAppFromCwd()
 		if err != nil {
 			return err
@@ -75,7 +75,7 @@ var historyShowCmd = &cobra.Command{
 	Use:   "show [entry]",
 	Short: "Show a history entry by index, task name, or path",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		application, err := getAppFromCwd()
 		if err != nil {
 			return err
@@ -174,7 +174,7 @@ func loadHistoryEntries(historyDir string, opts historyOptions) ([]historyEntry,
 
 		var content string
 		if readContent {
-			data, err := os.ReadFile(path)
+			data, err := os.ReadFile(path) //nolint:gosec // G304: path is from controlled history directory
 			if err != nil {
 				continue
 			}

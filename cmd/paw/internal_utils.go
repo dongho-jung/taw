@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -44,7 +46,7 @@ var renameWindowCmd = &cobra.Command{
 	Use:   "rename-window [window-id] [name]",
 	Short: "Rename a tmux window (with logging and notifications)",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		windowID := args[0]
 		name := args[1]
 
@@ -52,7 +54,7 @@ var renameWindowCmd = &cobra.Command{
 		var logPath string
 		var debug bool
 		if pawDir := os.Getenv("PAW_DIR"); pawDir != "" {
-			logPath = filepath.Join(pawDir, "log")
+			logPath = filepath.Join(pawDir, constants.LogFileName)
 			debug = os.Getenv("PAW_DEBUG") == "1"
 		}
 
@@ -198,7 +200,7 @@ func getCurrentWindowInfo(tm tmux.Client) (string, string, error) {
 		return "", "", err
 	}
 	if len(values) < 2 {
-		return "", "", fmt.Errorf("unexpected tmux response for window info")
+		return "", "", errors.New("unexpected tmux response for window info")
 	}
 	windowID := strings.TrimSpace(values[0])
 	windowName := strings.TrimSpace(values[1])
@@ -255,7 +257,7 @@ func renameWindowWithStatus(tm tmux.Client, windowID, name, pawDir, taskName, so
 		return nil
 	}
 
-	agentDir := filepath.Join(pawDir, "agents", taskName)
+	agentDir := filepath.Join(pawDir, constants.AgentsDirName, taskName)
 	t := task.New(taskName, agentDir)
 	prevStatus, valid, err := t.TransitionStatus(status)
 	if err != nil {
@@ -414,7 +416,7 @@ func getAppFromSession(sessionName string) (*app.App, error) {
 			break
 		}
 
-		pawDir := filepath.Join(dir, ".paw")
+		pawDir := filepath.Join(dir, constants.PawDirName)
 		if _, err := os.Stat(pawDir); err == nil {
 			logging.Debug("getAppFromSession: found .paw at %s", pawDir)
 			isGitRepo := gitClient.IsGitRepo(dir)
@@ -485,8 +487,8 @@ func loadAppConfig(application *app.App) (*app.App, error) {
 	}
 	if application.Config != nil {
 		_ = os.Setenv("PAW_LOG_FORMAT", application.Config.LogFormat)
-		_ = os.Setenv("PAW_LOG_MAX_SIZE_MB", fmt.Sprintf("%d", application.Config.LogMaxSizeMB))
-		_ = os.Setenv("PAW_LOG_MAX_BACKUPS", fmt.Sprintf("%d", application.Config.LogMaxBackups))
+		_ = os.Setenv("PAW_LOG_MAX_SIZE_MB", strconv.Itoa(application.Config.LogMaxSizeMB))
+		_ = os.Setenv("PAW_LOG_MAX_BACKUPS", strconv.Itoa(application.Config.LogMaxBackups))
 	}
 
 	return application, nil
@@ -535,13 +537,13 @@ func buildNewTaskCommand(appCtx *app.App, pawBin, sessionName string) string {
 }
 
 func buildTaskInstruction(userPromptPath string) (string, error) {
-	content, err := os.ReadFile(userPromptPath)
+	content, err := os.ReadFile(userPromptPath) //nolint:gosec // G304: userPromptPath is from task agent directory
 	if err != nil {
 		return "", fmt.Errorf("failed to read user prompt: %w", err)
 	}
 	trimmed := strings.TrimSpace(string(content))
 	if trimmed == "" {
-		return "", fmt.Errorf("user prompt is empty")
+		return "", errors.New("user prompt is empty")
 	}
 	return string(content), nil
 }

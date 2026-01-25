@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,7 @@ import (
 
 // bufferPool reuses bytes.Buffer instances to reduce allocations.
 var bufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(bytes.Buffer)
 	},
 }
@@ -49,6 +50,9 @@ type PRStatus struct {
 type ghClient struct {
 	timeout time.Duration
 }
+
+// Compile-time check that ghClient implements Client interface.
+var _ Client = (*ghClient)(nil)
 
 // New creates a new GitHub CLI client.
 func New() Client {
@@ -143,7 +147,7 @@ func (c *ghClient) CreatePR(dir, title, body, base string) (int, string, error) 
 
 // GetPRStatus gets the status of a pull request.
 func (c *ghClient) GetPRStatus(dir string, prNumber int) (*PRStatus, error) {
-	output, err := c.runOutput(dir, "pr", "view", fmt.Sprintf("%d", prNumber), "--json", "number,state,merged,url")
+	output, err := c.runOutput(dir, "pr", "view", strconv.Itoa(prNumber), "--json", "number,state,merged,url")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PR status: %w", err)
 	}
@@ -167,5 +171,5 @@ func (c *ghClient) IsPRMerged(dir string, prNumber int) (bool, error) {
 
 // ViewPRWeb opens the pull request in a web browser.
 func (c *ghClient) ViewPRWeb(dir string, prNumber int) error {
-	return c.run(dir, "pr", "view", fmt.Sprintf("%d", prNumber), "--web")
+	return c.run(dir, "pr", "view", strconv.Itoa(prNumber), "--web")
 }

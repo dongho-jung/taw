@@ -13,6 +13,7 @@ import (
 // TaskOptsField represents the current field being edited.
 type TaskOptsField int
 
+// Task options field values.
 const (
 	TaskOptsFieldModel TaskOptsField = iota
 )
@@ -38,7 +39,8 @@ type TaskOptsResult struct {
 }
 
 // NewTaskOptsUI creates a new task options UI.
-func NewTaskOptsUI(currentOpts *config.TaskOptions, activeTasks []string) *TaskOptsUI {
+// Note: activeTasks is reserved for future dependency selection feature.
+func NewTaskOptsUI(currentOpts *config.TaskOptions, _ []string) *TaskOptsUI {
 	// Detect dark mode BEFORE bubbletea starts
 	isDark := DetectDarkMode()
 
@@ -108,7 +110,6 @@ func (m *TaskOptsUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "right", "l":
 			m.handleRight()
 			return m, nil
-
 		}
 	}
 
@@ -116,8 +117,7 @@ func (m *TaskOptsUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *TaskOptsUI) handleLeft() {
-	switch m.field {
-	case TaskOptsFieldModel:
+	if m.field == TaskOptsFieldModel {
 		if m.modelIdx > 0 {
 			m.modelIdx--
 			m.options.Model = config.ValidModels()[m.modelIdx]
@@ -126,8 +126,7 @@ func (m *TaskOptsUI) handleLeft() {
 }
 
 func (m *TaskOptsUI) handleRight() {
-	switch m.field {
-	case TaskOptsFieldModel:
+	if m.field == TaskOptsFieldModel {
 		models := config.ValidModels()
 		if m.modelIdx < len(models)-1 {
 			m.modelIdx++

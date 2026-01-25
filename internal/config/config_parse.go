@@ -10,7 +10,8 @@ import (
 // parseConfig parses the configuration from a string.
 // Supports multi-line values using YAML-like '|' syntax.
 // Supports nested configuration blocks for notifications.
-func parseConfig(content string) (*Config, error) {
+// Invalid values are silently ignored (defaults are used).
+func parseConfig(content string) *Config {
 	cfg := DefaultConfig()
 	lines := strings.Split(content, "\n")
 
@@ -100,7 +101,7 @@ func parseConfig(content string) (*Config, error) {
 		}
 	}
 
-	return cfg, nil
+	return cfg
 }
 
 // getIndentLevel returns the indentation level of a line at the given index.
@@ -165,7 +166,7 @@ func formatHook(key, hook string) string {
 		// Multi-line: use | syntax with indentation
 		lines := strings.Split(hook, "\n")
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("%s: |\n", key))
+		sb.WriteString(key + ": |\n")
 		for _, line := range lines {
 			sb.WriteString("  ")
 			sb.WriteString(line)

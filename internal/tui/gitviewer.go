@@ -25,9 +25,9 @@ const (
 
 // Pre-computed status bar hints and their widths (avoids ansi.StringWidth on each render)
 const (
-	gitViewerHintFull      = "Tab/1-4:mode /:search n/N:match q:close"
-	gitViewerHintShort     = "⌃G/q:close"
-	gitViewerHintFullWidth = 41 // len("Tab/1-4:mode /:search n/N:match q:close")
+	gitViewerHintFull       = "Tab/1-4:mode /:search n/N:match q:close"
+	gitViewerHintShort      = "⌃G/q:close"
+	gitViewerHintFullWidth  = 41 // len("Tab/1-4:mode /:search n/N:match q:close")
 	gitViewerHintShortWidth = 10 // ansi.StringWidth("⌃G/q:close") - ⌃ is 1 width
 )
 
@@ -55,13 +55,13 @@ type GitViewer struct {
 	selectEndX   int // End column (screen-relative)
 
 	// Search state
-	searchMode        bool              // whether search input is active
-	searchQuery       string            // current search term (confirmed)
-	searchQueryLower  string            // pre-lowercased search query for performance
-	searchInput       string            // input buffer while typing
-	searchMatches     []int             // display line indices containing matches
-	currentMatchIdx   int               // current match index for n/N navigation
-	cacheMatchLineSet map[int]struct{}  // O(1) lookup for isMatchLine
+	searchMode        bool             // whether search input is active
+	searchQuery       string           // current search term (confirmed)
+	searchQueryLower  string           // pre-lowercased search query for performance
+	searchInput       string           // input buffer while typing
+	searchMatches     []int            // display line indices containing matches
+	currentMatchIdx   int              // current match index for n/N navigation
+	cacheMatchLineSet map[int]struct{} // O(1) lookup for isMatchLine
 
 	// Style cache (reused across renders to avoid allocations)
 	styleHighlight    lipgloss.Style
@@ -410,24 +410,24 @@ func (m *GitViewer) scrollUp(n int) {
 // scrollDown scrolls down by n lines.
 func (m *GitViewer) scrollDown(n int) {
 	displayLines := m.getDisplayLines()
-	max := len(displayLines) - m.contentHeight()
-	if max < 0 {
-		max = 0
+	maxPos := len(displayLines) - m.contentHeight()
+	if maxPos < 0 {
+		maxPos = 0
 	}
 	m.scrollPos += n
-	if m.scrollPos > max {
-		m.scrollPos = max
+	if m.scrollPos > maxPos {
+		m.scrollPos = maxPos
 	}
 }
 
 // scrollToEnd scrolls to the end of the content.
 func (m *GitViewer) scrollToEnd() {
 	displayLines := m.getDisplayLines()
-	max := len(displayLines) - m.contentHeight()
-	if max < 0 {
-		max = 0
+	maxPos := len(displayLines) - m.contentHeight()
+	if maxPos < 0 {
+		maxPos = 0
 	}
-	m.scrollPos = max
+	m.scrollPos = maxPos
 }
 
 // getDisplayLines returns lines to display, handling word wrap if enabled.
@@ -539,15 +539,15 @@ func (m *GitViewer) View() tea.View {
 		}
 
 		// Apply search highlighting before padding
-		if m.searchQuery != "" && m.isMatchLine(i) {
-			isCurrentMatch := m.isCurrentMatchLine(i)
+		if m.searchQuery != "" && isMatchLine(m.cacheMatchLineSet, i) {
+			isCurrentMatch := isCurrentMatchLine(m.searchMatches, m.currentMatchIdx, i)
 			line = m.highlightSearchMatches(line, isCurrentMatch)
 			lineWidth = ansi.StringWidth(line)
 		}
 
 		// Pad to full width (accounting for visual width)
 		if lineWidth < m.width {
-			line = line + getPadding(m.width-lineWidth)
+			line += getPadding(m.width - lineWidth)
 		}
 
 		// Apply selection highlighting if this line is in selection
@@ -756,24 +756,6 @@ func (m *GitViewer) prevMatch() {
 	m.scrollToMatch(m.currentMatchIdx)
 }
 
-// isMatchLine returns true if the display line at idx is a match line.
-// Uses O(1) map lookup instead of O(n) slice scan.
-func (m *GitViewer) isMatchLine(idx int) bool {
-	if m.cacheMatchLineSet == nil {
-		return false
-	}
-	_, ok := m.cacheMatchLineSet[idx]
-	return ok
-}
-
-// isCurrentMatchLine returns true if the display line at idx is the current match.
-func (m *GitViewer) isCurrentMatchLine(idx int) bool {
-	if len(m.searchMatches) == 0 || m.currentMatchIdx >= len(m.searchMatches) {
-		return false
-	}
-	return m.searchMatches[m.currentMatchIdx] == idx
-}
-
 // highlightSearchMatches highlights search matches in a line (ANSI-aware).
 // Uses pre-cached searchQueryLower and cached styles to avoid allocations.
 func (m *GitViewer) highlightSearchMatches(line string, isCurrentMatch bool) string {
@@ -940,7 +922,7 @@ func (m *GitViewer) copySelection() {
 
 		// Pad for consistent width
 		if lineWidth < m.width {
-			line = line + getPadding(m.width-lineWidth)
+			line += getPadding(m.width - lineWidth)
 		}
 
 		startX, endX := m.getSelectionXRange(screenY)
@@ -980,7 +962,7 @@ func (m *GitViewer) loadGitOutput() tea.Cmd {
 			cmd = exec.Command("git", "log", "--all", "--decorate", "--oneline", "--graph", "--color=always")
 		case gitModeDiff:
 			// git diff main...HEAD shows changes on the current branch since it diverged from main
-			cmd = exec.Command("git", "diff", "--color=always", m.mainBranch+"...HEAD")
+			cmd = exec.Command("git", "diff", "--color=always", m.mainBranch+"...HEAD") //nolint:gosec // G204: mainBranch comes from git
 		}
 
 		cmd.Dir = m.workDir

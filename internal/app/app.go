@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/dongho-jung/paw/internal/config"
@@ -86,7 +87,7 @@ func (a *App) Initialize() error {
 	}
 
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
@@ -257,8 +258,8 @@ func (a *App) GetEnvVars(taskName, worktreeDir, windowID string) []string {
 	if a.Config != nil {
 		env = append(env,
 			"PAW_LOG_FORMAT="+a.Config.LogFormat,
-			"PAW_LOG_MAX_SIZE_MB="+fmt.Sprintf("%d", a.Config.LogMaxSizeMB),
-			"PAW_LOG_MAX_BACKUPS="+fmt.Sprintf("%d", a.Config.LogMaxBackups),
+			"PAW_LOG_MAX_SIZE_MB="+strconv.Itoa(a.Config.LogMaxSizeMB),
+			"PAW_LOG_MAX_BACKUPS="+strconv.Itoa(a.Config.LogMaxBackups),
 		)
 	}
 

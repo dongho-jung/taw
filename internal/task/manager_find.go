@@ -35,9 +35,10 @@ func (m *Manager) FindTaskByWindowID(windowID string) (*Task, error) {
 
 // FindIncompleteTasks finds tasks that should have a window but don't.
 // This includes tasks with tab-lock but no window, and tasks with worktree but no window.
-func (m *Manager) FindIncompleteTasks(sessionName string) ([]*Task, error) {
+// Note: sessionName is currently unused but kept for future filtering by session.
+func (m *Manager) FindIncompleteTasks(_ string) ([]*Task, error) {
 	if m.tmuxClient == nil {
-		err := fmt.Errorf("tmux client not set")
+		err := errors.New("tmux client not set")
 		logging.Error("FindIncompleteTasks: %v", err)
 		return nil, err
 	}
@@ -208,7 +209,7 @@ func (m *Manager) isTaskMerged(task *Task, mainBranch string) bool {
 // These are windows left behind after cleanup.
 func (m *Manager) FindOrphanedWindows() ([]string, error) {
 	if m.tmuxClient == nil {
-		err := fmt.Errorf("tmux client not set")
+		err := errors.New("tmux client not set")
 		logging.Error("FindOrphanedWindows: %v", err)
 		return nil, err
 	}
@@ -248,7 +249,7 @@ type StoppedTaskInfo struct {
 // These are tasks where the window exists but the agent pane shows a shell prompt.
 func (m *Manager) FindStoppedTasks() ([]*StoppedTaskInfo, error) {
 	if m.tmuxClient == nil {
-		err := fmt.Errorf("tmux client not set")
+		err := errors.New("tmux client not set")
 		logging.Error("FindStoppedTasks: %v", err)
 		return nil, err
 	}

@@ -95,6 +95,7 @@ paw/                           # This repository
 ├── cmd/paw/                   # Go main package
 │   ├── main.go                # Entry point and root command
 │   ├── session.go             # Session management (attach, create)
+│   ├── setup.go               # Clean/clean-all commands
 │   ├── tmux_config.go         # Tmux configuration generation
 │   ├── tmux_theme.go          # Tmux theme/color management
 │   ├── check.go               # Dependency check command (paw check)
@@ -105,9 +106,10 @@ paw/                           # This repository
 │   ├── kill.go                # Kill session command (paw kill)
 │   ├── location.go            # Location command (paw location)
 │   ├── internal.go            # Internal command registration
-│   ├── internal_create*.go    # Task creation (toggleNew, newTask, spawnTask, handleTask)
-│   ├── internal_lifecycle*.go # Task lifecycle (endTask, cancelTask, merge, helpers)
-│   ├── internal_popup*.go     # Popup/UI (toggleLog, toggleHelp, shell, prompts)
+│   ├── internal_create*.go    # Task creation (toggleNew, newTask, spawnTask, handleTask, deps)
+│   ├── internal_lifecycle*.go # Task lifecycle (endTask, cancelTask, merge, helpers, misc)
+│   ├── internal_popup*.go     # Popup/UI (toggleLog, toggleHelp, shell, prompts, misc, viewers)
+│   ├── internal_pr_popup.go   # PR popup TUI command
 │   ├── internal_sync.go       # Sync commands (syncWithMain)
 │   ├── internal_stop_hook.go  # Claude stop hook handling (task status classification)
 │   ├── internal_user_prompt_hook.go # User prompt submission hook
@@ -115,6 +117,7 @@ paw/                           # This repository
 │   ├── keybindings.go         # Tmux keybinding definitions
 │   ├── timeparse.go           # Time parsing utilities for logs/history
 │   ├── wait*.go               # Wait detection for user input prompts
+│   ├── watch_pr.go            # PR merge watcher (auto-cleanup on merge)
 │   └── window_map.go          # Window ID to task name mapping
 ├── internal/                  # Go internal packages
 │   ├── app/                   # Application context
@@ -130,7 +133,7 @@ paw/                           # This repository
 │   │       ├── PROMPT-nogit.md # System prompt (non-git mode)
 │   │       ├── tmux.conf      # Base tmux configuration
 │   │       ├── hooks/         # Git hooks
-│   │       │   └── pre-commit # Pre-commit hook to prevent .claude commits
+│   │       │   └── pre-commit # Pre-commit hook (safety net for .claude)
 │   │       ├── prompts/       # Default prompt templates
 │   │       │   ├── task-name.md      # Task name generation rules
 │   │       │   ├── merge-conflict.md # Merge conflict resolution prompt
@@ -151,8 +154,10 @@ paw/                           # This repository
 │   │   └── recovery.go        # Task recovery logic
 │   ├── tmux/                  # Tmux client
 │   └── tui/                   # Terminal UI components
-│       ├── taskinput*.go      # Task input UI (main, helpers, mouse, options)
+│       ├── taskinput*.go      # Task input UI (main, helpers, mouse, options, templates)
 │       ├── taskopts.go        # Task options panel
+│       ├── tasknameinput.go   # Task name input with validation
+│       ├── taskviewer.go      # Task content viewer
 │       ├── gitviewer.go       # Git viewer (status, log, graph modes)
 │       ├── diffviewer.go      # Diff viewer for PR/merge operations
 │       ├── helpviewer.go      # Help viewer
@@ -163,6 +168,8 @@ paw/                           # This repository
 │       ├── kanban.go          # Kanban board view for tasks
 │       ├── projectpicker.go   # Project session picker (⌃J)
 │       ├── promptpicker.go    # Prompt editor picker (⌃Y)
+│       ├── templatepicker.go  # Template picker (⌃T)
+│       ├── prpopup.go         # PR info popup
 │       ├── branchmenu.go      # Branch selection menu
 │       ├── inputhistory.go    # Task input history (⌃R search)
 │       ├── recover.go         # Task recovery UI
@@ -170,6 +177,7 @@ paw/                           # This repository
 │       ├── theme.go           # Theme/color definitions
 │       ├── tips.go            # UI tips and hints
 │       ├── scrollbar.go       # Scrollbar component
+│       ├── textinput_helpers.go # Text input helper functions (padding, etc.)
 │       └── textarea/          # Custom textarea component (fork of bubbles)
 ├── Makefile                   # Build script
 └── go.mod                     # Go module file
@@ -196,14 +204,17 @@ paw/                           # This repository
     └── agents/{task-name}/    # Per-task workspace
         ├── task               # Task contents
         ├── log                # Task-specific progress log (for agent progress updates)
+        ├── start-agent        # Agent start script (avoids shell escaping issues)
         ├── end-task           # Per-task end-task script (called for auto-merge)
         ├── origin             # -> Project root (symlink)
-        ├── {project-name}/           # Git worktree (auto-created in git mode)
+        ├── worktree/          # Git worktree directory (auto-created in git mode)
         ├── .tab-lock/         # Tab creation lock (atomic mkdir prevents races)
         │   └── window_id      # Tmux window ID (used in cleanup)
         ├── .session-started   # Session marker (for resume on reopen)
         ├── .status            # Task status (working/waiting/done, persisted for resume)
         ├── .status-signal     # Temp file for Claude to signal status (deleted after read)
+        ├── .system-prompt     # Generated system prompt for the agent
+        ├── .user-prompt       # Generated user prompt for the agent
         ├── .options.json      # Task options (model, depends_on, pre_worktree_hook)
         └── .pr                # PR number (when created)
 
@@ -372,8 +383,13 @@ PAW uses several techniques to ensure smooth, responsive UI:
 | `internal/tui/logviewer.go` | `strings.Builder.Grow()` pre-allocation in View() |
 | `internal/tui/logviewer.go` | Pre-computed status bar hint widths |
 | `internal/tui/logviewer.go` | `strconv.Itoa` + string concat for status bar (no fmt.Sprintf) |
+| `internal/tui/helpviewer.go` | `strings.Builder.Grow()` pre-allocation in View() |
 | `internal/tui/helpviewer.go` | Pre-computed status bar hint widths |
 | `internal/tui/helpviewer.go` | `strconv.Itoa` + string concat for status bar (no fmt.Sprintf) |
+| `internal/tui/taskviewer.go` | `strings.Builder.Grow()` pre-allocation in View() |
+| `internal/tui/inputhistory.go` | `strings.Builder.Grow()` pre-allocation in View() |
+| `internal/tui/projectpicker.go` | `strings.Builder.Grow()` pre-allocation in View() |
+| `internal/tui/promptpicker.go` | `strings.Builder.Grow()` pre-allocation in View() |
 | `internal/tui/kanban.go` | Cached separator string for column headers |
 | `internal/tui/taskinput.go` | Cached View() styles (help, version, warning, tip, cancel hint) |
 | `internal/tui/taskinput.go` | Pre-rendered help text and cached width (avoids lipgloss.Width per render) |
@@ -398,15 +414,25 @@ PAW uses several techniques to ensure smooth, responsive UI:
 | `internal/embed/embed.go` | Uses `bytes.Contains` instead of custom byte search functions |
 | `internal/constants/constants.go` | `sync.Map` cache for `ToCamelCase()` results |
 | `internal/tui/textarea/internal/memoization/memoization.go` | `strconv.FormatUint`/`strconv.Itoa` for hash formatting (no fmt.Sprintf) |
+| `internal/tmux/client.go` | `strconv.Itoa` for popup dimensions (no fmt.Sprintf) |
+| `internal/github/client.go` | `strconv.Itoa` for PR number formatting (no fmt.Sprintf) |
+| `internal/app/app.go` | `strconv.Itoa` for log config env vars (no fmt.Sprintf) |
+| `internal/task/task.go` | `strconv.Itoa` for PR number file (no fmt.Sprintf) |
+| `internal/service/taskdiscovery.go` | `strconv.Itoa` for UID fallback (no fmt.Sprintf) |
+| `cmd/paw/*` | String concatenation for simple message formatting (no fmt.Sprintf) |
+| `cmd/paw/*`, `internal/*` | `errors.New` for static error messages (no fmt.Errorf) |
+| `internal/task/manager.go` | Pre-allocated tasks slice in `ListTasks()` |
+| `internal/service/history.go` | Pre-allocated files slice in `ListHistoryFiles()` |
+| `cmd/paw/internal_create.go` | Pre-allocated names slice in `getActiveTaskNames()` |
+| `cmd/paw/wait_prompt.go` | Pre-lowercased UI hints slice (avoids ToLower in loop) |
+| `internal/tui/endtask.go` | Pre-allocated steps slice with capacity based on git mode |
 
 ### Hot path optimizations
 
 - **TaskDiscoveryService**: Lines split once and passed to all extraction functions
-- **LogViewer**: `isMatchLine()` uses O(1) map lookup instead of O(n) slice scan
+- **Viewers (Log/Diff/Git)**: Shared `isMatchLine()` and `isCurrentMatchLine()` helpers with bounds checking
 - **LogViewer**: Pre-cached lowercase lines avoid repeated `strings.ToLower()` in render
 - **LogViewer**: Pre-computed level tags/filters avoid `fmt.Sprintf` per line
-- **DiffViewer**: `isMatchLine()` uses O(1) map lookup instead of O(n) slice scan
-- **GitViewer**: `isMatchLine()` uses O(1) map lookup instead of O(n) slice scan
 - **KanbanView**: `isCacheValid()` uses cached task count, not recalculated
 - **KanbanView**: `containsLower()` does case-insensitive match without allocation
 - **Render functions**: Early returns when cache is valid
@@ -434,6 +460,8 @@ PAW uses several techniques to ensure smooth, responsive UI:
 11. **Pre-allocate strings.Builder** with `sb.Grow(estimatedSize)` when output size is predictable
 12. **Pre-compute string widths** for static UI hints (avoid `ansi.StringWidth()` on each render)
 13. **Cache repeated string computations** like separators that depend on width
+14. **Add compile-time interface checks** for implementations: `var _ Interface = (*concreteType)(nil)`
+15. **Use constants for timeouts** - extract repeated duration values to `internal/constants/constants.go`
 
 ## Working rules
 

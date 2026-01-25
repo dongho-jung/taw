@@ -10,6 +10,7 @@ import (
 // BranchAction represents the selected action.
 type BranchAction int
 
+// Branch action options.
 const (
 	BranchActionCancel BranchAction = iota
 	BranchActionMerge               // ↑ Merge to main (default ← task)

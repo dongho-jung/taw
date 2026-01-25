@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,11 +36,8 @@ type pawSession struct {
 	SocketPath string
 }
 
-func runAttach(cmd *cobra.Command, args []string) error {
-	sessions, err := findPawSessions()
-	if err != nil {
-		return fmt.Errorf("failed to find PAW sessions: %w", err)
-	}
+func runAttach(_ *cobra.Command, args []string) error {
+	sessions := findPawSessions()
 
 	if len(sessions) == 0 {
 		fmt.Println("No running PAW sessions found.")
@@ -49,7 +47,8 @@ func runAttach(cmd *cobra.Command, args []string) error {
 
 	var targetSession pawSession
 
-	if len(args) == 1 {
+	switch {
+	case len(args) == 1:
 		// Direct attach to specified session
 		sessionName := args[0]
 		for _, s := range sessions {
@@ -66,28 +65,29 @@ func runAttach(cmd *cobra.Command, args []string) error {
 					matches = append(matches, s)
 				}
 			}
-			if len(matches) == 1 {
+			switch {
+			case len(matches) == 1:
 				targetSession = matches[0]
-			} else if len(matches) > 1 {
+			case len(matches) > 1:
 				fmt.Printf("Multiple sessions match '%s':\n", sessionName)
 				for _, m := range matches {
 					fmt.Printf("  - %s\n", m.Name)
 				}
-				return fmt.Errorf("please specify a unique session name")
-			} else {
+				return errors.New("please specify a unique session name")
+			default:
 				fmt.Printf("Session '%s' not found.\n\n", sessionName)
 				fmt.Println("Available sessions:")
 				for _, s := range sessions {
 					fmt.Printf("  - %s\n", s.Name)
 				}
-				return fmt.Errorf("session not found")
+				return errors.New("session not found")
 			}
 		}
-	} else if len(sessions) == 1 {
+	case len(sessions) == 1:
 		// Only one session, attach directly
 		targetSession = sessions[0]
 		fmt.Printf("Attaching to '%s'...\n", targetSession.Name)
-	} else {
+	default:
 		// Multiple sessions, prompt for selection
 		fmt.Println("Running PAW sessions:")
 		fmt.Println()
@@ -116,8 +116,8 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	return attachToPawSession(targetSession)
 }
 
-// findPawSessions discovers all running PAW tmux sessions
-func findPawSessions() ([]pawSession, error) {
+// findPawSessions discovers all running PAW tmux sessions.
+func findPawSessions() []pawSession {
 	// Find tmux socket directory
 	// macOS: /private/tmp/tmux-$UID/
 	// Linux: /tmp/tmux-$UID/
@@ -167,7 +167,7 @@ func findPawSessions() ([]pawSession, error) {
 		return sessions[i].Name < sessions[j].Name
 	})
 
-	return sessions, nil
+	return sessions
 }
 
 // attachToPawSession attaches to a PAW tmux session

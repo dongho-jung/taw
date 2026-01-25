@@ -101,8 +101,9 @@ func parseAskUserQuestionUI(content string) (askPrompt, bool) {
 	for i := 0; i < len(lines); i++ {
 		if option, ok := parseUIOption(lines[i]); ok {
 			// Skip "Type something." or similar custom input options
-			if strings.Contains(strings.ToLower(option), "type something") ||
-				strings.Contains(strings.ToLower(option), "other") {
+			optionLower := strings.ToLower(option)
+			if strings.Contains(optionLower, "type something") ||
+				strings.Contains(optionLower, "other") {
 				continue
 			}
 			prompt.Options = append(prompt.Options, option)
@@ -185,18 +186,20 @@ func isUIHeaderLine(line string) bool {
 	return false
 }
 
+// Pre-lowercased UI hints (avoids ToLower in loop)
+var uiHintsLower = []string{
+	"enter to select",
+	"tab/arrow keys",
+	"esc to cancel",
+	"space to toggle",
+	"navigate",
+}
+
 // isUIHintLine checks if a line is a UI hint/instruction
 func isUIHintLine(line string) bool {
-	hints := []string{
-		"Enter to select",
-		"Tab/Arrow keys",
-		"Esc to cancel",
-		"Space to toggle",
-		"navigate",
-	}
 	lower := strings.ToLower(line)
-	for _, hint := range hints {
-		if strings.Contains(lower, strings.ToLower(hint)) {
+	for _, hint := range uiHintsLower {
+		if strings.Contains(lower, hint) {
 			return true
 		}
 	}

@@ -22,7 +22,7 @@ Use 'paw --local' to force a local .paw workspace for git projects.`,
 	RunE: runLocation,
 }
 
-func runLocation(cmd *cobra.Command, args []string) error {
+func runLocation(_ *cobra.Command, _ []string) error {
 	// Get current directory
 	cwd, err := os.Getwd()
 	if err != nil {

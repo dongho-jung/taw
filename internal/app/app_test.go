@@ -112,7 +112,6 @@ func TestAppInitialize(t *testing.T) {
 			t.Errorf("%q is not a directory", dir)
 		}
 	}
-
 }
 
 func TestAppIsInitialized(t *testing.T) {

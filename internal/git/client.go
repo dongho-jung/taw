@@ -17,7 +17,7 @@ import (
 
 // bufferPool reuses bytes.Buffer instances to reduce allocations in run/runOutput.
 var bufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(bytes.Buffer)
 	},
 }
@@ -120,6 +120,9 @@ type StashEntry struct {
 type gitClient struct {
 	timeout time.Duration
 }
+
+// Compile-time check that gitClient implements Client interface.
+var _ Client = (*gitClient)(nil)
 
 // New creates a new git client.
 func New() Client {
@@ -257,11 +260,12 @@ func (c *gitClient) WorktreeList(projectDir string) ([]Worktree, error) {
 			continue
 		}
 
-		if strings.HasPrefix(line, "worktree ") {
+		switch {
+		case strings.HasPrefix(line, "worktree "):
 			current.Path = strings.TrimPrefix(line, "worktree ")
-		} else if strings.HasPrefix(line, "HEAD ") {
+		case strings.HasPrefix(line, "HEAD "):
 			current.Head = strings.TrimPrefix(line, "HEAD ")
-		} else if strings.HasPrefix(line, "branch ") {
+		case strings.HasPrefix(line, "branch "):
 			branch := strings.TrimPrefix(line, "branch ")
 			// Remove refs/heads/ prefix
 			current.Branch = strings.TrimPrefix(branch, "refs/heads/")
@@ -278,7 +282,7 @@ func (c *gitClient) WorktreeList(projectDir string) ([]Worktree, error) {
 // Branch
 
 func (c *gitClient) BranchExists(dir, branch string) bool {
-	err := c.run(dir, "rev-parse", "--verify", fmt.Sprintf("refs/heads/%s", branch))
+	err := c.run(dir, "rev-parse", "--verify", "refs/heads/"+branch)
 	return err == nil
 }
 
@@ -391,8 +395,9 @@ func (c *gitClient) StashList(dir string) ([]StashEntry, error) {
 		return nil, nil
 	}
 
-	var entries []StashEntry
-	for i, line := range strings.Split(output, "\n") {
+	lines := strings.Split(output, "\n")
+	entries := make([]StashEntry, 0, len(lines))
+	for i, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -658,8 +663,9 @@ func (c *gitClient) GetBranchCommits(dir, branch, baseBranch string, maxCount in
 		return nil, nil
 	}
 
-	var commits []CommitInfo
-	for _, line := range strings.Split(output, "\n") {
+	lines := strings.Split(output, "\n")
+	commits := make([]CommitInfo, 0, len(lines))
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -712,12 +718,12 @@ func CopyUntrackedFiles(files []string, srcDir, dstDir string) error {
 		dst := filepath.Join(dstDir, file)
 
 		// Create parent directory if needed
-		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 			return fmt.Errorf("failed to create directory for %s: %w", file, err)
 		}
 
 		// Read source file
-		data, err := os.ReadFile(src)
+		data, err := os.ReadFile(src) //nolint:gosec // G304: src is from controlled list
 		if err != nil {
 			return fmt.Errorf("failed to read %s: %w", file, err)
 		}
@@ -787,12 +793,12 @@ func AddToExcludeFile(worktreeDir, pattern string) error {
 	excludePath := filepath.Join(gitDir, "info", "exclude")
 
 	// Create info directory if it doesn't exist
-	if err := os.MkdirAll(filepath.Dir(excludePath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(excludePath), 0755); err != nil { //nolint:gosec // G301: standard directory permissions
 		return fmt.Errorf("failed to create info directory: %w", err)
 	}
 
 	// Read existing content
-	content, err := os.ReadFile(excludePath)
+	content, err := os.ReadFile(excludePath) //nolint:gosec // G304: excludePath is constructed from gitDir
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to read exclude file: %w", err)
 	}
@@ -815,7 +821,7 @@ func AddToExcludeFile(worktreeDir, pattern string) error {
 	newContent += pattern + "\n"
 
 	// Write back
-	if err := os.WriteFile(excludePath, []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(excludePath, []byte(newContent), 0644); err != nil { //nolint:gosec // G306: git exclude file needs standard permissions
 		return fmt.Errorf("failed to write exclude file: %w", err)
 	}
 

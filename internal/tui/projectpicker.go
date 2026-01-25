@@ -12,6 +12,7 @@ import (
 // ProjectPickerAction represents the selected action.
 type ProjectPickerAction int
 
+// Project picker action options.
 const (
 	ProjectPickerCancel ProjectPickerAction = iota
 	ProjectPickerSelect
@@ -234,6 +235,7 @@ func (m *ProjectPicker) View() tea.View {
 	}
 
 	var sb strings.Builder
+	sb.Grow((m.width + 1) * (m.height + 1)) // Pre-allocate for full screen
 	line := 0
 
 	// Title

@@ -2,6 +2,7 @@
 package task
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +30,7 @@ func NewRecoveryManager(projectDir string) *RecoveryManager {
 // RecoveryAction represents what action to take for a corrupted task.
 type RecoveryAction string
 
+// Recovery action options.
 const (
 	RecoveryRecover RecoveryAction = "recover" // Try to recover the task
 	RecoveryCleanup RecoveryAction = "cleanup" // Clean up the task
@@ -38,7 +40,7 @@ const (
 // RecoverTask attempts to recover a corrupted task.
 func (r *RecoveryManager) RecoverTask(task *Task) error {
 	if task == nil {
-		return fmt.Errorf("task is nil")
+		return errors.New("task is nil")
 	}
 
 	logging.Log("Recovery: start task=%s reason=%s", task.Name, task.CorruptedReason)
@@ -168,7 +170,7 @@ func (r *RecoveryManager) getWorktreeHead(worktreeDir string) (string, error) {
 	gitFile := filepath.Join(worktreeDir, ".git")
 
 	// Read .git file to get gitdir
-	data, err := os.ReadFile(gitFile)
+	data, err := os.ReadFile(gitFile) //nolint:gosec // G304: gitFile is constructed from worktreeDir
 	if err != nil {
 		return "", fmt.Errorf("failed to read .git file: %w", err)
 	}
@@ -176,18 +178,18 @@ func (r *RecoveryManager) getWorktreeHead(worktreeDir string) (string, error) {
 	// Parse gitdir line - format is "gitdir: /path/to/gitdir"
 	content := strings.TrimSpace(string(data))
 	if !strings.HasPrefix(content, "gitdir: ") {
-		return "", fmt.Errorf("invalid .git file format: missing 'gitdir:' prefix")
+		return "", errors.New("invalid .git file format: missing 'gitdir:' prefix")
 	}
 	gitdir := strings.TrimPrefix(content, "gitdir: ")
 	gitdir = strings.TrimSpace(gitdir)
 
 	if gitdir == "" {
-		return "", fmt.Errorf("invalid .git file format: empty gitdir path")
+		return "", errors.New("invalid .git file format: empty gitdir path")
 	}
 
 	// Read HEAD file from gitdir
 	headFile := filepath.Join(gitdir, "HEAD")
-	headData, err := os.ReadFile(headFile)
+	headData, err := os.ReadFile(headFile) //nolint:gosec // G304: headFile is constructed from validated gitdir
 	if err != nil {
 		return "", fmt.Errorf("failed to read HEAD file: %w", err)
 	}
@@ -199,7 +201,7 @@ func (r *RecoveryManager) getWorktreeHead(worktreeDir string) (string, error) {
 		refName := strings.TrimPrefix(head, "ref: ")
 		refName = strings.TrimSpace(refName)
 		refPath := filepath.Join(gitdir, "..", refName)
-		refData, err := os.ReadFile(refPath)
+		refData, err := os.ReadFile(refPath) //nolint:gosec // G304: refPath is constructed from validated git paths
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve ref %s: %w", refName, err)
 		}
@@ -276,7 +278,7 @@ func copyDirContents(src, dst string, exclude []string) error {
 
 // copyFile copies a single file.
 func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
+	srcFile, err := os.Open(src) //nolint:gosec // G304: src is from validated file walk
 	if err != nil {
 		return err
 	}
@@ -287,7 +289,7 @@ func copyFile(src, dst string) error {
 		return err
 	}
 
-	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode()) //nolint:gosec // G304: dst is from validated file walk
 	if err != nil {
 		return err
 	}

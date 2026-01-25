@@ -440,7 +440,7 @@ func TestTaskStatus(t *testing.T) {
 	task := New("test-task", agentDir)
 
 	// Test GetStatusFilePath
-	expectedPath := filepath.Join(agentDir, ".status")
+	expectedPath := filepath.Join(agentDir, constants.StatusFileName)
 	if task.GetStatusFilePath() != expectedPath {
 		t.Errorf("GetStatusFilePath() = %q, want %q", task.GetStatusFilePath(), expectedPath)
 	}

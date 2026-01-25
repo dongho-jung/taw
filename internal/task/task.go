@@ -2,9 +2,11 @@
 package task
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 // Status represents the status of a task.
 type Status string
 
+// Task status values.
 const (
 	StatusPending   Status = "pending"   // Task created, not yet started
 	StatusWorking   Status = "working"   // Agent is working on the task
@@ -58,6 +61,7 @@ var statusTransitions = map[Status]map[Status]bool{
 // CorruptedReason represents why a task is corrupted.
 type CorruptedReason string
 
+// Corruption reason values.
 const (
 	CorruptMissingWorktree CorruptedReason = "missing_worktree" // Worktree directory doesn't exist
 	CorruptNotInGit        CorruptedReason = "not_in_git"       // Worktree exists but not registered in git
@@ -115,7 +119,7 @@ func (t *Task) GetWorktreeDir() string {
 	if t.WorktreeDir != "" {
 		return t.WorktreeDir
 	}
-	return filepath.Join(t.AgentDir, "worktree")
+	return filepath.Join(t.AgentDir, constants.WorktreeDirName)
 }
 
 // GetPRFilePath returns the path to the PR number file.
@@ -125,17 +129,17 @@ func (t *Task) GetPRFilePath() string {
 
 // GetSystemPromptPath returns the path to the system prompt file.
 func (t *Task) GetSystemPromptPath() string {
-	return filepath.Join(t.AgentDir, ".system-prompt")
+	return filepath.Join(t.AgentDir, constants.AgentSystemPromptFile)
 }
 
 // GetUserPromptPath returns the path to the user prompt file.
 func (t *Task) GetUserPromptPath() string {
-	return filepath.Join(t.AgentDir, ".user-prompt")
+	return filepath.Join(t.AgentDir, constants.AgentUserPromptFile)
 }
 
 // GetSessionMarkerPath returns the path to the session started marker file.
 func (t *Task) GetSessionMarkerPath() string {
-	return filepath.Join(t.AgentDir, ".session-started")
+	return filepath.Join(t.AgentDir, constants.SessionStartedFile)
 }
 
 // GetHookOutputPath returns the output path for a named hook.
@@ -150,17 +154,17 @@ func (t *Task) GetHookMetaPath(name string) string {
 
 // GetVerifyOutputPath returns the output path for verification results.
 func (t *Task) GetVerifyOutputPath() string {
-	return filepath.Join(t.AgentDir, ".verify.log")
+	return filepath.Join(t.AgentDir, constants.VerifyLogFile)
 }
 
 // GetVerifyMetaPath returns the metadata path for verification results.
 func (t *Task) GetVerifyMetaPath() string {
-	return filepath.Join(t.AgentDir, ".verify.json")
+	return filepath.Join(t.AgentDir, constants.VerifyJSONFile)
 }
 
 // GetStatusFilePath returns the path to the status file.
 func (t *Task) GetStatusFilePath() string {
-	return filepath.Join(t.AgentDir, ".status")
+	return filepath.Join(t.AgentDir, constants.StatusFileName)
 }
 
 // GetStatusSignalPath returns the path to the status signal file.
@@ -200,7 +204,7 @@ func (t *Task) LoadStatus() (Status, error) {
 // If a valid signal file exists, it updates .status and deletes the signal file.
 func (t *Task) recoverStatusSignal() {
 	signalPath := t.GetStatusSignalPath()
-	data, err := os.ReadFile(signalPath)
+	data, err := os.ReadFile(signalPath) //nolint:gosec // G304: signalPath is from GetStatusSignalPath()
 	if err != nil {
 		return // No signal file or read error - nothing to recover
 	}
@@ -208,8 +212,8 @@ func (t *Task) recoverStatusSignal() {
 	statusStr := strings.TrimSpace(string(data))
 	status := Status(statusStr)
 
-	// Validate the status
-	switch status {
+	// Validate the status (only accept valid runtime states)
+	switch status { //nolint:exhaustive // StatusPending/StatusCorrupted are not valid signal values
 	case StatusWorking, StatusWaiting, StatusDone:
 		// Valid status - apply it
 		if saveErr := t.SaveStatus(status); saveErr != nil {
@@ -228,7 +232,7 @@ func (t *Task) recoverStatusSignal() {
 // Returns previous status, whether the transition is valid, and any save error.
 func (t *Task) TransitionStatus(next Status) (Status, bool, error) {
 	if next == "" {
-		return t.Status, false, fmt.Errorf("empty status")
+		return t.Status, false, errors.New("empty status")
 	}
 
 	prev, err := t.LoadStatus()
@@ -268,7 +272,7 @@ func (t *Task) CreateSessionMarker() error {
 
 // GetOriginPath returns the path to the origin symlink.
 func (t *Task) GetOriginPath() string {
-	return filepath.Join(t.AgentDir, "origin")
+	return filepath.Join(t.AgentDir, constants.OriginLinkName)
 }
 
 // HasTabLock returns true if the tab-lock directory exists.
@@ -280,7 +284,7 @@ func (t *Task) HasTabLock() bool {
 // CreateTabLock creates the tab-lock directory atomically.
 // Returns true if created successfully, false if it already exists.
 func (t *Task) CreateTabLock() (bool, error) {
-	err := os.Mkdir(t.GetTabLockDir(), 0755)
+	err := os.Mkdir(t.GetTabLockDir(), 0755) //nolint:gosec // G301: standard directory permissions
 	if err != nil {
 		if os.IsExist(err) {
 			return false, nil
@@ -330,7 +334,7 @@ func (t *Task) LoadContent() (string, error) {
 // SavePRNumber saves the PR number to the .pr file.
 func (t *Task) SavePRNumber(prNumber int) error {
 	t.PRNumber = prNumber
-	return fileutil.WriteFileAtomic(t.GetPRFilePath(), []byte(fmt.Sprintf("%d", prNumber)), 0644)
+	return fileutil.WriteFileAtomic(t.GetPRFilePath(), []byte(strconv.Itoa(prNumber)), 0644)
 }
 
 // LoadPRNumber loads the PR number from the .pr file.
@@ -362,7 +366,7 @@ func (t *Task) HasPR() bool {
 // Note: StatusCorrupted maps to Waiting emoji.
 func (t *Task) GetWindowName() string {
 	emoji := constants.EmojiWorking
-	switch t.Status {
+	switch t.Status { //nolint:exhaustive // StatusPending/StatusWorking use default (Working emoji)
 	case StatusWaiting, StatusCorrupted:
 		// Corrupted status displays as Waiting.
 		emoji = constants.EmojiWaiting

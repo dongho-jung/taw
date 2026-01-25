@@ -319,24 +319,24 @@ func (m *DiffViewer) scrollUp(n int) {
 // scrollDown scrolls down by n lines.
 func (m *DiffViewer) scrollDown(n int) {
 	displayLines := m.getDisplayLines()
-	max := len(displayLines) - m.contentHeight()
-	if max < 0 {
-		max = 0
+	maxPos := len(displayLines) - m.contentHeight()
+	if maxPos < 0 {
+		maxPos = 0
 	}
 	m.scrollPos += n
-	if m.scrollPos > max {
-		m.scrollPos = max
+	if m.scrollPos > maxPos {
+		m.scrollPos = maxPos
 	}
 }
 
 // scrollToEnd scrolls to the end of the content.
 func (m *DiffViewer) scrollToEnd() {
 	displayLines := m.getDisplayLines()
-	max := len(displayLines) - m.contentHeight()
-	if max < 0 {
-		max = 0
+	maxPos := len(displayLines) - m.contentHeight()
+	if maxPos < 0 {
+		maxPos = 0
 	}
-	m.scrollPos = max
+	m.scrollPos = maxPos
 }
 
 // getDisplayLines returns lines to display, handling word wrap if enabled.
@@ -448,15 +448,15 @@ func (m *DiffViewer) View() tea.View {
 		}
 
 		// Apply search highlighting before padding
-		if m.searchQuery != "" && m.isMatchLine(i) {
-			isCurrentMatch := m.isCurrentMatchLine(i)
+		if m.searchQuery != "" && isMatchLine(m.cacheMatchLineSet, i) {
+			isCurrentMatch := isCurrentMatchLine(m.searchMatches, m.currentMatchIdx, i)
 			line = m.highlightSearchMatches(line, isCurrentMatch)
 			lineWidth = ansi.StringWidth(line)
 		}
 
 		// Pad to full width (accounting for visual width)
 		if lineWidth < m.width {
-			line = line + getPadding(m.width-lineWidth)
+			line += getPadding(m.width - lineWidth)
 		}
 
 		// Apply selection highlighting if this line is in selection
@@ -652,24 +652,6 @@ func (m *DiffViewer) prevMatch() {
 	m.scrollToMatch(m.currentMatchIdx)
 }
 
-// isMatchLine returns true if the display line at idx is a match line.
-// Uses O(1) map lookup instead of O(n) slice scan.
-func (m *DiffViewer) isMatchLine(idx int) bool {
-	if m.cacheMatchLineSet == nil {
-		return false
-	}
-	_, ok := m.cacheMatchLineSet[idx]
-	return ok
-}
-
-// isCurrentMatchLine returns true if the display line at idx is the current match.
-func (m *DiffViewer) isCurrentMatchLine(idx int) bool {
-	if len(m.searchMatches) == 0 || m.currentMatchIdx >= len(m.searchMatches) {
-		return false
-	}
-	return m.searchMatches[m.currentMatchIdx] == idx
-}
-
 // highlightSearchMatches highlights search matches in a line (ANSI-aware).
 // Uses pre-cached searchQueryLower and cached styles to avoid allocations.
 func (m *DiffViewer) highlightSearchMatches(line string, isCurrentMatch bool) string {
@@ -836,7 +818,7 @@ func (m *DiffViewer) copySelection() {
 
 		// Pad for consistent width
 		if lineWidth < m.width {
-			line = line + getPadding(m.width-lineWidth)
+			line += getPadding(m.width - lineWidth)
 		}
 
 		startX, endX := m.getSelectionXRange(screenY)
@@ -863,7 +845,7 @@ func (m *DiffViewer) copySelection() {
 func (m *DiffViewer) loadDiffOutput() tea.Cmd {
 	return func() tea.Msg {
 		// git diff main...HEAD shows changes on the current branch since it diverged from main
-		cmd := exec.Command("git", "diff", "--color=always", m.mainBranch+"...HEAD")
+		cmd := exec.Command("git", "diff", "--color=always", m.mainBranch+"...HEAD") //nolint:gosec // G204: mainBranch comes from git
 		cmd.Dir = m.workDir
 		output, err := cmd.CombinedOutput()
 		if err != nil {

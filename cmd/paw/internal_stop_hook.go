@@ -31,8 +31,8 @@ type modelAttempt struct {
 // stopHookTrace writes a debug trace to help diagnose stop hook issues.
 // This is written to a separate file for debugging since stop hook runs
 // outside the normal logging context and may fail before logging is initialized.
-func stopHookTrace(format string, args ...interface{}) {
-	f, err := os.OpenFile(stopHookTraceFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+func stopHookTrace(format string, args ...any) {
+	f, err := os.OpenFile(stopHookTraceFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) //nolint:gosec // G302: trace file needs to be readable by users for debugging
 	if err != nil {
 		return
 	}
@@ -50,7 +50,7 @@ func stopHookTrace(format string, args ...interface{}) {
 var stopHookCmd = &cobra.Command{
 	Use:   "stop-hook",
 	Short: "Handle Claude stop hook for task status updates",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		// Trace hook invocation with environment variables for debugging
 		stopHookTrace("stop-hook called: PAW_STOP_HOOK=%q SESSION_NAME=%q WINDOW_ID=%q TASK_NAME=%q PAW_BIN=%q",
 			os.Getenv("PAW_STOP_HOOK"),
@@ -130,7 +130,7 @@ var stopHookCmd = &cobra.Command{
 		// Check status signal file first (highest priority - Claude writes directly)
 		// This is more reliable than terminal parsing since it's a direct file write.
 		if pawDir != "" {
-			signalPath := filepath.Join(pawDir, "agents", taskName, constants.StatusSignalFileName)
+			signalPath := filepath.Join(pawDir, constants.AgentsDirName, taskName, constants.StatusSignalFileName)
 			if signalStatus := readAndClearStatusSignal(signalPath); signalStatus != "" {
 				logging.Info("stopHookCmd: task=%s detected=status_signal status=%s", taskName, signalStatus)
 				stopHookTrace("Status signal file detected: %s", signalStatus)
@@ -356,7 +356,7 @@ func runClaudePromptWithModel(prompt, model string, thinking bool, timeout time.
 		args = append(args, "--think")
 	}
 
-	cmd := exec.CommandContext(ctx, "claude", args...)
+	cmd := exec.CommandContext(ctx, "claude", args...) //nolint:gosec // G204: args are controlled internally
 	cmd.Env = append(os.Environ(), "PAW_STOP_HOOK=1")
 	cmd.Stdin = strings.NewReader(prompt)
 
@@ -399,7 +399,7 @@ func parseStopHookDecision(output string) (task.Status, bool) {
 
 func windowNameForStatus(taskName string, status task.Status) string {
 	emoji := constants.EmojiWorking
-	switch status {
+	switch status { //nolint:exhaustive // StatusPending/StatusWorking use default (Working emoji)
 	case task.StatusWaiting, task.StatusCorrupted:
 		// Corrupted status displays as Waiting.
 		emoji = constants.EmojiWaiting
@@ -415,7 +415,7 @@ func windowNameForStatus(taskName string, status task.Status) string {
 // which is more reliable than parsing terminal output.
 // Returns empty string if file doesn't exist or is invalid.
 func readAndClearStatusSignal(signalPath string) task.Status {
-	data, err := os.ReadFile(signalPath)
+	data, err := os.ReadFile(signalPath) //nolint:gosec // G304: signalPath is from task agent directory
 	if err != nil {
 		if !os.IsNotExist(err) {
 			logging.Debug("readAndClearStatusSignal: failed to read %s: %v", signalPath, err)
@@ -431,8 +431,8 @@ func readAndClearStatusSignal(signalPath string) task.Status {
 	statusStr := strings.TrimSpace(string(data))
 	status := task.Status(statusStr)
 
-	// Validate the status
-	switch status {
+	// Validate the status (only accept valid runtime states)
+	switch status { //nolint:exhaustive // StatusPending/StatusCorrupted are not valid signal values
 	case task.StatusWorking, task.StatusWaiting, task.StatusDone:
 		logging.Debug("readAndClearStatusSignal: valid status=%s", status)
 		return status

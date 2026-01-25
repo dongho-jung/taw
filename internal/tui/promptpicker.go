@@ -21,6 +21,7 @@ type PromptEntry struct {
 // PromptPickerAction represents the selected action.
 type PromptPickerAction int
 
+// Prompt picker action options.
 const (
 	PromptPickerCancel PromptPickerAction = iota
 	PromptPickerSelect
@@ -166,6 +167,7 @@ func (m *PromptPicker) View() tea.View {
 	}
 
 	var sb strings.Builder
+	sb.Grow((m.width + 1) * (m.height + 1)) // Pre-allocate for full screen
 
 	// Title
 	sb.WriteString(m.styleTitle.Render("Edit Prompts"))

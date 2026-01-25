@@ -22,7 +22,7 @@ var loadingScreenCmd = &cobra.Command{
 	Short:  "Show a loading screen with braille animation",
 	Args:   cobra.MaximumNArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> loadingScreenCmd")
 		defer logging.Debug("<- loadingScreenCmd")
 
@@ -45,7 +45,7 @@ var toggleCmdPaletteCmd = &cobra.Command{
 	Use:   "toggle-cmd-palette [session]",
 	Short: "Toggle command palette top pane",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> toggleCmdPaletteCmd(session=%s)", args[0])
 		defer logging.Debug("<- toggleCmdPaletteCmd")
 
@@ -72,7 +72,7 @@ var cmdPaletteTUICmd = &cobra.Command{
 	Short:  "Run command palette TUI (called from popup)",
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
@@ -119,11 +119,11 @@ var cmdPaletteTUICmd = &cobra.Command{
 		switch selected.ID {
 		case "show-current-task":
 			logging.Debug("cmdPaletteTUICmd: executing show-current-task")
-			showTaskCmd := exec.Command(pawBin, "internal", "show-current-task", sessionName)
+			showTaskCmd := exec.Command(pawBin, "internal", "show-current-task", sessionName) //nolint:gosec // G204: pawBin is from getPawBin()
 			return showTaskCmd.Run()
 		case "restore-panes":
 			logging.Debug("cmdPaletteTUICmd: executing restore-panes")
-			restoreCmd := exec.Command(pawBin, "internal", "restore-panes", sessionName)
+			restoreCmd := exec.Command(pawBin, "internal", "restore-panes", sessionName) //nolint:gosec // G204: pawBin is from getPawBin()
 			return restoreCmd.Run()
 		}
 
@@ -136,7 +136,7 @@ var finishPickerTUICmd = &cobra.Command{
 	Short:  "Run finish picker TUI (called from popup)",
 	Args:   cobra.ExactArgs(2),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		windowID := args[1]
 
@@ -187,19 +187,19 @@ var finishPickerTUICmd = &cobra.Command{
 
 		// Map TUI action to end-task action flag
 		var endAction string
-		switch action {
+		switch action { //nolint:exhaustive // FinishActionCancel handled by early return above
 		case tui.FinishActionMergePush:
-			endAction = "merge-push"
+			endAction = constants.ActionMergePush
 		case tui.FinishActionMerge:
-			endAction = "merge"
+			endAction = constants.ActionMerge
 		case tui.FinishActionPR:
-			endAction = "pr"
+			endAction = constants.ActionPR
 		case tui.FinishActionKeep:
-			endAction = "keep"
+			endAction = constants.ActionKeep
 		case tui.FinishActionDone:
-			endAction = "done"
+			endAction = constants.ActionDone
 		case tui.FinishActionDrop:
-			endAction = "drop"
+			endAction = constants.ActionDrop
 		default:
 			logging.Debug("finishPickerTUICmd: unknown action=%s", action)
 			return nil
@@ -207,7 +207,7 @@ var finishPickerTUICmd = &cobra.Command{
 
 		// Call end-task-ui with the action flag
 		logging.Debug("finishPickerTUICmd: calling end-task-ui with action=%s", endAction)
-		endCmd := exec.Command(pawBin, "internal", "end-task-ui", sessionName, windowID, "--action", endAction)
+		endCmd := exec.Command(pawBin, "internal", "end-task-ui", sessionName, windowID, "--action", endAction) //nolint:gosec // G204: pawBin is from getPawBin()
 		return endCmd.Run()
 	},
 }
@@ -217,7 +217,7 @@ var taskNameInputTUICmd = &cobra.Command{
 	Short:  "Run task name input TUI (called from popup)",
 	Args:   cobra.ExactArgs(1),
 	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
@@ -248,7 +248,7 @@ var taskNameInputTUICmd = &cobra.Command{
 
 		// Write the task name to a selection file for the caller to read
 		selectionPath := filepath.Join(appCtx.PawDir, constants.TaskNameSelectionFile)
-		if err := os.WriteFile(selectionPath, []byte(taskName), 0644); err != nil {
+		if err := os.WriteFile(selectionPath, []byte(taskName), 0644); err != nil { //nolint:gosec // G306: selection file needs to be readable
 			logging.Warn("taskNameInputTUICmd: failed to write selection file: %v", err)
 			return err
 		}

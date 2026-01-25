@@ -190,13 +190,13 @@ func (m *HelpViewer) scrollUp(n int) {
 
 // scrollDown scrolls down by n lines.
 func (m *HelpViewer) scrollDown(n int) {
-	max := len(m.lines) - m.contentHeight()
-	if max < 0 {
-		max = 0
+	maxPos := len(m.lines) - m.contentHeight()
+	if maxPos < 0 {
+		maxPos = 0
 	}
 	m.scrollPos += n
-	if m.scrollPos > max {
-		m.scrollPos = max
+	if m.scrollPos > maxPos {
+		m.scrollPos = maxPos
 	}
 }
 
@@ -220,9 +220,10 @@ func (m *HelpViewer) View() tea.View {
 	}
 
 	var sb strings.Builder
+	contentHeight := m.contentHeight()
+	sb.Grow((m.width + 1) * (contentHeight + 1)) // Pre-allocate for content + newlines
 
 	// Calculate visible lines
-	contentHeight := m.contentHeight()
 	endPos := m.scrollPos + contentHeight
 	if endPos > len(m.lines) {
 		endPos = len(m.lines)
@@ -253,7 +254,7 @@ func (m *HelpViewer) View() tea.View {
 
 		// Pad to full width
 		if lineWidth < m.width {
-			line = line + getPadding(m.width-lineWidth)
+			line += getPadding(m.width - lineWidth)
 		}
 
 		// Apply selection highlighting if this line is in selection
@@ -315,11 +316,11 @@ func (m *HelpViewer) contentHeight() int {
 
 // scrollToEnd scrolls to the end of the content.
 func (m *HelpViewer) scrollToEnd() {
-	max := len(m.lines) - m.contentHeight()
-	if max < 0 {
-		max = 0
+	maxPos := len(m.lines) - m.contentHeight()
+	if maxPos < 0 {
+		maxPos = 0
 	}
-	m.scrollPos = max
+	m.scrollPos = maxPos
 }
 
 // getSelectionRange returns the normalized selection range (minY, maxY, startX, endX).
@@ -433,7 +434,7 @@ func (m *HelpViewer) copySelection() {
 
 		// Pad for consistent width
 		if lineWidth < m.width {
-			line = line + getPadding(m.width-lineWidth)
+			line += getPadding(m.width - lineWidth)
 		}
 
 		startX, endX := m.getSelectionXRange(screenY)

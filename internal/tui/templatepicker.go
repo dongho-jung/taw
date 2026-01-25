@@ -16,6 +16,7 @@ import (
 // TemplatePickerAction represents the selected action.
 type TemplatePickerAction int
 
+// Template picker action options.
 const (
 	TemplatePickerCancel TemplatePickerAction = iota
 	TemplatePickerSelect

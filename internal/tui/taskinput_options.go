@@ -49,7 +49,7 @@ func (m *TaskInput) updateOptionsPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
 					// Convert to lowercase for branch names
 					if r >= 'A' && r <= 'Z' {
-						r = r + 32
+						r += 32
 					}
 					if len(m.branchName) >= 32 {
 						return m, nil
@@ -80,7 +80,6 @@ func (m *TaskInput) updateOptionsPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "right", "l":
 		m.handleOptionRight()
 		return m, nil
-
 	}
 
 	return m, nil
@@ -88,8 +87,7 @@ func (m *TaskInput) updateOptionsPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleOptionLeft handles left arrow key in options panel.
 func (m *TaskInput) handleOptionLeft() {
-	switch m.optField {
-	case OptFieldModel:
+	if m.optField == OptFieldModel {
 		if m.modelIdx > 0 {
 			m.modelIdx--
 			m.options.Model = config.ValidModels()[m.modelIdx]
@@ -99,8 +97,7 @@ func (m *TaskInput) handleOptionLeft() {
 
 // handleOptionRight handles right arrow key in options panel.
 func (m *TaskInput) handleOptionRight() {
-	switch m.optField {
-	case OptFieldModel:
+	if m.optField == OptFieldModel {
 		models := config.ValidModels()
 		if m.modelIdx < len(models)-1 {
 			m.modelIdx++

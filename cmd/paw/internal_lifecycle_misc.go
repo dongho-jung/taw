@@ -20,7 +20,7 @@ var doneTaskCmd = &cobra.Command{
 	Use:   "done-task [session]",
 	Short: "Show finish action picker for current task",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 
 		appCtx, err := getAppFromSession(sessionName)
@@ -47,13 +47,12 @@ var doneTaskCmd = &cobra.Command{
 
 		// Check if this is a task window (has emoji prefix)
 		if !constants.IsTaskWindow(windowName) {
-			_ = tm.DisplayMessage("Not a task window", 1500)
+			_ = tm.DisplayMessage("Not a task window", constants.DisplayMsgQuick)
 			return nil
 		}
 
 		// Show finish picker in top pane
-		pawBin, _ := os.Executable()
-		finishCmd := shellJoin(pawBin, "internal", "finish-picker-tui", sessionName, windowID)
+		finishCmd := shellJoin(getPawBin(), "internal", "finish-picker-tui", sessionName, windowID)
 
 		// Display as popup to avoid resizing/redrawing task panes.
 		err = tm.DisplayPopup(tmux.PopupOpts{
@@ -81,7 +80,7 @@ var recoverTaskCmd = &cobra.Command{
 	Use:   "recover-task [session] [task-name]",
 	Short: "Recover a corrupted task",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		taskName := args[1]
 
@@ -114,7 +113,7 @@ var resumeAgentCmd = &cobra.Command{
 	Use:   "resume-agent [session] [window-id] [agent-dir]",
 	Short: "Resume a stopped Claude agent in an existing window",
 	Args:  cobra.ExactArgs(3),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		windowID := args[1]
 		agentDir := args[2]
@@ -145,7 +144,7 @@ var resumeAgentCmd = &cobra.Command{
 		workDir := mgr.GetWorkingDirectory(t)
 
 		// Get paw binary path
-		pawBin, _ := os.Executable()
+		pawBin := getPawBin()
 		// Use symlink path for PAW_BIN so running agents can use updated binary
 		pawBinSymlink := filepath.Join(appCtx.PawDir, constants.BinSymlinkName)
 
@@ -156,7 +155,7 @@ var resumeAgentCmd = &cobra.Command{
 		}
 
 		// Settings file path - use agent directory's .claude symlink
-		settingsPath := filepath.Join(t.AgentDir, ".claude", "settings.local.json")
+		settingsPath := filepath.Join(t.AgentDir, constants.ClaudeLink, "settings.local.json")
 
 		startAgentContent := fmt.Sprintf(`#!/bin/bash
 # Auto-generated start-agent script for this task (RESUME MODE)
@@ -174,9 +173,9 @@ exec claude --continue --dangerously-skip-permissions --settings %s
 `, shellQuote(taskName), shellQuote(appCtx.PawDir), shellQuote(appCtx.ProjectDir), worktreeDirExport, shellQuote(windowID),
 			shellQuote(filepath.Dir(filepath.Dir(pawBin))), shellQuote(pawBinSymlink), shellQuote(sessionName), shellQuote(settingsPath))
 
-		startAgentScriptPath := filepath.Join(t.AgentDir, "start-agent")
-		if err := os.WriteFile(startAgentScriptPath, []byte(startAgentContent), 0755); err != nil {
-			return fmt.Errorf("failed to write start-agent script: %w", err)
+		startAgentScriptPath := filepath.Join(t.AgentDir, constants.StartAgentScriptName)
+		if err := os.WriteFile(startAgentScriptPath, []byte(startAgentContent), 0755); err != nil { //nolint:gosec // G306: script needs to be executable
+			return fmt.Errorf("failed to write %s script: %w", constants.StartAgentScriptName, err)
 		}
 
 		agentPane := windowID + ".0"
@@ -189,7 +188,7 @@ exec claude --continue --dangerously-skip-permissions --settings %s
 		logging.Log("Agent resumed: task=%s, windowID=%s", taskName, windowID)
 
 		// Start wait watcher
-		watchCmd := exec.Command(pawBin, "internal", "watch-wait", sessionName, windowID, taskName)
+		watchCmd := exec.Command(pawBin, "internal", "watch-wait", sessionName, windowID, taskName) //nolint:gosec // G204: pawBin is from getPawBin()
 		watchCmd.Dir = appCtx.ProjectDir
 		if err := watchCmd.Start(); err != nil {
 			logging.Warn("Failed to start wait watcher: %v", err)
@@ -200,7 +199,7 @@ exec claude --continue --dangerously-skip-permissions --settings %s
 		// Notify user
 		notify.PlaySound(notify.SoundTaskCreated)
 		_ = notify.Send("Session resumed", fmt.Sprintf("🔄 %s resumed", taskName))
-		if err := tm.DisplayMessage(fmt.Sprintf("🔄 Session resumed: %s", taskName), 2000); err != nil {
+		if err := tm.DisplayMessage("🔄 Session resumed: "+taskName, constants.DisplayMsgStandard); err != nil {
 			logging.Trace("Failed to display message: %v", err)
 		}
 

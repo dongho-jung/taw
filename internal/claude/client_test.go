@@ -1,7 +1,7 @@
 package claude
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -342,17 +342,17 @@ func (m *mockTmuxClient) WaitForPane(target string, maxWait time.Duration, minLe
 	return nil
 }
 func (m *mockTmuxClient) DisplayPopup(opts tmux.PopupOpts, command string) error { return nil }
-func (m *mockTmuxClient) SetOption(key, value string, global bool) error      { return nil }
-func (m *mockTmuxClient) GetOption(key string) (string, error)                { return "", nil }
-func (m *mockTmuxClient) SetMultipleOptions(options map[string]string) error  { return nil }
-func (m *mockTmuxClient) SetEnv(key, value string) error                      { return nil }
-func (m *mockTmuxClient) Bind(opts tmux.BindOpts) error                       { return nil }
-func (m *mockTmuxClient) Unbind(key string) error                             { return nil }
-func (m *mockTmuxClient) Run(args ...string) error                            { return nil }
-func (m *mockTmuxClient) RunWithOutput(args ...string) (string, error)        { return "", nil }
-func (m *mockTmuxClient) Display(format string) (string, error)               { return "", nil }
-func (m *mockTmuxClient) DisplayMultiple(formats ...string) ([]string, error) { return nil, nil }
-func (m *mockTmuxClient) DisplayMessage(message string, durationMs int) error { return nil }
+func (m *mockTmuxClient) SetOption(key, value string, global bool) error         { return nil }
+func (m *mockTmuxClient) GetOption(key string) (string, error)                   { return "", nil }
+func (m *mockTmuxClient) SetMultipleOptions(options map[string]string) error     { return nil }
+func (m *mockTmuxClient) SetEnv(key, value string) error                         { return nil }
+func (m *mockTmuxClient) Bind(opts tmux.BindOpts) error                          { return nil }
+func (m *mockTmuxClient) Unbind(key string) error                                { return nil }
+func (m *mockTmuxClient) Run(args ...string) error                               { return nil }
+func (m *mockTmuxClient) RunWithOutput(args ...string) (string, error)           { return "", nil }
+func (m *mockTmuxClient) Display(format string) (string, error)                  { return "", nil }
+func (m *mockTmuxClient) DisplayMultiple(formats ...string) ([]string, error)    { return nil, nil }
+func (m *mockTmuxClient) DisplayMessage(message string, durationMs int) error    { return nil }
 func (m *mockTmuxClient) JoinPane(source, target string, opts tmux.JoinOpts) error {
 	return nil
 }
@@ -421,7 +421,7 @@ func TestIsClaudeRunning(t *testing.T) {
 			name:        "pane command error",
 			hasPaneRes:  true,
 			paneCommand: "",
-			paneErr:     fmt.Errorf("error"),
+			paneErr:     errors.New("error"),
 			expected:    false,
 		},
 	}
@@ -469,7 +469,7 @@ func TestSendTrustResponse(t *testing.T) {
 			name:           "capture pane error",
 			hasPaneRes:     true,
 			paneContent:    "",
-			capturePaneErr: fmt.Errorf("capture error"),
+			capturePaneErr: errors.New("capture error"),
 			expectErr:      true,
 		},
 	}

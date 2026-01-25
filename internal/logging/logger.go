@@ -24,6 +24,7 @@ import (
 // Level represents a log level.
 type Level int
 
+// Log level constants (L0-L5).
 const (
 	LevelTrace Level = iota // L0: Most detailed tracing
 	LevelDebug              // L1: Debug information
@@ -67,6 +68,7 @@ func (l Level) Name() string {
 // LogFormat defines the log output format.
 type LogFormat string
 
+// Log output format options.
 const (
 	LogFormatText  LogFormat = "text"
 	LogFormatJSONL LogFormat = "jsonl"
@@ -83,30 +85,30 @@ type Options struct {
 type Logger interface {
 	// Trace outputs the most detailed tracing information (L0)
 	// Use for: loop iterations, variable dumps, internal state tracking
-	Trace(format string, args ...interface{})
+	Trace(format string, args ...any)
 
 	// Debug outputs debug information (L1, only when PAW_DEBUG=1)
 	// Use for: retry attempts, state changes, conditional logic paths
-	Debug(format string, args ...interface{})
+	Debug(format string, args ...any)
 
 	// Log writes informational message to log file (L2)
 	// Use for: normal operation flow, task lifecycle events
-	Log(format string, args ...interface{})
+	Log(format string, args ...any)
 
 	// Info is an alias for Log (L2)
-	Info(format string, args ...interface{})
+	Info(format string, args ...any)
 
 	// Warn outputs warning to stderr and log file (L3)
 	// Use for: non-fatal issues, recoverable errors
-	Warn(format string, args ...interface{})
+	Warn(format string, args ...any)
 
 	// Error outputs error to stderr and log file (L4)
 	// Use for: errors that affect functionality
-	Error(format string, args ...interface{})
+	Error(format string, args ...any)
 
 	// Fatal outputs fatal error to stderr and log file (L5)
 	// Use for: critical errors requiring immediate attention
-	Fatal(format string, args ...interface{})
+	Fatal(format string, args ...any)
 
 	// SetScript sets the current script name for context
 	SetScript(script string)
@@ -165,6 +167,9 @@ type fileLogger struct {
 	mu     sync.Mutex
 }
 
+// Compile-time check that fileLogger implements Logger interface.
+var _ Logger = (*fileLogger)(nil)
+
 // New creates a new Logger that writes to the specified file.
 func New(logPath string, debug bool) (Logger, error) {
 	opts := optionsFromEnv()
@@ -172,7 +177,7 @@ func New(logPath string, debug bool) (Logger, error) {
 		fmt.Fprintf(os.Stderr, "Failed to rotate log file: %v\n", err)
 	}
 
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644) //nolint:gosec // G302,G304: log file needs to be readable; path is from caller
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
 	}
@@ -229,7 +234,7 @@ type logEntry struct {
 
 // callerPCsPool reuses uintptr slices to reduce allocations in getCaller.
 var callerPCsPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		pcs := make([]uintptr, 16)
 		return &pcs
 	},
@@ -332,7 +337,7 @@ func rotateIfNeeded(logPath string, opts Options) error {
 }
 
 // logWithLevel writes a log entry with the specified level
-func (l *fileLogger) logWithLevel(level Level, format string, args ...interface{}) {
+func (l *fileLogger) logWithLevel(level Level, format string, args ...any) {
 	// Debug level only logged when debug mode is enabled
 	if (level == LevelDebug || level == LevelTrace) && !l.debug {
 		return
@@ -379,14 +384,14 @@ func (l *fileLogger) logWithLevel(level Level, format string, args ...interface{
 	}
 }
 
-func (l *fileLogger) Trace(format string, args ...interface{}) {
+func (l *fileLogger) Trace(format string, args ...any) {
 	if !l.debug {
 		return
 	}
 	l.logWithLevel(LevelTrace, format, args...)
 }
 
-func (l *fileLogger) Debug(format string, args ...interface{}) {
+func (l *fileLogger) Debug(format string, args ...any) {
 	if !l.debug {
 		return
 	}
@@ -396,29 +401,29 @@ func (l *fileLogger) Debug(format string, args ...interface{}) {
 	l.logWithLevel(LevelDebug, "%s", msg)
 }
 
-func (l *fileLogger) Log(format string, args ...interface{}) {
+func (l *fileLogger) Log(format string, args ...any) {
 	l.logWithLevel(LevelInfo, format, args...)
 }
 
-func (l *fileLogger) Info(format string, args ...interface{}) {
+func (l *fileLogger) Info(format string, args ...any) {
 	l.logWithLevel(LevelInfo, format, args...)
 }
 
-func (l *fileLogger) Warn(format string, args ...interface{}) {
+func (l *fileLogger) Warn(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintf(os.Stderr, "Warning: %s\n", msg)
 
 	l.logWithLevel(LevelWarn, "%s", msg)
 }
 
-func (l *fileLogger) Error(format string, args ...interface{}) {
+func (l *fileLogger) Error(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintf(os.Stderr, "Error: %s\n", msg)
 
 	l.logWithLevel(LevelError, "%s", msg)
 }
 
-func (l *fileLogger) Fatal(format string, args ...interface{}) {
+func (l *fileLogger) Fatal(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintf(os.Stderr, "FATAL: %s\n", msg)
 
@@ -448,7 +453,7 @@ func (l *fileLogger) Close() error {
 }
 
 // Global logger instance
-var globalLogger Logger = NewStdout(os.Getenv("PAW_DEBUG") == "1")
+var globalLogger = NewStdout(os.Getenv("PAW_DEBUG") == "1")
 
 // SetGlobal sets the global logger instance.
 func SetGlobal(l Logger) {
@@ -461,37 +466,37 @@ func Global() Logger {
 }
 
 // Trace logs trace information using the global logger.
-func Trace(format string, args ...interface{}) {
+func Trace(format string, args ...any) {
 	globalLogger.Trace(format, args...)
 }
 
 // Debug logs debug information using the global logger.
-func Debug(format string, args ...interface{}) {
+func Debug(format string, args ...any) {
 	globalLogger.Debug(format, args...)
 }
 
 // Log logs information using the global logger.
-func Log(format string, args ...interface{}) {
+func Log(format string, args ...any) {
 	globalLogger.Log(format, args...)
 }
 
 // Info logs informational message using the global logger.
-func Info(format string, args ...interface{}) {
+func Info(format string, args ...any) {
 	globalLogger.Info(format, args...)
 }
 
 // Warn logs a warning using the global logger.
-func Warn(format string, args ...interface{}) {
+func Warn(format string, args ...any) {
 	globalLogger.Warn(format, args...)
 }
 
 // Error logs an error using the global logger.
-func Error(format string, args ...interface{}) {
+func Error(format string, args ...any) {
 	globalLogger.Error(format, args...)
 }
 
 // Fatal logs a fatal error using the global logger.
-func Fatal(format string, args ...interface{}) {
+func Fatal(format string, args ...any) {
 	globalLogger.Fatal(format, args...)
 }
 

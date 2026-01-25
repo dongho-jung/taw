@@ -1,8 +1,9 @@
 #!/bin/sh
-# PAW pre-commit hook: Prevent .claude symlink from being committed
+# PAW pre-commit hook: Safety net for .claude directory
 #
-# The .claude symlink points to PAW internal settings and must not be in version control.
-# This hook automatically unstages .claude if it was accidentally staged.
+# Note: PAW now creates .claude symlink in the agent directory (outside worktree),
+# so this should rarely trigger. This hook serves as a safety net in case
+# .claude ends up in the worktree due to manual user actions.
 
 # Check if .claude is staged
 if git diff --cached --name-only | grep -q "^\.claude$"; then

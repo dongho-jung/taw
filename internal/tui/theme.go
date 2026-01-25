@@ -59,6 +59,10 @@ func getPadding(n int) string {
 // buildSearchBar creates a search bar string with proper padding.
 // This is more efficient than fmt.Sprintf("/%-*s", width, input) for hot paths.
 func buildSearchBar(input string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+
 	prefix := "/" + input
 	prefixLen := len(prefix)
 
@@ -67,6 +71,26 @@ func buildSearchBar(input string, width int) string {
 	}
 
 	return prefix + getPadding(width-prefixLen)
+}
+
+// isMatchLine returns true if the given index exists in the match set.
+// Uses O(1) map lookup. Returns false if the set is nil.
+// This is a shared helper for viewer components (LogViewer, DiffViewer, GitViewer).
+func isMatchLine(matchSet map[int]struct{}, idx int) bool {
+	if matchSet == nil {
+		return false
+	}
+	_, ok := matchSet[idx]
+	return ok
+}
+
+// isCurrentMatchLine returns true if the given index is the current search match.
+// This is a shared helper for viewer components (LogViewer, DiffViewer, GitViewer).
+func isCurrentMatchLine(searchMatches []int, currentMatchIdx, idx int) bool {
+	if len(searchMatches) == 0 || currentMatchIdx < 0 || currentMatchIdx >= len(searchMatches) {
+		return false
+	}
+	return searchMatches[currentMatchIdx] == idx
 }
 
 // ThemeColors provides a consistent color palette for TUI components.
@@ -85,19 +109,19 @@ type ThemeColors struct {
 	TextInverted color.Color // Text on colored backgrounds
 
 	// UI element colors
-	Border         color.Color // Border color
-	BorderFocused  color.Color // Focused border color
-	BorderDim      color.Color // Dimmed border color
-	Background     color.Color // Background for input fields etc.
-	BackgroundAlt  color.Color // Alternate background
-	Selection      color.Color // Selection/highlight background
-	StatusBar      color.Color // Status bar background
-	StatusBarText  color.Color // Status bar text
-	SuccessColor   color.Color // Success indicator
-	WarningColor   color.Color // Warning indicator
-	ErrorColor     color.Color // Error indicator
-	SearchMatch    color.Color // Search match highlight
-	SearchCurrent  color.Color // Current search match
+	Border        color.Color // Border color
+	BorderFocused color.Color // Focused border color
+	BorderDim     color.Color // Dimmed border color
+	Background    color.Color // Background for input fields etc.
+	BackgroundAlt color.Color // Alternate background
+	Selection     color.Color // Selection/highlight background
+	StatusBar     color.Color // Status bar background
+	StatusBarText color.Color // Status bar text
+	SuccessColor  color.Color // Success indicator
+	WarningColor  color.Color // Warning indicator
+	ErrorColor    color.Color // Error indicator
+	SearchMatch   color.Color // Search match highlight
+	SearchCurrent color.Color // Current search match
 
 	// Log level colors
 	LogTrace color.Color // L0 - Trace level (least important)
@@ -115,8 +139,8 @@ func NewThemeColors(isDark bool) ThemeColors {
 			isDark: true,
 
 			// Primary colors - blue/cyan for dark backgrounds
-			Accent:          lipgloss.Color("39"),  // Bright cyan-blue
-			AccentSecondary: lipgloss.Color("86"),  // Bright cyan
+			Accent:          lipgloss.Color("39"), // Bright cyan-blue
+			AccentSecondary: lipgloss.Color("86"), // Bright cyan
 
 			// Text colors
 			TextNormal:   lipgloss.Color("252"), // Light gray
@@ -125,19 +149,19 @@ func NewThemeColors(isDark bool) ThemeColors {
 			TextInverted: lipgloss.Color("232"), // Near black
 
 			// UI element colors
-			Border:         lipgloss.Color("240"), // Medium gray
-			BorderFocused:  lipgloss.Color("39"),  // Cyan-blue
-			BorderDim:      lipgloss.Color("236"), // Dark gray
-			Background:     lipgloss.Color("235"), // Dark gray
-			BackgroundAlt:  lipgloss.Color("237"), // Slightly lighter
-			Selection:      lipgloss.Color("25"),  // Dark blue
-			StatusBar:      lipgloss.Color("240"), // Medium gray
-			StatusBarText:  lipgloss.Color("252"), // Light gray
-			SuccessColor:   lipgloss.Color("42"),  // Green
-			WarningColor:   lipgloss.Color("214"), // Orange
-			ErrorColor:     lipgloss.Color("196"), // Red
-			SearchMatch:    lipgloss.Color("226"), // Yellow
-			SearchCurrent:  lipgloss.Color("208"), // Orange
+			Border:        lipgloss.Color("240"), // Medium gray
+			BorderFocused: lipgloss.Color("39"),  // Cyan-blue
+			BorderDim:     lipgloss.Color("236"), // Dark gray
+			Background:    lipgloss.Color("235"), // Dark gray
+			BackgroundAlt: lipgloss.Color("237"), // Slightly lighter
+			Selection:     lipgloss.Color("25"),  // Dark blue
+			StatusBar:     lipgloss.Color("240"), // Medium gray
+			StatusBarText: lipgloss.Color("252"), // Light gray
+			SuccessColor:  lipgloss.Color("42"),  // Green
+			WarningColor:  lipgloss.Color("214"), // Orange
+			ErrorColor:    lipgloss.Color("196"), // Red
+			SearchMatch:   lipgloss.Color("226"), // Yellow
+			SearchCurrent: lipgloss.Color("208"), // Orange
 
 			// Log level colors - distinct colors for dark backgrounds
 			LogTrace: lipgloss.Color("243"), // Gray (dim, least important)
@@ -154,8 +178,8 @@ func NewThemeColors(isDark bool) ThemeColors {
 		isDark: false,
 
 		// Primary colors - darker blue for light backgrounds
-		Accent:          lipgloss.Color("25"),  // Dark blue
-		AccentSecondary: lipgloss.Color("30"),  // Teal
+		Accent:          lipgloss.Color("25"), // Dark blue
+		AccentSecondary: lipgloss.Color("30"), // Teal
 
 		// Text colors
 		TextNormal:   lipgloss.Color("236"), // Dark gray
@@ -164,19 +188,19 @@ func NewThemeColors(isDark bool) ThemeColors {
 		TextInverted: lipgloss.Color("255"), // White
 
 		// UI element colors
-		Border:         lipgloss.Color("250"), // Light gray
-		BorderFocused:  lipgloss.Color("25"),  // Dark blue
-		BorderDim:      lipgloss.Color("252"), // Very light gray
-		Background:     lipgloss.Color("254"), // Near white
-		BackgroundAlt:  lipgloss.Color("253"), // Slightly darker
-		Selection:      lipgloss.Color("153"), // Light blue
-		StatusBar:      lipgloss.Color("250"), // Light gray
-		StatusBarText:  lipgloss.Color("236"), // Dark gray
-		SuccessColor:   lipgloss.Color("28"),  // Dark green
-		WarningColor:   lipgloss.Color("166"), // Dark orange
-		ErrorColor:     lipgloss.Color("160"), // Dark red
-		SearchMatch:    lipgloss.Color("220"), // Yellow
-		SearchCurrent:  lipgloss.Color("208"), // Orange
+		Border:        lipgloss.Color("250"), // Light gray
+		BorderFocused: lipgloss.Color("25"),  // Dark blue
+		BorderDim:     lipgloss.Color("252"), // Very light gray
+		Background:    lipgloss.Color("254"), // Near white
+		BackgroundAlt: lipgloss.Color("253"), // Slightly darker
+		Selection:     lipgloss.Color("153"), // Light blue
+		StatusBar:     lipgloss.Color("250"), // Light gray
+		StatusBarText: lipgloss.Color("236"), // Dark gray
+		SuccessColor:  lipgloss.Color("28"),  // Dark green
+		WarningColor:  lipgloss.Color("166"), // Dark orange
+		ErrorColor:    lipgloss.Color("160"), // Dark red
+		SearchMatch:   lipgloss.Color("220"), // Yellow
+		SearchCurrent: lipgloss.Color("208"), // Orange
 
 		// Log level colors - distinct colors for light backgrounds
 		LogTrace: lipgloss.Color("247"), // Gray (dim, least important)

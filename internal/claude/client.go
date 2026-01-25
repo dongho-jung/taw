@@ -4,6 +4,7 @@ package claude
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,7 +20,7 @@ import (
 
 // bufferPool reuses bytes.Buffer instances to reduce allocations.
 var bufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(bytes.Buffer)
 	},
 }
@@ -63,6 +64,9 @@ type claudeClient struct {
 	pollInterval time.Duration
 }
 
+// Compile-time check that claudeClient implements Client interface.
+var _ Client = (*claudeClient)(nil)
+
 // New creates a new Claude client.
 func New() Client {
 	return &claudeClient{
@@ -91,10 +95,9 @@ const SummaryTimeout = 15 * time.Second
 
 // GenerateSummary generates a brief summary of task work from the pane content.
 func (c *claudeClient) GenerateSummary(paneContent string) (string, error) {
-	// Truncate pane content if too long (keep last 8000 chars for summary)
-	maxLen := 8000
-	if len(paneContent) > maxLen {
-		paneContent = paneContent[len(paneContent)-maxLen:]
+	// Truncate pane content if too long (keep last N chars for summary)
+	if len(paneContent) > constants.SummaryMaxLen {
+		paneContent = paneContent[len(paneContent)-constants.SummaryMaxLen:]
 	}
 
 	prompt := fmt.Sprintf(`Below is the terminal output from a development task. Please provide a brief summary of what was done (3-5 lines).
@@ -198,7 +201,7 @@ func (c *claudeClient) runClaudeWithModel(prompt, model string, thinking bool, t
 	}
 	logging.Trace("runClaudeWithModel: executing claude %v with timeout=%v", args, timeout)
 
-	cmd := exec.CommandContext(ctx, "claude", args...)
+	cmd := exec.CommandContext(ctx, "claude", args...) //nolint:gosec // G204: args are controlled by internal PAW code
 	env := append(os.Environ(), "PAW_STOP_HOOK=1")
 	if os.Getenv("PAW_BIN") == "" {
 		if exe, err := os.Executable(); err == nil {
@@ -429,9 +432,10 @@ func (c *claudeClient) SendInputWithRetry(tm tmux.Client, target, input string, 
 		time.Sleep(300 * time.Millisecond)
 		contentAfter, err := tm.CapturePane(target, 10)
 		if err != nil {
-			// Can't verify, but send succeeded - consider it successful
+			// Can't verify, but send succeeded - consider it successful.
+			// Intentionally return nil: verification failure doesn't mean send failed.
 			logging.Debug("SendInputWithRetry: can't verify after send, assuming success")
-			return nil
+			return nil //nolint:nilerr // Intentional: verification error doesn't indicate send failure
 		}
 
 		// If content changed, input was likely accepted
@@ -442,7 +446,7 @@ func (c *claudeClient) SendInputWithRetry(tm tmux.Client, target, input string, 
 
 		// Content didn't change - might need retry
 		logging.Debug("SendInputWithRetry: content unchanged after send (attempt %d/%d)", attempt, maxRetries)
-		lastErr = fmt.Errorf("input may not have been accepted")
+		lastErr = errors.New("input may not have been accepted")
 		time.Sleep(500 * time.Millisecond)
 	}
 
@@ -528,8 +532,8 @@ func (c *claudeClient) IsClaudeRunning(tm tmux.Client, target string) bool {
 		}
 	}
 
-	// If the command contains "claude" or "start-agent", it's running
-	if strings.Contains(cmd, "claude") || strings.Contains(cmd, "start-agent") {
+	// If the command contains "claude" or the start-agent script, it's running
+	if strings.Contains(cmd, "claude") || strings.Contains(cmd, constants.StartAgentScriptName) {
 		logging.Debug("IsClaudeRunning: pane %s shows Claude-related command %q", target, cmd)
 		return true
 	}

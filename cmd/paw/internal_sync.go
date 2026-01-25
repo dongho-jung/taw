@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/dongho-jung/paw/internal/constants"
 	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/task"
@@ -19,7 +19,7 @@ var syncWithMainCmd = &cobra.Command{
 	Use:   "sync-with-main [session] [window-id]",
 	Short: "Sync task branch with main (fetch and rebase)",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		logging.Debug("-> syncWithMainCmd(session=%s, windowID=%s)", args[0], args[1])
 		defer logging.Debug("<- syncWithMainCmd")
 
@@ -106,7 +106,7 @@ var syncWithMainCmd = &cobra.Command{
 		fetchSpinner.Stop(true, "")
 
 		// Check if there are new commits on main
-		remoteMain := fmt.Sprintf("origin/%s", mainBranch)
+		remoteMain := "origin/" + mainBranch
 		behindCount, err := getBehindCount(workDir, currentBranch, remoteMain)
 		if err != nil {
 			logging.Warn("Failed to check commit count: %v", err)
@@ -145,7 +145,7 @@ var syncWithMainCmd = &cobra.Command{
 			fmt.Println()
 			return nil
 		}
-		rebaseTimer.StopWithResult(true, fmt.Sprintf("rebased onto origin/%s", mainBranch))
+		rebaseTimer.StopWithResult(true, "rebased onto origin/"+mainBranch)
 		rebaseSpinner.Stop(true, "")
 
 		logging.Log("Successfully synced %s with %s", targetTask.Name, mainBranch)
@@ -160,7 +160,7 @@ var syncWithMainUICmd = &cobra.Command{
 	Use:   "sync-with-main-ui [session] [window-id]",
 	Short: "Sync with main (creates visible pane with progress)",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		sessionName := args[0]
 		windowID := args[1]
 
@@ -179,10 +179,7 @@ var syncWithMainUICmd = &cobra.Command{
 		tm := tmux.New(sessionName)
 
 		// Get the paw binary path
-		pawBin, err := os.Executable()
-		if err != nil {
-			pawBin = "paw"
-		}
+		pawBin := getPawBin()
 
 		// Get working directory from pane
 		panePath, err := tm.Display("#{pane_current_path}")
@@ -194,10 +191,10 @@ var syncWithMainUICmd = &cobra.Command{
 		syncCmdStr := shellJoin(pawBin, "internal", "sync-with-main", sessionName, windowID)
 		syncCmdStr += "; echo; echo 'Press Enter to close...'; read"
 
-		// Create a top pane (40% height) spanning full window width
+		// Create a top pane spanning full window width
 		_, err = tm.SplitWindowPane(tmux.SplitOpts{
 			Horizontal: false, // vertical split (top/bottom)
-			Size:       "40%",
+			Size:       constants.TopPaneSize,
 			StartDir:   panePath,
 			Command:    syncCmdStr,
 			Before:     true, // create pane above (top)
@@ -213,7 +210,7 @@ var syncWithMainUICmd = &cobra.Command{
 
 // getBehindCount returns how many commits the current branch is behind origin/main
 func getBehindCount(workDir, currentBranch, remoteMain string) (string, error) {
-	cmd := exec.Command("git", "rev-list", "--count", currentBranch+".."+remoteMain)
+	cmd := exec.Command("git", "rev-list", "--count", currentBranch+".."+remoteMain) //nolint:gosec // G204: branch names come from git itself
 	cmd.Dir = workDir
 	output, err := cmd.Output()
 	if err != nil {

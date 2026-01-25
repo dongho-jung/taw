@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/dongho-jung/paw/internal/app"
 	"github.com/dongho-jung/paw/internal/constants"
@@ -21,7 +20,7 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 	logging.Debug("Starting new tmux session...")
 
 	// Create/update bin symlink for hook execution
-	if _, err := updateBinSymlink(appCtx.PawDir); err != nil {
+	if err := updateBinSymlink(appCtx.PawDir); err != nil {
 		logging.Warn("Failed to create bin symlink: %v", err)
 	}
 
@@ -47,10 +46,7 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 	}
 
 	// Get paw binary path for initial command
-	pawBin, err := os.Executable()
-	if err != nil {
-		pawBin = "paw"
-	}
+	pawBin := getPawBin()
 
 	// Create session with a shell (not the new-task command directly)
 	if err := tm.NewSession(tmux.SessionOpts{
@@ -64,14 +60,12 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 	syncSessionEnv(tm, appCtx)
 
 	// Setup tmux configuration
-	if err := setupTmuxConfig(appCtx, tm); err != nil {
-		logging.Warn("Failed to setup tmux config: %v", err)
-	}
+	setupTmuxConfig(appCtx, tm)
 
 	// Setup git repo marker if applicable
 	if appCtx.IsGitRepo {
 		markerPath := filepath.Join(appCtx.PawDir, constants.GitRepoMarker)
-		_ = os.WriteFile(markerPath, []byte{}, 0644)
+		_ = os.WriteFile(markerPath, []byte{}, 0644) //nolint:gosec // G306: marker file needs to be readable
 	}
 
 	// Write embedded claude files to .paw/.claude/
@@ -98,7 +92,7 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 		for _, t := range incomplete {
 			logging.Log("Reopening incomplete task: %s", t.Name)
 			_ = t.RemoveTabLock()
-			handleCmd := exec.Command(pawBin, "internal", "handle-task", appCtx.SessionName, t.AgentDir)
+			handleCmd := exec.Command(pawBin, "internal", "handle-task", appCtx.SessionName, t.AgentDir) //nolint:gosec // G204: pawBin is from getPawBin()
 			// Pass PAW_DIR and PROJECT_DIR so getAppFromSession can find the project
 			// (required for global workspaces where there's no local .paw directory)
 			handleCmd.Env = append(os.Environ(),
@@ -115,7 +109,7 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 
 	// Wait for shell to be ready before sending keys
 	paneTarget := appCtx.SessionName + ":" + constants.NewWindowName + ".0"
-	if err := tm.WaitForPane(paneTarget, 5*time.Second, 1); err != nil {
+	if err := tm.WaitForPane(paneTarget, constants.PaneWaitTimeout, 1); err != nil {
 		logging.Warn("WaitForPane timed out, continuing anyway: %v", err)
 	}
 
@@ -142,7 +136,7 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 	versionChanged := checkVersionChanged(appCtx.PawDir)
 	if versionChanged {
 		logging.Log("PAW version changed, updating bin symlink...")
-		if _, err := updateBinSymlink(appCtx.PawDir); err != nil {
+		if err := updateBinSymlink(appCtx.PawDir); err != nil {
 			logging.Warn("Failed to update bin symlink: %v", err)
 		} else {
 			logging.Log("Bin symlink updated to current version")
@@ -256,11 +250,11 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 	incomplete, err := mgr.FindIncompleteTasks(appCtx.SessionName)
 	if err == nil && len(incomplete) > 0 {
 		logging.Log("Found %d incomplete tasks to reopen", len(incomplete))
-		pawBin, _ := os.Executable()
+		pawBin := getPawBin()
 		for _, t := range incomplete {
 			logging.Log("Reopening incomplete task: %s (reason: window not found)", t.Name)
 			_ = t.RemoveTabLock()
-			handleCmd := exec.Command(pawBin, "internal", "handle-task", appCtx.SessionName, t.AgentDir)
+			handleCmd := exec.Command(pawBin, "internal", "handle-task", appCtx.SessionName, t.AgentDir) //nolint:gosec // G204: pawBin is from getPawBin()
 			// Pass PAW_DIR and PROJECT_DIR so getAppFromSession can find the project
 			// (required for global workspaces where there's no local .paw directory)
 			handleCmd.Env = append(os.Environ(),
@@ -279,10 +273,10 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 	stopped, err := mgr.FindStoppedTasks()
 	if err == nil && len(stopped) > 0 {
 		logging.Log("Found %d stopped agents to resume", len(stopped))
-		pawBin, _ := os.Executable()
+		pawBin := getPawBin()
 		for _, info := range stopped {
 			logging.Log("Resuming stopped agent: %s (window=%s)", info.Task.Name, info.WindowID)
-			resumeCmd := exec.Command(pawBin, "internal", "resume-agent", appCtx.SessionName, info.WindowID, info.Task.AgentDir)
+			resumeCmd := exec.Command(pawBin, "internal", "resume-agent", appCtx.SessionName, info.WindowID, info.Task.AgentDir) //nolint:gosec // G204: pawBin is from getPawBin()
 			if err := resumeCmd.Start(); err != nil {
 				logging.Warn("Failed to resume agent %s: %v", info.Task.Name, err)
 			} else {
@@ -294,9 +288,7 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 	logging.Debug("Attaching to session: %s", appCtx.SessionName)
 
 	// Re-apply tmux config to ensure terminal title is set
-	if err := reapplyTmuxConfig(appCtx, tm); err != nil {
-		logging.Debug("Failed to re-apply tmux config: %v", err)
-	}
+	reapplyTmuxConfig(appCtx, tm)
 
 	// Detect terminal theme and apply theme-aware tmux colors.
 	// This ensures status bar, window tabs, and pane borders match the terminal's
@@ -351,15 +343,9 @@ func respawnMainWindow(appCtx *app.App, tm tmux.Client) error {
 		}
 	}
 
-	// Get the new paw binary path
-	pawBin, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-
 	// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
 	// (required for global workspaces where there's no local .paw directory)
-	newTaskCmd := buildNewTaskCommand(appCtx, pawBin, appCtx.SessionName)
+	newTaskCmd := buildNewTaskCommand(appCtx, getPawBin(), appCtx.SessionName)
 
 	if mainWindowID == "" {
 		// Main window doesn't exist - create it
@@ -374,7 +360,7 @@ func respawnMainWindow(appCtx *app.App, tm tmux.Client) error {
 
 		// Wait for shell to be ready before sending keys
 		paneID := windowID + ".0"
-		if err := tm.WaitForPane(paneID, 5*time.Second, 1); err != nil {
+		if err := tm.WaitForPane(paneID, constants.PaneWaitTimeout, 1); err != nil {
 			logging.Warn("WaitForPane timed out, continuing anyway: %v", err)
 		}
 
@@ -402,17 +388,17 @@ func respawnMainWindow(appCtx *app.App, tm tmux.Client) error {
 }
 
 // updateBinSymlink creates or updates the .paw/bin symlink to point to the current paw binary.
-func updateBinSymlink(pawDir string) (string, error) {
+func updateBinSymlink(pawDir string) error {
 	// Get current executable path
 	exe, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("failed to get executable path: %w", err)
+		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
 	// Resolve symlinks to get actual path
 	exe, err = filepath.EvalSymlinks(exe)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve executable path: %w", err)
+		return fmt.Errorf("failed to resolve executable path: %w", err)
 	}
 
 	symlink := filepath.Join(pawDir, constants.BinSymlinkName)
@@ -420,7 +406,7 @@ func updateBinSymlink(pawDir string) (string, error) {
 	// Check if symlink exists and points to the same binary
 	if target, err := os.Readlink(symlink); err == nil {
 		if target == exe {
-			return symlink, nil
+			return nil
 		}
 	}
 
@@ -429,16 +415,16 @@ func updateBinSymlink(pawDir string) (string, error) {
 
 	// Create new symlink
 	if err := os.Symlink(exe, symlink); err != nil {
-		return "", fmt.Errorf("failed to create symlink: %w", err)
+		return fmt.Errorf("failed to create symlink: %w", err)
 	}
 
-	return symlink, nil
+	return nil
 }
 
 // saveVersion saves the current PAW version to .paw/.version
 func saveVersion(pawDir string) error {
 	versionFile := filepath.Join(pawDir, constants.VersionFileName)
-	return os.WriteFile(versionFile, []byte(Version), 0644)
+	return os.WriteFile(versionFile, []byte(Version), 0644) //nolint:gosec // G306: version file needs to be readable
 }
 
 // checkVersionChanged checks if PAW version has changed since session was started.

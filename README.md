@@ -176,12 +176,14 @@ Install tmux/gh via Homebrew: `brew install tmux gh`. Install the Claude Code CL
 |--------|----------|
 | Cycle panes / task options (new task) | `⌥Tab` |
 | Move window | `⌥←/→` |
+| Switch project (jump to other PAW sessions) | `⌃J` |
 
 ### Task Commands
 | Action | Shortcut |
 |--------|----------|
 | New task | `⌃N` |
 | Search task history (new task window) | `⌃R` |
+| Template picker (new task window) | `⌃T` |
 | Finish task (shows action picker) | `⌃F` |
 | Command palette | `⌃P` |
 | Quit paw | `⌃Q` |
@@ -209,6 +211,11 @@ The viewer starts in status mode and allows you to switch between different git 
 | `s` | Switch to status mode (`git status`) |
 | `L` | Switch to log mode (`git log`) |
 | `a` | Switch to all mode (`git log --all --decorate --oneline --graph`) |
+| `d` | Switch to diff mode (`git diff main...HEAD`) |
+| `Tab` | Cycle modes (STATUS → LOG → LOG --all → DIFF) |
+| `1` / `2` / `3` / `4` | Jump to specific mode |
+| `/` | Start search |
+| `n` / `N` | Next/previous match |
 | `w` | Toggle word wrap |
 | `↑` / `↓` / `j` / `k` | Scroll vertically |
 | `←` / `→` / `h` / `l` | Scroll horizontally (when word wrap is off) |
@@ -236,10 +243,12 @@ Use `paw logs --since 2h --task my-task` for CLI filtering.
 | `g` | Jump to top |
 | `G` | Jump to bottom |
 | `PgUp` / `PgDn` | Page scroll |
+| `/` | Start search |
+| `n` / `N` | Next/previous match |
 | `s` | Toggle tail mode (follow new logs) |
 | `w` | Toggle word wrap |
 | `Tab` | Cycle log level filter (L0+ → L1+ → ... → L5 only) |
-| `q` / `Esc` | Close the log viewer |
+| `⌃O` / `q` / `Esc` | Close the log viewer |
 </details>
 
 ## Task history
