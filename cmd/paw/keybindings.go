@@ -64,11 +64,12 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 	cmdDoneTask := buildPawRunShell("done-task", ctx.SessionName)
 	cmdPrevWindow := buildPawRunShell("select-prev-window", ctx.SessionName)
 	cmdNextWindow := buildPawRunShell("select-next-window", ctx.SessionName)
-	// Just detach - don't modify the terminal title.
-	// The parent shell's prompt command (PROMPT_COMMAND, precmd, etc.) will naturally
-	// restore the title when control returns to the shell.
-	// Previously we tried setting an empty OSC 0 sequence, but that just blanks the title.
-	cmdQuit := `detach-client`
+	// Disable mouse mode before detaching to prevent escape sequences from leaking to shell.
+	// When tmux has mouse mode on and the client detaches, any pending mouse events can
+	// appear as raw escape codes (e.g., "51;109;28M") in the parent shell.
+	// Disabling mouse mode first sends the proper disable sequences to the terminal.
+	// The client-attached hook in tmux_config.go re-enables mouse mode on reconnect.
+	cmdQuit := `set-option mouse off \; detach-client`
 	cmdToggleLogs := buildPawRunShell("toggle-log", ctx.SessionName)
 	cmdToggleGitStatus := buildPawRunShell("toggle-git-status", ctx.SessionName)
 	cmdToggleBottom := buildPawRunShell("popup-shell", ctx.SessionName)

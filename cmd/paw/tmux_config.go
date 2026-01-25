@@ -59,6 +59,10 @@ func setupTmuxConfig(appCtx *app.App, tm tmux.Client) {
 	// Enable mouse mode
 	_ = tm.SetOption("mouse", "on", true)
 
+	// Re-enable mouse mode on client attach (needed because Ctrl+Q disables it before detach)
+	// This ensures mouse mode works correctly after reattaching to a session.
+	_ = tm.Run("set-hook", "-g", "client-attached", "set-option mouse on")
+
 	// Enable focus events (required for tea.FocusMsg to work)
 	// This is required for auto-focusing the input textarea when switching windows
 	_ = tm.SetOption("focus-events", "on", true)
