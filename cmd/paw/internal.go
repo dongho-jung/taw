@@ -62,6 +62,10 @@ func init() {
 	internalCmd.AddCommand(promptPickerTUICmd)
 	internalCmd.AddCommand(taskNameInputTUICmd)
 
+	// Navigation commands
+	internalCmd.AddCommand(selectPrevWindowCmd)
+	internalCmd.AddCommand(selectNextWindowCmd)
+
 	// Utility commands
 	internalCmd.AddCommand(renameWindowCmd)
 	internalCmd.AddCommand(stopHookCmd)

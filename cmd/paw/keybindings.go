@@ -62,6 +62,8 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 	// Command shortcuts - all commands include env vars for proper context resolution
 	cmdNewTask := buildPawRunShell("toggle-new", ctx.SessionName)
 	cmdDoneTask := buildPawRunShell("done-task", ctx.SessionName)
+	cmdPrevWindow := buildPawRunShell("select-prev-window", ctx.SessionName)
+	cmdNextWindow := buildPawRunShell("select-next-window", ctx.SessionName)
 	// Just detach - don't modify the terminal title.
 	// The parent shell's prompt command (PROMPT_COMMAND, precmd, etc.) will naturally
 	// restore the title when control returns to the shell.
@@ -96,8 +98,8 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 		// Navigation (Alt-based)
 		{Key: "M-Tab", Command: cmdAltTab, NoPrefix: true},
 		{Key: "M-BTab", Command: cmdAltShiftTab, NoPrefix: true},
-		{Key: "M-Left", Command: "previous-window", NoPrefix: true},
-		{Key: "M-Right", Command: "next-window", NoPrefix: true},
+		{Key: "M-Left", Command: cmdPrevWindow, NoPrefix: true},
+		{Key: "M-Right", Command: cmdNextWindow, NoPrefix: true},
 
 		// Task commands (Ctrl-based)
 		// These pass through to shell in shell pane, except Ctrl+F and Ctrl+Q
