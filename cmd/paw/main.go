@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -43,6 +44,8 @@ var showVersion bool
 var forceLocal bool
 
 func init() {
+	hydrateBuildInfo()
+
 	// Set version for TUI display
 	tui.SetVersion(Version)
 
@@ -64,6 +67,68 @@ func init() {
 	// Add -v/--version flag to root command
 	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Print version information")
 	rootCmd.Flags().BoolVar(&forceLocal, "local", false, "Force local .paw workspace for git repositories")
+}
+
+func hydrateBuildInfo() {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+
+	applyBuildInfo(info)
+}
+
+func applyBuildInfo(info *debug.BuildInfo) {
+	if info == nil {
+		return
+	}
+
+	if Version == "" || Version == "dev" {
+		if info.Main.Version != "" && info.Main.Version != "(devel)" {
+			Version = info.Main.Version
+		}
+	}
+
+	if Commit == "" || Commit == "unknown" {
+		revision := buildInfoRevision(info)
+		if revision != "" {
+			Commit = shortenCommit(revision)
+		}
+	}
+
+	if Commit == "" || Commit == "unknown" {
+		mapped := mappedCommitForVersion(Version)
+		if mapped != "" {
+			Commit = mapped
+		}
+	}
+}
+
+func buildInfoRevision(info *debug.BuildInfo) string {
+	for _, setting := range info.Settings {
+		if setting.Key == "vcs.revision" {
+			return setting.Value
+		}
+	}
+	return ""
+}
+
+func mappedCommitForVersion(version string) string {
+	if version == "" {
+		return ""
+	}
+	commit, ok := versionCommitMap[version]
+	if !ok {
+		return ""
+	}
+	return shortenCommit(commit)
+}
+
+func shortenCommit(commit string) string {
+	if len(commit) > 7 {
+		return commit[:7]
+	}
+	return commit
 }
 
 // checkVersionFlag checks if -v flag was passed and prints version if so
