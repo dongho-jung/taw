@@ -189,14 +189,22 @@ var finishPickerTUICmd = &cobra.Command{
 				// Check if main branch exists
 				hasMainBranch = gitClient.BranchExists(appCtx.ProjectDir, mainBranch)
 
-				commits, err := gitClient.GetBranchCommits(workDir, targetTask.Name, mainBranch, 1)
-				if err != nil {
-					logging.Warn("finishPickerTUICmd: GetBranchCommits failed: %v", err)
+				// Only call GetBranchCommits if main branch exists
+				if hasMainBranch {
+					commits, err := gitClient.GetBranchCommits(workDir, targetTask.Name, mainBranch, 1)
+					if err != nil {
+						logging.Warn("finishPickerTUICmd: GetBranchCommits failed: %v", err)
+						if _, headErr := gitClient.GetHeadCommit(workDir); headErr == nil {
+							hasCommits = true
+						}
+					} else {
+						hasCommits = len(commits) > 0
+					}
+				} else {
+					// No main branch - check if we have any commits at all
 					if _, headErr := gitClient.GetHeadCommit(workDir); headErr == nil {
 						hasCommits = true
 					}
-				} else {
-					hasCommits = len(commits) > 0
 				}
 				logging.Debug("finishPickerTUICmd: hasCommits=%v hasChanges=%v hasRemote=%v hasMainBranch=%v (branch=%s, main=%s)", hasCommits, hasChanges, hasRemote, hasMainBranch, targetTask.Name, mainBranch)
 			} else {
