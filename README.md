@@ -3,9 +3,9 @@
 [![CI](https://github.com/dongho-jung/paw/actions/workflows/ci.yml/badge.svg)](https://github.com/dongho-jung/paw/actions/workflows/ci.yml)
 [![Release](https://github.com/dongho-jung/paw/actions/workflows/release.yml/badge.svg)](https://github.com/dongho-jung/paw/actions/workflows/release.yml)
 
-![](./assets/demo_1.png)
-![](./assets/demo_2.png)
-![](./assets/demo_3.png)
+![](./.github/assets/demo_1.png)
+![](./.github/assets/demo_2.png)
+![](./.github/assets/demo_3.png)
 
 생각나는대로 에이전트에게 이것저것 시키고 싶은데, 두가지 어려움이 있었습니다:
   1. 동시에 이것저것 시키다보면, **서로 작업하다가 충돌이 나곤 한다**. -> "충돌을 해결하느라 더 많은 시간과 공수를 쓰게 된다."
