@@ -68,11 +68,13 @@ make uninstall
 
 ## 기본 조작
 - window(task)간 이동: `alt + left/right key`
+- window 순서 변경: `alt + up/down key`
 - pane간 cycle: `alt + tab`
 - 작업 마무리(Finish): `ctrl + f`
 - paw 나가기(Quit): `ctrl + q`
 
 ## 추가 조작
+- `ctrl + k`: 새 shell window 열기
 - `ctrl + r`: 이전에 작성한 task 불러오기
 - `ctrl + t`: 템플릿 불러오기
 - `ctrl + g`: Git Viewer

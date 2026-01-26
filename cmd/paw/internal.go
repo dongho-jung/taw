@@ -65,6 +65,7 @@ func init() {
 	// Navigation commands
 	internalCmd.AddCommand(selectPrevWindowCmd)
 	internalCmd.AddCommand(selectNextWindowCmd)
+	internalCmd.AddCommand(newShellWindowCmd)
 
 	// Utility commands
 	internalCmd.AddCommand(renameWindowCmd)

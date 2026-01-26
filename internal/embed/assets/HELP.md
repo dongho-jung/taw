@@ -14,10 +14,12 @@ Claude Code-based autonomous agent work environment
 ### Navigation
   ⌥Tab        Cycle panes / Cycle options (in new task window)
   ⌥←/→        Move to previous/next window
+  ⌥↑/↓        Swap window left/right (reorder)
   ⌃J          Switch project (jump to other PAW sessions)
 
 ### Task Commands
   ⌃N          New task
+  ⌃K          New shell window
   ⌃R          Search task history (in new task window)
   ⌃T          Template picker (in new task window)
   ⌃F          Finish task (action picker: merge/merge+push/PR/drop or done)

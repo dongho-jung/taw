@@ -47,7 +47,7 @@ func setupTmuxConfig(appCtx *app.App, tm tmux.Client) {
 	_ = tm.SetOption("status-position", "bottom", true)
 	_ = tm.SetOption("status-left", " "+appCtx.GetDisplayName()+" ", true)
 	_ = tm.SetOption("status-left-length", "30", true)
-	_ = tm.SetOption("status-right", " ⌥←→:windows ⌥Tab:panes ^/:help ", true)
+	_ = tm.SetOption("status-right", " ⌥←→:windows ⌥↑↓:reorder ^K:shell ^/:help ", true)
 	_ = tm.SetOption("status-right-length", "100", true)
 
 	// Window status separator (no separator between windows)

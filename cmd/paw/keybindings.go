@@ -41,7 +41,9 @@ func shellPassthrough(key, pawCmd string) string {
 //   - Ctrl+T: Toggle template picker (in new task window only)
 //   - Ctrl+J: Toggle project picker (switch between PAW sessions)
 //   - Ctrl+Y: Edit prompts (open prompt picker)
-//   - Alt+Left/Right: Move window
+//   - Ctrl+K: New shell window
+//   - Alt+Left/Right: Select previous/next window
+//   - Alt+Up/Down: Swap window left/right
 //   - Alt+Tab: Cycle pane forward (in task windows) / Cycle options (in new task window)
 //   - Alt+Shift+Tab: Cycle pane backward (in task windows) / Cycle options backward (in new task window)
 //
@@ -79,6 +81,7 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 	cmdToggleCmdPalette := buildPawRunShell("toggle-cmd-palette", ctx.SessionName)
 	cmdToggleProjectPicker := buildPawRunShell("toggle-project-picker", ctx.SessionName)
 	cmdTogglePromptPicker := buildPawRunShell("toggle-prompt-picker", ctx.SessionName)
+	cmdNewShellWindow := buildPawRunShell("new-shell-window", ctx.SessionName)
 
 	// Alt+Tab: context-aware - pass through to TUI in new task window, cycle panes otherwise
 	// #{m:pattern,string} checks if string matches pattern (⭐️* = starts with ⭐️)
@@ -97,12 +100,19 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 	cmdCtrlTBase := fmt.Sprintf(`if -F "#{m:⭐️*,#{window_name}}" "%s" "send-keys C-t"`, buildPawRunShell("toggle-template", ctx.SessionName))
 	cmdCtrlT := shellPassthrough("C-t", cmdCtrlTBase)
 
+	// Window reorder commands (swap current window with adjacent, then follow focus)
+	// Use run-shell to chain commands since \; doesn't work reliably in bind
+	cmdSwapWindowLeft := `run-shell 'tmux swap-window -t -1 && tmux select-window -t -1'`
+	cmdSwapWindowRight := `run-shell 'tmux swap-window -t +1 && tmux select-window -t +1'`
+
 	return []tmux.BindOpts{
 		// Navigation (Alt-based)
 		{Key: "M-Tab", Command: cmdAltTab, NoPrefix: true},
 		{Key: "M-BTab", Command: cmdAltShiftTab, NoPrefix: true},
 		{Key: "M-Left", Command: cmdPrevWindow, NoPrefix: true},
 		{Key: "M-Right", Command: cmdNextWindow, NoPrefix: true},
+		{Key: "M-Up", Command: cmdSwapWindowLeft, NoPrefix: true},
+		{Key: "M-Down", Command: cmdSwapWindowRight, NoPrefix: true},
 
 		// Task commands (Ctrl-based)
 		// These pass through to shell in shell pane, except Ctrl+F and Ctrl+Q
@@ -121,5 +131,6 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 		{Key: "C-t", Command: cmdCtrlT, NoPrefix: true},                                        // Template picker in new task window
 		{Key: "C-j", Command: shellPassthrough("C-j", cmdToggleProjectPicker), NoPrefix: true}, // Project picker
 		{Key: "C-y", Command: shellPassthrough("C-y", cmdTogglePromptPicker), NoPrefix: true},  // Prompt editor
+		{Key: "C-k", Command: shellPassthrough("C-k", cmdNewShellWindow), NoPrefix: true},      // New shell window
 	}
 }

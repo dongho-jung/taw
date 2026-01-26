@@ -304,3 +304,41 @@ var taskNameInputTUICmd = &cobra.Command{
 		return nil
 	},
 }
+
+var newShellWindowCmd = &cobra.Command{
+	Use:    "new-shell-window [session]",
+	Short:  "Create a new shell window",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
+	RunE: func(_ *cobra.Command, args []string) error {
+		sessionName := args[0]
+
+		appCtx, err := getAppFromSession(sessionName)
+		if err != nil {
+			return err
+		}
+
+		// Setup logging
+		_, cleanup := setupLoggerFromApp(appCtx, "new-shell-window", "")
+		defer cleanup()
+
+		logging.Debug("-> newShellWindowCmd(session=%s)", sessionName)
+		defer logging.Debug("<- newShellWindowCmd")
+
+		tm := tmux.New(sessionName)
+
+		// Create a new window with shell in project directory
+		// Window name will be auto-set by tmux's automatic-rename to the running process
+		windowID, err := tm.NewWindow(tmux.WindowOpts{
+			StartDir: appCtx.ProjectDir,
+			Detached: false, // Select the new window
+		})
+		if err != nil {
+			logging.Warn("newShellWindowCmd: NewWindow failed: %v", err)
+			return err
+		}
+
+		logging.Info("newShellWindowCmd: created shell window: %s", windowID)
+		return nil
+	},
+}
