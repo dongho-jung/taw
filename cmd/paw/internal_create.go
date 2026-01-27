@@ -83,6 +83,80 @@ var toggleNewCmd = &cobra.Command{
 			return fmt.Errorf("failed to send Enter: %w", err)
 		}
 
+		// Create file picker pane on the left side of the main window
+		if err := createFilePickerPane(tm, appCtx, windowID); err != nil {
+			logging.Warn("Failed to create file picker pane: %v", err)
+			// Non-fatal: continue without file picker pane
+		}
+
+		return nil
+	},
+}
+
+// createFilePickerPane creates a file picker pane on the left side of the window.
+// The pane runs the built-in file picker in a loop to allow file selection.
+// Selected files are written to YaziSelectionFile for the TUI to pick up.
+func createFilePickerPane(tm tmux.Client, appCtx *app.App, windowID string) error {
+	// Build the file picker command
+	// Use a loop so the picker restarts after each selection
+	pawBin := getPawBin()
+	pickerCmd := fmt.Sprintf(`while true; do PAW_DIR=%s PROJECT_DIR=%s %s internal file-picker; sleep 0.1; done`,
+		shellQuote(appCtx.PawDir),
+		shellQuote(appCtx.ProjectDir),
+		shellQuote(pawBin))
+
+	// Split horizontally (left/right) with picker pane sized to 60 columns
+	// We create the picker on the right first (Size applies to new pane), then swap
+	pickerPaneID, err := tm.SplitWindowPane(tmux.SplitOpts{
+		Target:     windowID + ".0",
+		Horizontal: true,  // horizontal split = left/right
+		Before:     false, // create after target = right side initially
+		Size:       "60",  // picker pane is 60 columns
+		StartDir:   appCtx.ProjectDir,
+		Command:    pickerCmd,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to split window for file picker: %w", err)
+	}
+
+	logging.Debug("Split created file picker pane: %s", pickerPaneID)
+
+	// Swap panes so file picker moves to the left (pane 0)
+	if err := tm.Run("swap-pane", "-s", windowID+".0", "-t", windowID+".1"); err != nil {
+		logging.Warn("Failed to swap panes: %v", err)
+	}
+
+	// Focus on the task input pane (now pane 1 after swap)
+	_ = tm.SelectPane(windowID + ".1")
+
+	logging.Debug("Created file picker pane on the left side of window %s", windowID)
+	return nil
+}
+
+var filePickerCmd = &cobra.Command{
+	Use:    "file-picker",
+	Short:  "Run the file picker (internal use)",
+	Hidden: true,
+	RunE: func(_ *cobra.Command, _ []string) error {
+		pawDir := os.Getenv("PAW_DIR")
+		projectDir := os.Getenv("PROJECT_DIR")
+		if pawDir == "" || projectDir == "" {
+			return fmt.Errorf("PAW_DIR and PROJECT_DIR must be set")
+		}
+
+		action, selectedPath, err := tui.RunFilePicker(projectDir)
+		if err != nil {
+			return err
+		}
+
+		if action == tui.FilePickerSelect && selectedPath != "" {
+			// Write selected path to file for TUI to pick up
+			selectionPath := filepath.Join(pawDir, constants.YaziSelectionFile)
+			if err := os.WriteFile(selectionPath, []byte(selectedPath), 0644); err != nil { //nolint:gosec // G306: selection file needs to be readable
+				return fmt.Errorf("failed to write selection: %w", err)
+			}
+		}
+
 		return nil
 	},
 }

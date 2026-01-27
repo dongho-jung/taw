@@ -108,6 +108,52 @@ func (m *TaskInput) checkHistorySelection() {
 	_ = os.Remove(selectionPath)
 }
 
+// checkYaziSelection checks for a yazi file selection file.
+// If found, it appends the selected file path to the current content and deletes the file.
+func (m *TaskInput) checkYaziSelection() {
+	pawDir := m.pawDirPath()
+	if pawDir == "" {
+		return
+	}
+
+	selectionPath := filepath.Join(pawDir, constants.YaziSelectionFile)
+	data, err := os.ReadFile(selectionPath) //nolint:gosec // G304: selectionPath is constructed from pawDir
+	if err != nil {
+		// File doesn't exist or can't be read - this is normal (no pending selection)
+		return
+	}
+
+	// Delete the file immediately to prevent re-loading
+	_ = os.Remove(selectionPath)
+
+	// Got a selection - append the file path to current content
+	filePath := strings.TrimSpace(string(data))
+	if filePath == "" {
+		return
+	}
+
+	// Get current content and cursor position
+	currentContent := m.textarea.Value()
+
+	// Add the file path at cursor position or at the end
+	// If content is not empty and doesn't end with space/newline, add a space
+	var newContent string
+	if currentContent == "" {
+		newContent = filePath
+	} else {
+		lastChar := currentContent[len(currentContent)-1]
+		if lastChar == ' ' || lastChar == '\n' || lastChar == '\t' {
+			newContent = currentContent + filePath
+		} else {
+			newContent = currentContent + " " + filePath
+		}
+	}
+
+	m.textarea.SetValue(newContent)
+	m.textarea.CursorEnd()
+	m.updateTextareaHeight()
+}
+
 // RunTaskInputWithOptions runs the task input with active task list, git mode flag, and optional initial content.
 func RunTaskInputWithOptions(activeTasks []string, isGitRepo bool, initialContent string) (*TaskInputResult, error) {
 	m := NewTaskInputWithOptions(activeTasks, isGitRepo)

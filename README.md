@@ -60,6 +60,7 @@ make uninstall
 1. 작업할 디렉토리로 이동
 2. `paw`로 시작
 3. 시킬 작업을 작성, `alt + enter`로 제출
+   - 왼쪽의 파일 탐색기에서 파일을 선택하면 경로가 자동으로 입력됩니다
 4. 자동으로 적절한 branch와 worktree가 만들어지고 작업 시작
 5. 작업이 완료되면, 해당 task window에서 `ctrl + f`로 마무리
 

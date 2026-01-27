@@ -30,7 +30,7 @@ func shellPassthrough(key, pawCmd string) string {
 // buildKeybindings creates tmux keybindings for PAW.
 // Keyboard shortcuts:
 //   - Ctrl+N: New task
-//   - Ctrl+F: Finish task (shows action picker)
+//   - Ctrl+F: Toggle file picker pane focus (main window) / Finish task (task windows)
 //   - Ctrl+P: Command palette
 //   - Ctrl+Q: Quit paw
 //   - Ctrl+O: Toggle logs
@@ -64,6 +64,11 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 	// Command shortcuts - all commands include env vars for proper context resolution
 	cmdNewTask := buildPawRunShell("toggle-new", ctx.SessionName)
 	cmdDoneTask := buildPawRunShell("done-task", ctx.SessionName)
+
+	// Ctrl+F: In main window (⭐️main), toggle between file picker pane (0) and main pane (1)
+	// In other windows, run done-task
+	// #{==:#{pane_index},0} checks if current pane is file picker
+	cmdCtrlF := fmt.Sprintf(`if -F "#{==:#{window_name},⭐️main}" "if -F \"#{==:#{pane_index},0}\" \"select-pane -t :.1\" \"select-pane -t :.0\"" "%s"`, cmdDoneTask)
 	cmdPrevWindow := buildPawRunShell("select-prev-window", ctx.SessionName)
 	cmdNextWindow := buildPawRunShell("select-next-window", ctx.SessionName)
 	// Disable mouse mode before detaching to prevent escape sequences from leaking to shell.
@@ -117,7 +122,7 @@ func buildKeybindings(ctx KeybindingsContext) []tmux.BindOpts {
 		// Task commands (Ctrl-based)
 		// These pass through to shell in shell pane, except Ctrl+F and Ctrl+Q
 		{Key: "C-n", Command: shellPassthrough("C-n", cmdNewTask), NoPrefix: true},
-		{Key: "C-f", Command: cmdDoneTask, NoPrefix: true}, // Always works (finish task)
+		{Key: "C-f", Command: cmdCtrlF, NoPrefix: true}, // Main window: toggle file picker, others: finish task
 		{Key: "C-p", Command: shellPassthrough("C-p", cmdToggleCmdPalette), NoPrefix: true},
 		{Key: "C-q", Command: cmdQuit, NoPrefix: true}, // Always works (quit)
 

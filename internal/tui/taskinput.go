@@ -386,9 +386,10 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Persist template draft on tick (debounced, not on every keystroke)
 		m.persistTemplateDraft()
-		// Check for history/template selection on tick (not on every keystroke)
+		// Check for history/template/yazi selection on tick (not on every keystroke)
 		// This avoids file I/O on every keystroke which causes stuttering
 		m.checkHistorySelection()
+		m.checkYaziSelection()
 		if m.checkTemplateSelection() {
 			cmds = append(cmds, tea.Tick(templateTipDuration, func(_ time.Time) tea.Msg {
 				return templateTipClearMsg{}
@@ -432,9 +433,10 @@ func (m *TaskInput) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// When terminal gains focus (user switches to this window),
 		// automatically focus the task input textarea
 		m.switchFocusTo(FocusPanelLeft)
-		// Check for history/template selection when window regains focus
-		// (e.g., returning from Ctrl+R history picker or Ctrl+T template picker)
+		// Check for history/template/yazi selection when window regains focus
+		// (e.g., returning from Ctrl+R history picker, Ctrl+T template picker, or yazi file selection)
 		m.checkHistorySelection()
+		m.checkYaziSelection()
 		if m.checkTemplateSelection() {
 			return m, tea.Tick(templateTipDuration, func(_ time.Time) tea.Msg {
 				return templateTipClearMsg{}

@@ -224,6 +224,7 @@ const (
 	VersionFileName       = ".version"             // Stores PAW version for upgrade detection
 	HistorySelectionFile  = ".history-selection"   // Temp file for Ctrl+R history selection
 	TemplateSelectionFile = ".template-selection"  // Temp file for Ctrl+T template selection
+	YaziSelectionFile     = ".yazi-selection"      // Temp file for yazi file picker selection
 	TemplateDraftFile     = ".template-draft"      // Temp file for Ctrl+T template creation
 	StatusSignalFileName  = ".status-signal"       // Temp file for Claude to signal status directly
 	ProjectSwitchFileName = ".project-switch"      // Temp file for project picker to signal switch target

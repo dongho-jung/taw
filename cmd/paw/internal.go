@@ -17,6 +17,7 @@ func init() {
 	internalCmd.AddCommand(newTaskCmd)
 	internalCmd.AddCommand(spawnTaskCmd)
 	internalCmd.AddCommand(handleTaskCmd)
+	internalCmd.AddCommand(filePickerCmd)
 
 	// Task lifecycle commands
 	internalCmd.AddCommand(endTaskCmd)

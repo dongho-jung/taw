@@ -120,6 +120,13 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 	_ = tm.SendKeysLiteral(appCtx.SessionName+":"+constants.NewWindowName, newTaskCmd)
 	_ = tm.SendKeys(appCtx.SessionName+":"+constants.NewWindowName, "Enter")
 
+	// Create yazi pane on the left side of the main window
+	mainWindowTarget := appCtx.SessionName + ":" + constants.NewWindowName
+	if err := createFilePickerPane(tm, appCtx, mainWindowTarget); err != nil {
+		logging.Warn("Failed to create yazi pane: %v", err)
+		// Non-fatal: continue without yazi pane
+	}
+
 	// Attach to session
 	if err := tm.AttachSession(appCtx.SessionName); err != nil {
 		return fmt.Errorf("failed to attach to newly created session %q: %w (workspace: %s)", appCtx.SessionName, err, appCtx.PawDir)
@@ -372,14 +379,28 @@ func respawnMainWindow(appCtx *app.App, tm tmux.Client) error {
 			return fmt.Errorf("failed to send Enter: %w", err)
 		}
 
+		// Create yazi pane on the left side of the main window
+		if err := createFilePickerPane(tm, appCtx, windowID); err != nil {
+			logging.Warn("Failed to create yazi pane: %v", err)
+			// Non-fatal: continue without yazi pane
+		}
+
 		logging.Log("Main window created successfully: %s", windowID)
 		return nil
 	}
 
 	logging.Log("Respawning main window %s with new binary", mainWindowID)
 
+	// Determine which pane is the main TUI pane
+	// If pane 1 exists, file picker is pane 0 and main TUI is pane 1
+	// Otherwise, main TUI is pane 0
+	mainPaneID := mainWindowID + ".0"
+	if tm.HasPane(mainWindowID + ".1") {
+		mainPaneID = mainWindowID + ".1"
+	}
+
 	// Respawn the pane with the new-task command using the new binary
-	if err := tm.RespawnPane(mainWindowID+".0", appCtx.ProjectDir, newTaskCmd); err != nil {
+	if err := tm.RespawnPane(mainPaneID, appCtx.ProjectDir, newTaskCmd); err != nil {
 		return fmt.Errorf("failed to respawn main window: %w", err)
 	}
 
