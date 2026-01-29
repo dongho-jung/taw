@@ -3,10 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/dongho-jung/paw/internal/git"
 	"github.com/dongho-jung/paw/internal/tmux"
 )
 
@@ -17,8 +20,6 @@ var killCmd = &cobra.Command{
 
 If a session name is provided, kills that specific session.
 If no session name is provided, lists available sessions to choose from.
-
-Prompts for confirmation before killing.
 
 Unlike 'paw clean', this preserves the .paw directory, worktrees, and branches.
 
@@ -46,6 +47,7 @@ Unlike 'paw clean', this preserves .paw directories, worktrees, and branches.`,
 
 func runKill(_ *cobra.Command, args []string) error {
 	sessions := findPawSessions()
+	preferSessionFromCwd(sessions)
 
 	if len(sessions) == 0 {
 		fmt.Println("No running PAW sessions found.")
@@ -120,13 +122,57 @@ func runKill(_ *cobra.Command, args []string) error {
 		targetSession = sessions[idx]
 	}
 
-	// Confirm before killing
-	if !confirmPrompt(fmt.Sprintf("Kill session '%s'? [y/N]: ", targetSession.Name)) {
-		fmt.Println("Cancelled.")
-		return nil
+	return forceKillSession(targetSession, true)
+}
+
+func preferSessionFromCwd(sessions []pawSession) {
+	preferred := sessionNameFromCwd()
+	if preferred == "" {
+		return
 	}
 
-	return forceKillSession(targetSession, true)
+	for i := range sessions {
+		if sessions[i].Name != preferred {
+			continue
+		}
+		if i == 0 {
+			return
+		}
+		matched := sessions[i]
+		copy(sessions[1:i+1], sessions[0:i])
+		sessions[0] = matched
+		return
+	}
+}
+
+func sessionNameFromCwd() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	if abs, err := filepath.Abs(cwd); err == nil {
+		cwd = abs
+	}
+
+	gitClient := git.New()
+	if gitClient.IsGitRepo(cwd) {
+		repoRoot, err := gitClient.GetRepoRoot(cwd)
+		if err == nil && repoRoot != "" {
+			if abs, err := filepath.Abs(repoRoot); err == nil {
+				repoRoot = abs
+			}
+			repoName := filepath.Base(repoRoot)
+			if repoRoot != cwd {
+				subdirName := filepath.Base(cwd)
+				if subdirName != "" {
+					return repoName + "-" + subdirName
+				}
+			}
+			return repoName
+		}
+	}
+
+	return filepath.Base(cwd)
 }
 
 func runKillAll(_ *cobra.Command, _ []string) error {
