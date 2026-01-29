@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/dongho-jung/paw/internal/app"
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/tmux"
@@ -9,6 +11,8 @@ import (
 // reapplyTmuxConfig re-applies tmux configuration after config reload.
 // This is a subset of setupTmuxConfig that updates settings that depend on config.
 func reapplyTmuxConfig(appCtx *app.App, tm tmux.Client) {
+	applyAttachHooks(tm)
+
 	// Re-apply keybindings (in case session name changed or for consistency)
 	bindings := buildKeybindings(KeybindingsContext{
 		PawBin:      getPawBin(),
@@ -22,6 +26,20 @@ func reapplyTmuxConfig(appCtx *app.App, tm tmux.Client) {
 			logging.Debug("Failed to bind %s: %v", b.Key, err)
 		}
 	}
+}
+
+func applyAttachHooks(tm tmux.Client) {
+	filePickerVar := "#{" + filePickerPaneIDKey + "}"
+	filePickerResizeCmd := fmt.Sprintf(`if -F "#{!=:%s,}" "resize-pane -t %s -x %s"`, filePickerVar, filePickerVar, filePickerPaneWidth)
+
+	pawBin := shellQuote(getPawBin())
+	attachedLogCmd := fmt.Sprintf("%s internal log-pane-layout '#{session_name}' --reason %s", pawBin, shellQuote("client-attached"))
+	resizedLogCmd := fmt.Sprintf("%s internal log-pane-layout '#{session_name}' --reason %s", pawBin, shellQuote("client-resized"))
+	attachedResizeCmd := fmt.Sprintf("%s internal resize-file-picker '#{session_name}' --reason %s", pawBin, shellQuote("client-attached"))
+	resizedResizeCmd := fmt.Sprintf("%s internal resize-file-picker '#{session_name}' --reason %s", pawBin, shellQuote("client-resized"))
+
+	_ = tm.Run("set-hook", "-g", "client-attached", "set-option mouse on; "+filePickerResizeCmd+"; run-shell "+shellQuote(attachedResizeCmd)+"; run-shell "+shellQuote(attachedLogCmd))
+	_ = tm.Run("set-hook", "-g", "client-resized", filePickerResizeCmd+"; run-shell "+shellQuote(resizedResizeCmd)+"; run-shell "+shellQuote(resizedLogCmd))
 }
 
 // setupTmuxConfig configures tmux keybindings and options
@@ -61,7 +79,8 @@ func setupTmuxConfig(appCtx *app.App, tm tmux.Client) {
 
 	// Re-enable mouse mode on client attach (needed because Ctrl+Q disables it before detach)
 	// This ensures mouse mode works correctly after reattaching to a session.
-	_ = tm.Run("set-hook", "-g", "client-attached", "set-option mouse on")
+	// Also re-apply file picker width after attach/resize because tmux scales panes on attach.
+	applyAttachHooks(tm)
 
 	// Enable focus events (required for tea.FocusMsg to work)
 	// This is required for auto-focusing the input textarea when switching windows

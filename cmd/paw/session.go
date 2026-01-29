@@ -13,6 +13,7 @@ import (
 	"github.com/dongho-jung/paw/internal/logging"
 	"github.com/dongho-jung/paw/internal/task"
 	"github.com/dongho-jung/paw/internal/tmux"
+	"golang.org/x/term"
 )
 
 // startNewSession creates a new tmux session
@@ -49,13 +50,19 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 	pawBin := getPawBin()
 
 	// Create session with a shell (not the new-task command directly)
+	width, height, ok := getTerminalSize()
 	if err := tm.NewSession(tmux.SessionOpts{
 		Name:       appCtx.SessionName,
 		StartDir:   appCtx.ProjectDir,
 		WindowName: constants.NewWindowName,
 		Detached:   true,
+		Width:      width,
+		Height:     height,
 	}); err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
+	}
+	if ok {
+		logging.Debug("Using terminal size for new session: %dx%d", width, height)
 	}
 	syncSessionEnv(tm, appCtx)
 
@@ -113,25 +120,38 @@ func startNewSession(appCtx *app.App, tm tmux.Client) error {
 		logging.Warn("WaitForPane timed out, continuing anyway: %v", err)
 	}
 
-	// Send new-task command to the _ window
-	// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
-	// (required for global workspaces where there's no local .paw directory)
-	newTaskCmd := buildNewTaskCommand(appCtx, pawBin, appCtx.SessionName)
-	_ = tm.SendKeysLiteral(appCtx.SessionName+":"+constants.NewWindowName, newTaskCmd)
-	_ = tm.SendKeys(appCtx.SessionName+":"+constants.NewWindowName, "Enter")
-
-	// Create yazi pane on the left side of the main window
+	// Create yazi pane on the left side of the main window before launching the TUI.
+	// This avoids resize artifacts from swapping panes after the TUI starts.
 	mainWindowTarget := appCtx.SessionName + ":" + constants.NewWindowName
 	if err := createFilePickerPane(tm, appCtx, mainWindowTarget); err != nil {
 		logging.Warn("Failed to create yazi pane: %v", err)
 		// Non-fatal: continue without yazi pane
 	}
 
+	// Send new-task command to the main window
+	// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
+	// (required for global workspaces where there's no local .paw directory)
+	newTaskCmd := buildNewTaskCommand(appCtx, pawBin, appCtx.SessionName)
+	_ = tm.SendKeysLiteral(appCtx.SessionName+":"+constants.NewWindowName, newTaskCmd)
+	_ = tm.SendKeys(appCtx.SessionName+":"+constants.NewWindowName, "Enter")
+
 	// Attach to session
 	if err := tm.AttachSession(appCtx.SessionName); err != nil {
 		return fmt.Errorf("failed to attach to newly created session %q: %w (workspace: %s)", appCtx.SessionName, err, appCtx.PawDir)
 	}
 	return nil
+}
+
+func getTerminalSize() (int, int, bool) {
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		return 0, 0, false
+	}
+
+	width, height, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || width <= 0 || height <= 0 {
+		return 0, 0, false
+	}
+	return width, height, true
 }
 
 // attachToSession attaches to an existing session
@@ -314,6 +334,8 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 		}
 	}
 
+	primeFilePickerPaneOption(tm)
+
 	// Also set terminal title option on re-attach
 	// Use DisplayName for user-friendly display (e.g., "repo/subdir" format)
 	_ = tm.SetOption("set-titles", "on", true)
@@ -331,6 +353,26 @@ func attachToSession(appCtx *app.App, tm tmux.Client) error {
 		return fmt.Errorf("failed to attach to session %q: %w (workspace: %s)", appCtx.SessionName, err, appCtx.PawDir)
 	}
 	return nil
+}
+
+func primeFilePickerPaneOption(tm tmux.Client) {
+	windows, err := tm.ListWindows()
+	if err != nil {
+		return
+	}
+
+	var mainWindowID string
+	for _, w := range windows {
+		if strings.HasPrefix(w.Name, constants.EmojiNew) {
+			mainWindowID = w.ID
+			break
+		}
+	}
+	if mainWindowID == "" {
+		return
+	}
+
+	forceFilePickerWidth(tm, mainWindowID, "prime-file-picker")
 }
 
 // respawnMainWindow respawns the main window (⭐️main) with the new paw binary.
@@ -371,18 +413,18 @@ func respawnMainWindow(appCtx *app.App, tm tmux.Client) error {
 			logging.Warn("WaitForPane timed out, continuing anyway: %v", err)
 		}
 
+		// Create yazi pane on the left side of the main window before launching the TUI.
+		if err := createFilePickerPane(tm, appCtx, windowID); err != nil {
+			logging.Warn("Failed to create yazi pane: %v", err)
+			// Non-fatal: continue without yazi pane
+		}
+
 		// Send new-task command to the new window
 		if err := tm.SendKeysLiteral(windowID, newTaskCmd); err != nil {
 			return fmt.Errorf("failed to send keys: %w", err)
 		}
 		if err := tm.SendKeys(windowID, "Enter"); err != nil {
 			return fmt.Errorf("failed to send Enter: %w", err)
-		}
-
-		// Create yazi pane on the left side of the main window
-		if err := createFilePickerPane(tm, appCtx, windowID); err != nil {
-			logging.Warn("Failed to create yazi pane: %v", err)
-			// Non-fatal: continue without yazi pane
 		}
 
 		logging.Log("Main window created successfully: %s", windowID)

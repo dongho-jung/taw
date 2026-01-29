@@ -21,6 +21,11 @@ import (
 	"github.com/dongho-jung/paw/internal/tui"
 )
 
+const (
+	filePickerPaneWidth = "60"
+	filePickerPaneIDKey = "@paw_file_picker_pane_id"
+)
+
 var toggleNewCmd = &cobra.Command{
 	Use:   "toggle-new [session]",
 	Short: "Toggle the new task window",
@@ -73,6 +78,12 @@ var toggleNewCmd = &cobra.Command{
 			logging.Warn("toggleNewCmd: WaitForPane timed out, continuing anyway: %v", err)
 		}
 
+		// Create file picker pane on the left side of the main window before launching the TUI.
+		if err := createFilePickerPane(tm, appCtx, windowID); err != nil {
+			logging.Warn("Failed to create file picker pane: %v", err)
+			// Non-fatal: continue without file picker pane
+		}
+
 		// Send new-task command to the new window
 		// Include PAW_DIR, PROJECT_DIR, and DISPLAY_NAME so getAppFromSession can find the project
 		newTaskCmdStr := buildNewTaskCommand(appCtx, getPawBin(), sessionName)
@@ -81,12 +92,6 @@ var toggleNewCmd = &cobra.Command{
 		}
 		if err := tm.SendKeys(windowID, "Enter"); err != nil {
 			return fmt.Errorf("failed to send Enter: %w", err)
-		}
-
-		// Create file picker pane on the left side of the main window
-		if err := createFilePickerPane(tm, appCtx, windowID); err != nil {
-			logging.Warn("Failed to create file picker pane: %v", err)
-			// Non-fatal: continue without file picker pane
 		}
 
 		return nil
@@ -105,13 +110,14 @@ func createFilePickerPane(tm tmux.Client, appCtx *app.App, windowID string) erro
 		shellQuote(appCtx.ProjectDir),
 		shellQuote(pawBin))
 
-	// Split horizontally (left/right) with picker pane sized to 60 columns
+	// Split horizontally (left/right) with picker pane sized to 60 columns.
 	// We create the picker on the right first (Size applies to new pane), then swap
-	pickerPaneID, err := tm.SplitWindowPane(tmux.SplitOpts{
+	// to keep the file picker as pane 0 for keybindings.
+	_, err := tm.SplitWindowPane(tmux.SplitOpts{
 		Target:     windowID + ".0",
-		Horizontal: true,  // horizontal split = left/right
-		Before:     false, // create after target = right side initially
-		Size:       "60",  // picker pane is 60 columns
+		Horizontal: true,                // horizontal split = left/right
+		Before:     false,               // create after target = right side initially
+		Size:       filePickerPaneWidth, // picker pane is 60 columns
 		StartDir:   appCtx.ProjectDir,
 		Command:    pickerCmd,
 	})
@@ -119,12 +125,15 @@ func createFilePickerPane(tm tmux.Client, appCtx *app.App, windowID string) erro
 		return fmt.Errorf("failed to split window for file picker: %w", err)
 	}
 
-	logging.Debug("Split created file picker pane: %s", pickerPaneID)
+	logging.Debug("Split created file picker pane")
 
 	// Swap panes so file picker moves to the left (pane 0)
 	if err := tm.Run("swap-pane", "-s", windowID+".0", "-t", windowID+".1"); err != nil {
 		logging.Warn("Failed to swap panes: %v", err)
 	}
+
+	// Enforce the picker width after swap (swap swaps pane contents, not positions).
+	forceFilePickerWidth(tm, windowID, "create-file-picker")
 
 	// Focus on the task input pane (now pane 1 after swap)
 	_ = tm.SelectPane(windowID + ".1")

@@ -62,6 +62,7 @@ func init() {
 	internalCmd.AddCommand(togglePromptPickerCmd)
 	internalCmd.AddCommand(promptPickerTUICmd)
 	internalCmd.AddCommand(taskNameInputTUICmd)
+	internalCmd.AddCommand(resizeFilePickerCmd)
 
 	// Navigation commands
 	internalCmd.AddCommand(selectPrevWindowCmd)
@@ -76,6 +77,7 @@ func init() {
 	internalCmd.AddCommand(askUserQuestionHookCmd)
 	internalCmd.AddCommand(watchWaitCmd)
 	internalCmd.AddCommand(watchPRCmd)
+	internalCmd.AddCommand(logPaneLayoutCmd)
 
 	// Add flags to end-task command
 	endTaskCmd.Flags().StringVar(&paneCaptureFile, "pane-capture-file", "", "Path to pre-captured pane content file")
