@@ -18,7 +18,6 @@ var versionCommitMap = map[string]string{
 	"v0.3.1": "73d904e",
 	"v0.3.2": "cc1815a",
 	"v0.3.3": "e4d01ef",
-	"v0.4.0": "afbfe35",
 	"v0.4.1": "b42db79",
 	"v0.4.2": "3208e57",
 	"v0.5.0": "f891741",
@@ -39,5 +38,6 @@ var versionCommitMap = map[string]string{
 	"v0.9.4": "1c6f01a",
 	"v0.9.5": "d9e59f3",
 	"v0.9.6": "88cbcb3",
-	"v0.9.7": "d791777",
+	"v0.9.7": "6b4d246",
+	"v0.10.0": "284d7f5",
 }
